@@ -14,7 +14,12 @@ export async function signOut() { const { error } = await supabase.auth.signOut(
 export function onAuthChange(listener) { return supabase.auth.onAuthStateChange((event, session) => listener(event, session)); }
 
 export async function loadResidentWorkspace() {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  // An anonymous browser has no stored session. Treat that as the normal
+  // sign-in state rather than surfacing Supabase's "Auth session missing".
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  fail(sessionError);
+  if (!sessionData.session) return null;
+  const { data: authData, error: authError } = await supabase.auth.getUser(sessionData.session.access_token);
   fail(authError);
   if (!authData.user) return null;
   const [{ data: role, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
