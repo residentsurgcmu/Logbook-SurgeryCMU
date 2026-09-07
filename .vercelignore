@@ -1,0 +1,7 @@
+รายชื่ออาจารย์ ปี 4.xlsx
+*.xlsx
+*.doc
+api/
+.playwright-cli/
+supabase/.temp/
+design/

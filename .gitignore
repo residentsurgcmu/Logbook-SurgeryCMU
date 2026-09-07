@@ -1,0 +1,29 @@
+node_modules/
+.pnpm-store/
+dist/
+.env
+.env.local
+.vercel/
+.DS_Store
+*.log
+data/training-records.tmp.json
+
+# Local source references and screenshots are not production assets.
+/IMG_*.PNG
+/IMG_*.jpg
+/Logbook-year4-2568.pdf
+
+# Private roster, training source documents, and local records stay in Google Drive.
+Staff.docx
+Fellow.docx
+Logbook_*.xlsx
+essential procedure.pdf
+สมรรณนะ  EPA PBA.pdf
+Breast.JPG
+data/
+Backups/
+supabase/private/
+.playwright-cli/
+supabase/.temp/
+*.doc
+*.xlsx
