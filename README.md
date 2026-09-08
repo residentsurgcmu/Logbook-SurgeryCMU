@@ -5,8 +5,9 @@
 ## สิ่งที่ระบบรองรับ
 
 - Resident ดูประวัติการประเมินของตนเอง
-- Evaluator ประเมินได้เฉพาะ Resident ที่ Admin มอบหมาย
-- Admin ซิงก์ catalog, เชิญบัญชี, มอบหมาย Evaluator และดูรายงาน
+- Staff ประเมินได้เฉพาะ Resident ที่ Admin มอบหมาย
+- Admin ซิงก์ catalog, ส่งคำเชิญ Staff จากรายชื่ออาจารย์ที่อนุมัติ, มอบหมาย Staff และดูรายงาน
+- หน้า login แยก Resident, Staff และ Admin พร้อมลิงก์ลืมรหัสผ่านสำหรับทุกบทบาท
 - EPA 1–6, EPA 7 Basic Laparoscopic และ EPA 8 (OPD)
 - PBA แบบละเอียด 21 แบบ พร้อมลำดับเกณฑ์และมาตราส่วนตามเอกสารต้นทาง
 - EPA 1–6/8 ใช้ L1–L5; EPA 7 และ PBA ใช้ F/M/E
@@ -48,13 +49,23 @@ migration เป็น additive และไม่ลบ Auth users หรือ
 
 ```text
 supabase/migrations/202609070001_resident_assessment_platform.sql
+supabase/migrations/20260908090000_add_resident_staff_directory_and_password_reset.sql
 ```
 
-ให้ apply migration นี้ใน project ref `dyiiivcyoatgmkmvgcnt` แล้ว deploy Edge Function `resident-admin` พร้อมตั้ง `SUPABASE_URL`, `SUPABASE_ANON_KEY` และ `SUPABASE_SERVICE_ROLE_KEY` เป็น secret ของ Supabase Edge Function เท่านั้น
+ให้ apply migrations ตามลำดับใน project ref `dyiiivcyoatgmkmvgcnt` แล้ว deploy Edge Function `resident-admin` พร้อมตั้ง `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` และ `APP_URL=https://resident-surgery-logbook.vercel.app` เป็น secret ของ Supabase Edge Function เท่านั้น
+
+Migration ใหม่เปลี่ยนชื่อ role `evaluator` เดิมเป็น `staff` โดยคงข้อมูลบัญชีและ assignment เดิมไว้ และนำเข้า 35 แถวจาก `รายชื่ออาจารย์ ปี 4.xlsx` ลงใน Staff directory แบบไม่ส่งคำเชิญอัตโนมัติ. แถวที่ระบุหน่วย `test` ถูกเก็บไว้เพื่อให้ตรวจสอบแหล่งข้อมูลได้ แต่ตั้งเป็น inactive จึงเชิญหรือใช้เป็น Staff ไม่ได้.
 
 หลัง migration ผู้ใช้ `resident.surgcmu@gmail.com` จะเป็น Admin ก็ต่อเมื่อมี Auth user เดิมอยู่แล้ว หากยังไม่มี ให้สร้างบัญชี Auth นั้นก่อน แล้วรันส่วน bootstrap ของ migration อีกครั้งโดยผู้ดูแลระบบ
 
-ใน Supabase Auth ให้เปิด Email provider, ตั้ง Site URL/Redirect URL เป็น Vercel URL ใหม่ และตั้ง SMTP operational identity เป็น `resident.surgcmu@gmail.com` โดยเก็บ Gmail App Password ใน Supabase SMTP settings เท่านั้น
+ใน Supabase Auth ให้เปิด Email provider และตั้งค่าดังนี้:
+
+- Site URL: `https://resident-surgery-logbook.vercel.app`
+- Redirect URL: `https://resident-surgery-logbook.vercel.app/reset-password`
+- SMTP operational identity: `resident.surgcmu@gmail.com` โดยเก็บ Gmail App Password ใน Supabase SMTP settings เท่านั้น
+- Email templates: ตั้งหัวข้อ/เนื้อหา Invite และ Reset password เป็นภาษาไทย และเปิด password-changed notification
+
+ห้ามใส่ service role, SMTP password หรือ secret ใดใน Vercel browser environment variables หรือ source code ฝั่ง client.
 
 ## Vercel deployment
 
@@ -74,7 +85,7 @@ pnpm test
 pnpm build
 ```
 
-ทดสอบบน Chrome ที่ desktop และ mobile: login ของ Resident, ประวัติของตนเอง, การจำกัด Evaluator ตาม assignment, การบันทึก assessment ที่คะแนนครบทุกข้อ, และ Admin provision/assignment/sync catalog. ทดสอบ RLS โดยใช้ผู้ใช้ต่าง role อย่างน้อยสองบัญชี และยืนยันว่าไม่สามารถอ่านหรือเขียน assessment ของ Resident ที่ไม่ได้รับสิทธิ์
+ทดสอบบน Chrome ที่ desktop และ mobile: login ของ Resident/Staff/Admin, ลืมรหัสผ่านและการตั้งรหัสผ่านจาก recovery link, ประวัติของ Resident, การจำกัด Staff ตาม assignment, การบันทึก assessment ที่คะแนนครบทุกข้อ, และ Admin provision/Staff invitation/assignment/sync catalog. ทดสอบ RLS โดยใช้ผู้ใช้ต่าง role อย่างน้อยสองบัญชี และยืนยันว่า Resident/Staff อ่าน Staff directory หรือส่งคำเชิญไม่ได้
 
 ## Privacy
 

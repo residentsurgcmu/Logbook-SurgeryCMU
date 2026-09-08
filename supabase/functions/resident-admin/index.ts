@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2.57.4";
 
+const appUrl = (Deno.env.get("APP_URL") || "https://resident-surgery-logbook.vercel.app").replace(/\/$/, "");
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "https://resident-surgery-logbook.vercel.app",
+  "Access-Control-Allow-Origin": appUrl,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -12,40 +13,84 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { "Content-Type": "application/json", ...corsHeaders },
 });
 
+const resetPasswordUrl = () => `${appUrl}/reset-password`;
+const normalizedEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : "";
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
   const authorization = request.headers.get("Authorization") || "";
   const token = authorization.replace(/^Bearer\s+/i, "");
   if (!token) return json({ error: "Authentication required" }, 401);
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const publishableKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const url = Deno.env.get("SUPABASE_URL") || "";
+  const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (!url || !publishableKey || !serviceKey) return json({ error: "Function configuration is incomplete" }, 500);
+
   const callerClient = createClient(url, publishableKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
   const { data: callerData } = await callerClient.auth.getUser(token);
   if (!callerData.user) return json({ error: "Session expired" }, 401);
   const adminClient = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: callerRole } = await adminClient.from("resident_user_roles").select("role,active").eq("user_id", callerData.user.id).maybeSingle();
+  const { data: callerRole, error: callerRoleError } = await adminClient.from("resident_user_roles").select("role,active").eq("user_id", callerData.user.id).maybeSingle();
+  if (callerRoleError) return json({ error: "Could not verify caller role" }, 500);
   if (!callerRole?.active || callerRole.role !== "admin") return json({ error: "Admin role required" }, 403);
 
   try {
-    const { email, fullName, role, pgy, appUrl } = await request.json();
-    if (!["resident", "evaluator", "admin"].includes(role) || typeof email !== "string" || typeof fullName !== "string") throw new Error("Invalid account data");
+    const payload = await request.json();
+    const action = payload?.action;
+    const email = normalizedEmail(payload?.email);
+
+    if (action === "invite_staff") {
+      if (!email) throw new Error("Invalid Staff email");
+      const { data: directory, error: directoryError } = await adminClient
+        .from("resident_staff_directory")
+        .select("email,full_name,active,auth_user_id")
+        .eq("email", email)
+        .maybeSingle();
+      if (directoryError) throw directoryError;
+      if (!directory?.active) throw new Error("This email is not an active approved Staff account");
+      if (directory.auth_user_id) return json({ ok: true, invitationSent: false, alreadyProvisioned: true });
+
+      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(directory.email, {
+        data: { full_name: directory.full_name },
+        redirectTo: resetPasswordUrl(),
+      });
+      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite Staff account");
+
+      const userId = invitation.user.id;
+      const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: directory.email, full_name: directory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
+      if (profileError) throw profileError;
+      const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role: "staff", active: true }, { onConflict: "user_id" });
+      if (roleError) throw roleError;
+      const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", directory.email);
+      if (linkError) throw linkError;
+      return json({ ok: true, invitationSent: true });
+    }
+
+    if (action !== "provision_account") throw new Error("Invalid action");
+    const { fullName, role, pgy } = payload;
+    if (!["resident", "admin"].includes(role) || !email || typeof fullName !== "string" || !fullName.trim()) throw new Error("Invalid account data");
     if (role === "resident" && ![1, 2, 3, 4].includes(Number(pgy))) throw new Error("Resident PGY must be 1–4");
-    const normalizedEmail = email.trim().toLowerCase();
-    const { data: existing } = await adminClient.from("resident_profiles").select("user_id").eq("email", normalizedEmail).maybeSingle();
+
+    const { data: directory, error: directoryError } = await adminClient.from("resident_staff_directory").select("email").eq("email", email).maybeSingle();
+    if (directoryError) throw directoryError;
+    if (directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
+
+    const { data: existing, error: existingError } = await adminClient.from("resident_profiles").select("user_id").eq("email", email).maybeSingle();
+    if (existingError) throw existingError;
     let userId = existing?.user_id;
     let invitationSent = false;
     if (!userId) {
-      const { data, error } = await adminClient.auth.admin.inviteUserByEmail(normalizedEmail, {
+      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(email, {
         data: { full_name: fullName.trim() },
-        redirectTo: typeof appUrl === "string" ? `${appUrl.replace(/\/$/, "")}/` : undefined,
+        redirectTo: resetPasswordUrl(),
       });
-      if (error || !data.user) throw error || new Error("Could not invite account");
-      userId = data.user.id;
+      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite account");
+      userId = invitation.user.id;
       invitationSent = true;
     }
-    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: normalizedEmail, full_name: fullName.trim(), pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
+    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email, full_name: fullName.trim(), pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
     if (profileError) throw profileError;
     const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role, active: true }, { onConflict: "user_id" });
     if (roleError) throw roleError;
