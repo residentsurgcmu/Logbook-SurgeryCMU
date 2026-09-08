@@ -11,6 +11,7 @@ export async function signIn({ email, password }) {
 }
 
 export async function signOut() { const { error } = await supabase.auth.signOut(); fail(error); }
+export async function updatePassword(password) { const { error } = await supabase.auth.updateUser({ password }); fail(error); }
 export function onAuthChange(listener) { return supabase.auth.onAuthStateChange((event, session) => listener(event, session)); }
 
 export async function loadResidentWorkspace() {
