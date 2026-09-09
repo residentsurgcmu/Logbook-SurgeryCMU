@@ -146,3 +146,20 @@ export async function inviteStaff(email) {
   const { data, error } = await supabase.functions.invoke("resident-admin", { body: { action: "invite_staff", email: normalizeResidentEmail(email) } });
   fail(error); if (!data?.ok) throw new Error(data?.error || "Could not provision account"); return data;
 }
+
+async function residentAdminError(error, fallback) {
+  const context = error?.context;
+  const payload = context && typeof context.json === "function" ? await context.json().catch(() => ({})) : {};
+  return new Error(payload.error || error?.message || fallback);
+}
+
+export async function deleteResidentAssessment(profile, assessmentId, residentId, password) {
+  if (profile?.role !== "admin") throw new Error("เฉพาะ Admin เท่านั้นที่ลบหัตถการได้");
+  if (!password) throw new Error("กรุณากรอกรหัสผ่าน Admin");
+  const { data, error } = await supabase.functions.invoke("resident-admin", {
+    body: { action: "delete_assessment", assessmentId, residentId, password },
+  });
+  if (error) throw await residentAdminError(error, "ไม่สามารถลบหัตถการได้");
+  if (!data?.ok) throw new Error(data?.error || "ไม่สามารถลบหัตถการได้");
+  return data;
+}

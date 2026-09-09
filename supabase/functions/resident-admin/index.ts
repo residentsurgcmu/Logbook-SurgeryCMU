@@ -15,6 +15,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const resetPasswordUrl = () => `${appUrl}/reset-password`;
 const normalizedEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : "";
+const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -40,6 +41,34 @@ Deno.serve(async (request) => {
     const payload = await request.json();
     const action = payload?.action;
     const email = normalizedEmail(payload?.email);
+
+    if (action === "delete_assessment") {
+      const assessmentId = payload?.assessmentId;
+      const residentId = payload?.residentId;
+      const password = typeof payload?.password === "string" ? payload.password : "";
+      if (!isUuid(assessmentId) || !isUuid(residentId)) return json({ error: "ข้อมูลหัตถการหรือ Resident ไม่ถูกต้อง" }, 400);
+      if (!password) return json({ error: "กรุณากรอกรหัสผ่าน Admin" }, 400);
+      if (!callerData.user.email) return json({ error: "ไม่พบอีเมลของบัญชี Admin" }, 400);
+
+      const passwordClient = createClient(url, publishableKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { error: passwordError } = await passwordClient.auth.signInWithPassword({
+        email: callerData.user.email,
+        password,
+      });
+      if (passwordError) return json({ error: "รหัสผ่าน Admin ไม่ถูกต้อง" }, 401);
+      // Clear only the temporary in-memory session; keep the browser session active.
+      await passwordClient.auth.signOut({ scope: "local" }).catch(() => {});
+
+      const { data: deletedCount, error: deleteError } = await adminClient.rpc("admin_delete_resident_assessment", {
+        p_assessment_id: assessmentId,
+        p_resident_id: residentId,
+      });
+      if (deleteError) {
+        if (deleteError.message.includes("Assessment was not found")) return json({ error: "ไม่พบหัตถการของ Resident ที่เลือก" }, 404);
+        throw deleteError;
+      }
+      return json({ ok: true, deletedCount });
+    }
 
     if (action === "invite_staff") {
       if (!email) throw new Error("Invalid Staff email");
