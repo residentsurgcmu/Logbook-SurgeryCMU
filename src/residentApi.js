@@ -49,15 +49,28 @@ export async function loadResidentWorkspace() {
   const directoryQuery = role.role === "admin"
     ? supabase.from("resident_staff_directory").select("email,full_name,unit_name,active,auth_user_id,invited_at").order("unit_name").order("full_name")
     : Promise.resolve({ data: [], error: null });
-  const [{ data: templates, error: templatesError }, { data: assessments, error: assessmentsError }, { data: profiles, error: profilesError }, { data: assignments, error: assignmentsError }, { data: staffDirectory, error: staffDirectoryError }] = await Promise.all([
+  const [{ data: templates, error: templatesError }, { data: assessments, error: assessmentsError }, { data: profiles, error: profilesError }, { data: assignments, error: assignmentsError }, { data: staffDirectory, error: staffDirectoryError }, { data: registeredStaff, error: registeredStaffError }, { data: requests, error: requestsError }, { data: notifications, error: notificationsError }] = await Promise.all([
     supabase.from("resident_template_definitions").select("*,resident_template_criteria(*)").eq("active", true).order("template_code"),
     supabase.from("resident_assessments").select("*,resident_template_definitions(template_code,title,template_type),resident_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))").order("assessment_date", { ascending: false }),
     supabase.from("resident_profiles").select("*").eq("active", true).order("full_name"),
     supabase.from("resident_evaluator_assignments").select("*").eq("active", true),
     directoryQuery,
+    supabase.rpc("list_registered_resident_staff"),
+    supabase.from("resident_assessment_requests").select("*,resident_template_definitions(template_code,title,template_type)").order("submitted_at", { ascending: false }),
+    supabase.from("resident_notifications").select("*").order("created_at", { ascending: false }).limit(100),
   ]);
-  fail(templatesError); fail(assessmentsError); fail(profilesError); fail(assignmentsError); fail(staffDirectoryError);
-  return { user: { ...mapProfile(profile), role: role.role }, templates: (templates || []).map((template) => ({ ...template, criteria: (template.resident_template_criteria || []).sort((a, b) => a.sort_order - b.sort_order) })), assessments: assessments || [], profiles: (profiles || []).map(mapProfile), assignments: assignments || [], staffDirectory: staffDirectory || [] };
+  fail(templatesError); fail(assessmentsError); fail(profilesError); fail(assignmentsError); fail(staffDirectoryError); fail(registeredStaffError); fail(requestsError); fail(notificationsError);
+  return {
+    user: { ...mapProfile(profile), role: role.role },
+    templates: (templates || []).map((template) => ({ ...template, criteria: (template.resident_template_criteria || []).sort((a, b) => a.sort_order - b.sort_order) })),
+    assessments: assessments || [],
+    profiles: (profiles || []).map(mapProfile),
+    assignments: assignments || [],
+    staffDirectory: staffDirectory || [],
+    registeredStaff: registeredStaff || [],
+    requests: requests || [],
+    notifications: notifications || [],
+  };
 }
 
 export async function syncSourceTemplates() {
@@ -77,6 +90,37 @@ export async function createAssessment(form) {
     p_overall_outcome: form.outcome.trim(), p_overall_comment: form.comment.trim(), p_scores: form.scores,
   });
   fail(error); return data;
+}
+
+export async function requestAssessment(form) {
+  const { data: requestId, error } = await supabase.rpc("submit_resident_assessment_request", {
+    p_template_id: form.templateId,
+    p_staff_id: form.staffId,
+    p_assessment_date: form.date,
+    p_clinical_context: form.context.trim(),
+    p_procedure_or_activity: form.activity.trim(),
+  });
+  fail(error);
+  const { data: delivery, error: deliveryError } = await supabase.functions.invoke("resident-assessment-notifier", {
+    body: { action: "deliver_initial", requestId },
+  });
+  return { requestId, emailSent: !deliveryError && delivery?.ok && delivery?.sent };
+}
+
+export async function completeAssessmentRequest(form) {
+  const { data, error } = await supabase.rpc("complete_resident_assessment_request", {
+    p_request_id: form.requestId,
+    p_overall_outcome: form.outcome.trim(),
+    p_overall_comment: form.comment.trim(),
+    p_scores: form.scores,
+  });
+  fail(error);
+  return data;
+}
+
+export async function markNotificationRead(notificationId) {
+  const { error } = await supabase.from("resident_notifications").update({ read_at: new Date().toISOString() }).eq("id", notificationId);
+  fail(error);
 }
 
 export async function saveAssignment(staffId, residentId) {
