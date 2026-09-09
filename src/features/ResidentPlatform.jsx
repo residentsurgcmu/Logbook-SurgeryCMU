@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { completeAssessmentRequest, inviteStaff, markNotificationRead, provisionAccount, requestAssessment, saveAssignment, syncSourceTemplates } from "../residentApi";
+import ResidentDashboard from "./ResidentDashboard";
+import ResidentExportCenter from "./ResidentExportCenter";
+import { parseResidentQrToken, ResidentQrCard, StaffQrScanner } from "./ResidentQr";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const readableDate = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(new Date(`${value}T00:00:00`));
@@ -63,15 +66,18 @@ function Admin({ workspace, onRefresh }) {
 }
 
 export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
-  const initialTab = workspace.user.role === "resident" ? "request" : workspace.user.role === "staff" ? "pending" : "admin";
+  const routeToken = parseResidentQrToken(window.location.pathname);
+  const initialTab = workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
   const [tab, setTab] = useState(initialTab); const [selectedRequest, setSelectedRequest] = useState(null);
   const unreadCount = useMemo(() => workspace.notifications.filter((item) => !item.read_at).length, [workspace.notifications]);
-  const nav = [["history", "ผลการประเมิน"]];
+  const nav = [["dashboard", "Dashboard"], ["history", "ผลการประเมิน"]];
   if (workspace.user.role === "resident") nav.unshift(["request", "ส่งแบบประเมิน"]);
-  if (workspace.user.role === "staff") nav.unshift(["pending", `รอประเมิน (${workspace.requests.filter((item) => item.status === "pending").length})`]);
+  if (workspace.user.role === "resident") nav.splice(2, 0, ["qr", "QR ของฉัน"]);
+  if (workspace.user.role === "staff") nav.unshift(["pending", `รอประเมิน (${workspace.requests.filter((item) => item.status === "pending").length})`], ["scan", "สแกน QR"]);
   nav.push(["notifications", `Notification${unreadCount ? ` (${unreadCount})` : ""}`]);
-  if (workspace.user.role === "admin") nav.push(["admin", "จัดการระบบ"]);
-  const titles = { request: "ส่งแบบประเมิน EPA/PBA", pending: "รายการรอ Staff ประเมิน", history: "ผลการประเมินของฉัน", notifications: "Notification", admin: "จัดการระบบ Resident" };
+  if (workspace.user.role === "admin") nav.push(["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
+  const titles = { dashboard: "Dashboard การประเมิน", request: "ส่งแบบประเมิน EPA/PBA", pending: "รายการรอ Staff ประเมิน", scan: "สแกน QR เพื่อประเมิน", qr: "QR สำหรับ Staff", history: "ผลการประเมินของฉัน", notifications: "Notification", export: "Export ข้อมูลการประเมิน", admin: "จัดการระบบ Resident" };
   async function readNotification(id) { await markNotificationRead(id); await onRefresh(); }
-  return <div className="resident-app"><header><div className="resident-brand"><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><div><strong>Resident Surgery Assessment</strong><span>EPA · PBA · ภาควิชาศัลยศาสตร์ มหาวิทยาลัยเชียงใหม่</span></div></div><div><span className="role-chip">{roleLabel[workspace.user.role]}</span><button className="text-button" onClick={onLogout}>ออกจากระบบ</button></div></header><nav>{nav.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setSelectedRequest(null); }}>{label}</button>)}</nav><main><div className="page-heading"><div><h1>{titles[tab]}</h1><p>{workspace.user.name}{workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}</p></div></div>{tab === "admin" ? <Admin workspace={workspace} onRefresh={onRefresh} /> : tab === "request" ? <><RequestForm templates={workspace.templates} staff={workspace.registeredStaff} onSaved={onRefresh} /><RequestHistory requests={workspace.requests} profiles={workspace.profiles} /></> : tab === "pending" ? selectedRequest ? <EvaluationForm request={selectedRequest} templates={workspace.templates} profiles={workspace.profiles} onSaved={async () => { setSelectedRequest(null); await onRefresh(); }} onCancel={() => setSelectedRequest(null)} /> : <RequestQueue requests={workspace.requests} profiles={workspace.profiles} onSelect={setSelectedRequest} /> : tab === "notifications" ? <Notifications notifications={workspace.notifications} onRead={readNotification} /> : <History assessments={workspace.assessments} user={workspace.user} profiles={workspace.profiles} />}</main><footer>ข้อมูลการประเมินใช้เพื่อการศึกษาและการพัฒนาวิชาชีพ ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</footer></div>;
+  const openScannedRequest = (request) => { setSelectedRequest(request); setTab("pending"); };
+  return <div className="resident-app"><header><div className="resident-brand"><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><div><strong>Resident Surgery Assessment</strong><span>EPA · PBA · ภาควิชาศัลยศาสตร์ มหาวิทยาลัยเชียงใหม่</span></div></div><div><span className="role-chip">{roleLabel[workspace.user.role]}</span><button className="text-button" onClick={onLogout}>ออกจากระบบ</button></div></header><nav>{nav.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setSelectedRequest(null); }}>{label}</button>)}</nav><main><div className="page-heading"><div><h1>{titles[tab]}</h1><p>{workspace.user.name}{workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}</p></div></div>{tab === "dashboard" ? <ResidentDashboard workspace={workspace} /> : tab === "export" ? <ResidentExportCenter workspace={workspace} /> : tab === "qr" ? <ResidentQrCard user={workspace.user} /> : tab === "scan" ? <StaffQrScanner workspace={workspace} initialToken={routeToken} onOpenRequest={openScannedRequest} /> : tab === "admin" ? <Admin workspace={workspace} onRefresh={onRefresh} /> : tab === "request" ? <><RequestForm templates={workspace.templates} staff={workspace.registeredStaff} onSaved={onRefresh} /><RequestHistory requests={workspace.requests} profiles={workspace.profiles} /></> : tab === "pending" ? selectedRequest ? <EvaluationForm request={selectedRequest} templates={workspace.templates} profiles={workspace.profiles} onSaved={async () => { setSelectedRequest(null); await onRefresh(); }} onCancel={() => setSelectedRequest(null)} /> : <RequestQueue requests={workspace.requests} profiles={workspace.profiles} onSelect={setSelectedRequest} /> : tab === "notifications" ? <Notifications notifications={workspace.notifications} onRead={readNotification} /> : <History assessments={workspace.assessments} user={workspace.user} profiles={workspace.profiles} />}</main><footer>ข้อมูลการประเมินใช้เพื่อการศึกษาและการพัฒนาวิชาชีพ ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</footer></div>;
 }

@@ -3,7 +3,7 @@ import { residentTemplates } from "./generated/residentTemplates";
 import { normalizeResidentEmail, passwordResetRedirect } from "./residentAuth";
 
 const fail = (error) => { if (error) throw error; };
-const mapProfile = (row) => ({ id: row.user_id, name: row.full_name, email: row.email, pgy: row.pgy, active: row.active });
+const mapProfile = (row) => ({ id: row.user_id, name: row.full_name, email: row.email, pgy: row.pgy, active: row.active, qrToken: row.qr_token || null });
 
 export async function signIn({ email, password }) {
   const { data, error } = await supabase.auth.signInWithPassword({ email: normalizeResidentEmail(email), password });
@@ -42,7 +42,7 @@ export async function loadResidentWorkspace() {
   if (!authData.user) return null;
   const [{ data: role, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
     supabase.from("resident_user_roles").select("role,active").eq("user_id", authData.user.id).maybeSingle(),
-    supabase.from("resident_profiles").select("*").eq("user_id", authData.user.id).maybeSingle(),
+    supabase.from("resident_profiles").select("user_id,full_name,email,pgy,active,qr_token").eq("user_id", authData.user.id).maybeSingle(),
   ]);
   fail(roleError); fail(profileError);
   if (!role?.active || !profile?.active) return { unauthorized: true, email: authData.user.email || "" };
@@ -52,7 +52,7 @@ export async function loadResidentWorkspace() {
   const [{ data: templates, error: templatesError }, { data: assessments, error: assessmentsError }, { data: profiles, error: profilesError }, { data: assignments, error: assignmentsError }, { data: staffDirectory, error: staffDirectoryError }, { data: registeredStaff, error: registeredStaffError }, { data: requests, error: requestsError }, { data: notifications, error: notificationsError }] = await Promise.all([
     supabase.from("resident_template_definitions").select("*,resident_template_criteria(*)").eq("active", true).order("template_code"),
     supabase.from("resident_assessments").select("*,resident_template_definitions(template_code,title,template_type),resident_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))").order("assessment_date", { ascending: false }),
-    supabase.from("resident_profiles").select("*").eq("active", true).order("full_name"),
+    supabase.from("resident_profiles").select("user_id,full_name,email,pgy,active").eq("active", true).order("full_name"),
     supabase.from("resident_evaluator_assignments").select("*").eq("active", true),
     directoryQuery,
     supabase.rpc("list_registered_resident_staff"),
@@ -121,6 +121,15 @@ export async function completeAssessmentRequest(form) {
 export async function markNotificationRead(notificationId) {
   const { error } = await supabase.from("resident_notifications").update({ read_at: new Date().toISOString() }).eq("id", notificationId);
   fail(error);
+}
+
+export async function resolveResidentQr(token) {
+  const normalized = String(token || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) throw new Error("QR code ไม่ถูกต้อง");
+  const { data, error } = await supabase.rpc("resolve_resident_assessment_qr", { p_qr_token: normalized });
+  fail(error);
+  if (!data?.length) throw new Error("ไม่พบ Resident จาก QR code นี้");
+  return data[0];
 }
 
 export async function saveAssignment(staffId, residentId) {
