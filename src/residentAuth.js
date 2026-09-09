@@ -23,3 +23,7 @@ export function hasPasswordRecoveryLink(location) {
 export function isPasswordSetupRoute(location) {
   return location.pathname === "/reset-password" || hasPasswordRecoveryLink(location);
 }
+
+export function shouldLoadResidentWorkspace(location) {
+  return !isPasswordSetupRoute(location);
+}

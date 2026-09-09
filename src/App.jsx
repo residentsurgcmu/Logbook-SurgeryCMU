@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
+import { getResidentSession, onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
 import ResidentPlatform from "./features/ResidentPlatform";
-import { isPasswordSetupRoute, residentRoleLabels, residentRoles } from "./residentAuth";
+import { isPasswordSetupRoute, residentRoleLabels, residentRoles, shouldLoadResidentWorkspace } from "./residentAuth";
 
 function Login({ onLogin, onRequestReset, error, initialMessage }) {
   const [role, setRole] = useState("resident"); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [mode, setMode] = useState("login"); const [busy, setBusy] = useState(false); const [localError, setLocalError] = useState(""); const [message, setMessage] = useState(initialMessage || "");
@@ -26,12 +26,33 @@ function PasswordSetup({ onSave }) {
   return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>ตั้งรหัสผ่าน</h1><p>สร้างรหัสผ่านสำหรับบัญชี Resident Surgery Assessment</p><small>ลิงก์นี้ใช้สำหรับบัญชีที่ได้รับคำเชิญหรือขอรีเซ็ตรหัสผ่าน</small></section><form onSubmit={submit}><h2>ตั้งรหัสผ่านใหม่</h2><label>รหัสผ่านใหม่<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} autoComplete="new-password" /></label><label>ยืนยันรหัสผ่าน<input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={8} autoComplete="new-password" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-button" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกรหัสผ่าน"}</button></form></main>;
 }
 
+function PasswordSetupUnavailable({ onReturnToLogin }) {
+  return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>ลิงก์ตั้งรหัสผ่านใช้ไม่ได้</h1><p>ลิงก์อาจหมดอายุ ถูกใช้งานแล้ว หรือเปิดในเบราว์เซอร์อื่น</p><small>เพื่อความปลอดภัย กรุณาขอลิงก์ตั้งรหัสผ่านใหม่</small></section><div className="resident-recovery-unavailable"><h2>ไม่พบ session สำหรับตั้งรหัสผ่าน</h2><p>กลับไปหน้าเข้าสู่ระบบ แล้วเลือก “ลืมรหัสผ่าน?” เพื่อส่งลิงก์ใหม่ไปยังอีเมลของคุณ</p><button className="primary-button" type="button" onClick={onReturnToLogin}>กลับไปหน้าเข้าสู่ระบบ</button></div></main>;
+}
+
 export default function App() {
-  const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location));
+  const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
   async function refresh() { setError(""); try { setWorkspace(await loadResidentWorkspace()); } catch (nextError) { setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setWorkspace(null); } }
-  useEffect(() => { refresh(); const { data: listener } = onAuthChange((event, session) => { if (event === "PASSWORD_RECOVERY" || isPasswordSetupRoute(window.location)) setNeedsPassword(true); if (session) refresh(); else setWorkspace(null); }); return () => listener.subscription.unsubscribe(); }, []);
+  useEffect(() => {
+    let active = true;
+    const startPasswordSetup = (session) => { if (!active) return; setNeedsPassword(true); setPasswordSession(session || null); };
+    const setupRoute = isPasswordSetupRoute(window.location);
+    if (setupRoute) getResidentSession().then(startPasswordSetup).catch(() => startPasswordSetup(null));
+    else refresh();
+    const { data: listener } = onAuthChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") { startPasswordSetup(session); return; }
+      if (isPasswordSetupRoute(window.location)) { if (session) startPasswordSetup(session); return; }
+      if (session && shouldLoadResidentWorkspace(window.location)) refresh();
+      else setWorkspace(null);
+    });
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, []);
+  if (needsPassword) {
+    if (passwordSession === undefined) return <div className="resident-loading">กำลังตรวจสอบลิงก์ตั้งรหัสผ่าน…</div>;
+    if (!passwordSession) return <PasswordSetupUnavailable onReturnToLogin={() => { window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setPasswordSession(null); setWorkspace(null); }} />;
+    return <PasswordSetup onSave={async (password) => { await updatePassword(password); await signOut(); window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setPasswordSession(null); setAuthMessage("ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง"); setWorkspace(null); }} />;
+  }
   if (workspace === undefined) return <div className="resident-loading">กำลังเชื่อมต่อ Resident Surgery Assessment…</div>;
-  if (needsPassword && workspace && !workspace.unauthorized) return <PasswordSetup onSave={async (password) => { await updatePassword(password); await signOut(); window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setAuthMessage("ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง"); setWorkspace(null); }} />;
   if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} onLogin={async (credentials) => { setAuthMessage(""); await signIn(credentials); await refresh(); }} onRequestReset={requestPasswordReset} />;
   return <ResidentPlatform workspace={workspace} onRefresh={refresh} onLogout={async () => { await signOut(); setWorkspace(null); }} />;
 }

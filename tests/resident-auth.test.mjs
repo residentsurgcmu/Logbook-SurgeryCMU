@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hasPasswordRecoveryLink, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles } from "../src/residentAuth.js";
+import { hasPasswordRecoveryLink, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
 
 test("Resident authentication exposes exactly Resident, Staff, and Admin roles", () => {
   assert.deepEqual(residentRoles, ["resident", "staff", "admin"]);
@@ -13,6 +13,27 @@ test("password reset targets the dedicated SPA route and recognizes invite/recov
   assert.equal(hasPasswordRecoveryLink({ search: "", hash: "#access_token=token&type=recovery" }), true);
   assert.equal(hasPasswordRecoveryLink({ search: "", hash: "" }), false);
   assert.equal(isPasswordSetupRoute({ pathname: "/reset-password", search: "", hash: "" }), true);
+  assert.equal(shouldLoadResidentWorkspace({ pathname: "/reset-password", search: "", hash: "" }), false);
+  assert.equal(shouldLoadResidentWorkspace({ pathname: "/", search: "", hash: "" }), true);
+});
+
+test("RLS helpers are executable only while evaluating authenticated policies", async () => {
+  const sql = await readFile(new URL("../supabase/migrations/20260909093203_fix_resident_rls_helper_permissions.sql", import.meta.url), "utf8");
+  assert.match(sql, /grant execute on function private\.resident_role_is\(public\.resident_system_role\) to authenticated/);
+  assert.match(sql, /grant execute on function private\.resident_can_evaluate\(uuid\) to authenticated/);
+  assert.match(sql, /revoke all on function private\.resident_role_is\(public\.resident_system_role\) from public, anon/);
+  assert.match(sql, /revoke all on function private\.resident_can_evaluate\(uuid\) from public, anon/);
+  assert.match(sql, /has_function_privilege\('authenticated'/);
+  assert.match(sql, /has_function_privilege\('anon'/);
+  assert.match(sql, /has_function_privilege\('public'/);
+});
+
+test("recovery UI obtains only an Auth session before rendering password setup", async () => {
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /if \(setupRoute\) getResidentSession\(\)\.then\(startPasswordSetup\)/);
+  assert.match(app, /event === "PASSWORD_RECOVERY"[\s\S]*?startPasswordSetup\(session\); return;/);
+  assert.doesNotMatch(app, /if \(setupRoute\) refresh\(\)/);
+  assert.match(app, /PasswordSetupUnavailable/);
 });
 
 test("email normalization is stable before login, invite, and recovery calls", () => {

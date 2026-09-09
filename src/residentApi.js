@@ -15,6 +15,12 @@ export async function signOut() { const { error } = await supabase.auth.signOut(
 export async function updatePassword(password) { const { error } = await supabase.auth.updateUser({ password }); fail(error); }
 export function onAuthChange(listener) { return supabase.auth.onAuthStateChange((event, session) => listener(event, session)); }
 
+export async function getResidentSession() {
+  const { data, error } = await supabase.auth.getSession();
+  fail(error);
+  return data.session;
+}
+
 export async function requestPasswordReset(email) {
   const configuredAppUrl = import.meta.env.VITE_APP_URL?.trim();
   const appUrl = configuredAppUrl || window.location.origin;
@@ -29,10 +35,9 @@ export async function requestPasswordReset(email) {
 export async function loadResidentWorkspace() {
   // An anonymous browser has no stored session. Treat that as the normal
   // sign-in state rather than surfacing Supabase's "Auth session missing".
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  fail(sessionError);
-  if (!sessionData.session) return null;
-  const { data: authData, error: authError } = await supabase.auth.getUser(sessionData.session.access_token);
+  const session = await getResidentSession();
+  if (!session) return null;
+  const { data: authData, error: authError } = await supabase.auth.getUser(session.access_token);
   fail(authError);
   if (!authData.user) return null;
   const [{ data: role, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
