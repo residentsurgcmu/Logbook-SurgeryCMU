@@ -6,6 +6,12 @@ export const residentRoleLabels = {
   admin: "Admin",
 };
 
+export const residentSessionClockErrorMessage = "เซสชันเดิมมีข้อมูลเวลาไม่สอดคล้อง ระบบล้างเซสชันเฉพาะอุปกรณ์นี้แล้ว กรุณาตั้งวันที่และเวลาเป็นอัตโนมัติ แล้วเข้าสู่ระบบใหม่";
+
+export function isJwtIssuedInFutureError(error) {
+  return /jwt\s+issued\s+at\s+future/i.test(String(error?.message || error || ""));
+}
+
 export function normalizeResidentEmail(email) {
   return String(email || "").trim().toLowerCase();
 }

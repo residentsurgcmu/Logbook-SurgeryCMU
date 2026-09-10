@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { residentTemplates } from "./generated/residentTemplates";
-import { normalizeResidentEmail, passwordResetRedirect } from "./residentAuth";
+import { isJwtIssuedInFutureError, normalizeResidentEmail, passwordResetRedirect, residentSessionClockErrorMessage } from "./residentAuth";
 
 const fail = (error) => { if (error) throw error; };
 const mapProfile = (row) => ({ id: row.user_id, name: row.full_name, email: row.email, pgy: row.pgy, active: row.active, qrToken: row.qr_token || null });
@@ -11,7 +11,7 @@ export async function signIn({ email, password }) {
   return data.user;
 }
 
-export async function signOut() { const { error } = await supabase.auth.signOut(); fail(error); }
+export async function signOut() { const { error } = await supabase.auth.signOut({ scope: "local" }); fail(error); }
 export async function updatePassword(password) { const { error } = await supabase.auth.updateUser({ password }); fail(error); }
 export function onAuthChange(listener) { return supabase.auth.onAuthStateChange((event, session) => listener(event, session)); }
 
@@ -37,7 +37,21 @@ export async function loadResidentWorkspace() {
   // sign-in state rather than surfacing Supabase's "Auth session missing".
   const session = await getResidentSession();
   if (!session) return null;
-  const { data: authData, error: authError } = await supabase.auth.getUser(session.access_token);
+  let { data: authData, error: authError } = await supabase.auth.getUser(session.access_token);
+  if (isJwtIssuedInFutureError(authError)) {
+    // A persisted access token can become unusable when clocks drift. Ask Auth
+    // for one fresh token before clearing only this browser's broken session.
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshed.session) {
+      ({ data: authData, error: authError } = await supabase.auth.getUser(refreshed.session.access_token));
+    }
+    if (isJwtIssuedInFutureError(authError) || refreshError) {
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+      const clockError = new Error(residentSessionClockErrorMessage);
+      clockError.code = "RESIDENT_SESSION_CLOCK_SKEW";
+      throw clockError;
+    }
+  }
   fail(authError);
   if (!authData.user) return null;
   const [{ data: role, error: roleError }, { data: profile, error: profileError }] = await Promise.all([

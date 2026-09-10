@@ -67,3 +67,359 @@ button,input,textarea,select { font:inherit; }
 
 @media (max-width:960px) { .dashboard-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.metric-item:nth-child(2) { border-right:0; }.metric-item:nth-child(-n+2) { border-bottom:1px solid var(--resident-line); }.dashboard-columns,.export-layout,.scanner-layout { grid-template-columns:1fr; }.export-scope-panel { position:static; }.resident-qr-card { grid-template-columns:1fr; }.qr-code-panel { justify-self:center; width:min(100%,340px); } }
 @media (max-width:560px) { .dashboard-summary { grid-template-columns:1fr 1fr; }.metric-item { min-height:96px; padding:15px; }.metric-item:nth-child(odd) { border-right:1px solid var(--resident-line); }.metric-icon { width:36px; height:36px; }.metric-item strong { font-size:24px; }.progress-row { grid-template-columns:1fr 40px; }.progress-track { grid-row:2; grid-column:1/-1; }.resident-qr-card { padding:20px; }.manual-qr { grid-template-columns:1fr; }.export-actions > span { width:100%; margin-left:0; }.qr-card-copy h2 { font-size:21px; } }
+
+/* Liquid Glass is deliberately limited to controls that float above opaque clinical content. */
+:root {
+  --glass-fill: rgba(255, 255, 255, .72);
+  --glass-fill-strong: rgba(255, 255, 255, .86);
+  --glass-edge: rgba(255, 255, 255, .92);
+  --glass-shadow: 0 12px 28px rgba(17, 51, 33, .11), inset 0 1px 0 rgba(255, 255, 255, .96), inset 0 -1px 0 rgba(15, 63, 34, .05);
+  --glass-radius: 999px;
+  --keyboard-ring: #5336d9;
+}
+
+html { background: #f3f7f4; }
+body { background: #f3f7f4; }
+
+.app-shell, .resident-app { background: #f3f7f4; }
+
+/* The sign-in canvas stays opaque; only its controls use the glass lens. */
+.resident-login form,
+.resident-recovery-unavailable {
+  background:
+    radial-gradient(circle at 12% 28%, rgba(62, 161, 98, .15), transparent 29%),
+    radial-gradient(circle at 92% 72%, rgba(104, 82, 220, .10), transparent 28%),
+    #f8fbf9;
+}
+.resident-login form { position: relative; }
+.resident-login h2 { letter-spacing: -.02em; }
+.resident-role-selector > div {
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, .88);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .46);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+.resident-role-selector button {
+  min-height: 48px;
+  border-color: transparent;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .32);
+  color: #4b5850;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  backdrop-filter: blur(16px) saturate(145%);
+}
+.resident-role-selector button:hover { background: rgba(255, 255, 255, .68); }
+.resident-role-selector button.active {
+  border-color: rgba(255, 255, 255, .32);
+  background: linear-gradient(145deg, rgba(31, 116, 58, .92), rgba(11, 66, 29, .91));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34), inset 0 -1px 0 rgba(0, 0, 0, .16), 0 7px 17px rgba(12, 61, 29, .22);
+  color: #fff;
+}
+.resident-login form input {
+  min-height: 54px;
+  border-color: rgba(50, 90, 64, .20);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, .61);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .98), inset 0 -1px 0 rgba(17, 65, 34, .06), 0 8px 20px rgba(25, 67, 40, .06);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+}
+.resident-login .primary-button {
+  min-height: 54px;
+  background: linear-gradient(145deg, rgba(31, 116, 58, .94), rgba(10, 66, 28, .92));
+  -webkit-backdrop-filter: blur(20px) saturate(155%);
+  backdrop-filter: blur(20px) saturate(155%);
+}
+.resident-login .forgot-password-button,
+.resident-login .login-mode-button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, .76);
+  border-radius: var(--glass-radius);
+  background: rgba(255, 255, 255, .5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92), 0 5px 12px rgba(17, 51, 33, .06);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+  backdrop-filter: blur(16px) saturate(145%);
+}
+.resident-login .forgot-password-button { margin-top: -8px; }
+.resident-login .form-error,
+.resident-login .form-success {
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid #efc3c3;
+  border-radius: 14px;
+  background: #fff2f2;
+}
+.resident-login .form-success { border-color: #bdddc7; background: #eff9f2; }
+
+.app-header,
+.tab-nav,
+.resident-app > header,
+.resident-app > nav,
+.profile-button,
+.profile-menu,
+.resident-app header .text-button,
+.role-chip,
+.primary-button,
+.secondary-button,
+.subtabs button,
+.modal-close,
+.text-button.icon-button,
+.icon-button {
+  border: 1px solid rgba(255, 255, 255, .82);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+  backdrop-filter: blur(22px) saturate(155%);
+}
+
+.app-header {
+  width: min(calc(100% - 32px), 1400px);
+  height: 72px;
+  margin: 12px auto 8px;
+  padding: 0 clamp(16px, 2.25vw, 30px);
+  border-radius: 28px;
+  color: var(--ink);
+  position: sticky;
+  top: 12px;
+}
+
+.brand-copy { border-left-color: rgba(21, 84, 38, .18); }
+.header-actions { gap: 10px; }
+.profile-button { min-height: 48px; border-radius: var(--glass-radius); padding: 5px 11px 5px 7px; }
+.profile-button:hover, .resident-app header .text-button:hover { background: var(--glass-fill-strong); }
+.profile-avatar { background: rgba(225, 245, 235, .8); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .92); }
+.profile-menu { top: 56px; border-radius: 20px; background: rgba(255, 255, 255, .86); }
+
+.tab-nav {
+  width: min(calc(100% - 32px), 840px);
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, .82);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill);
+  position: sticky;
+  top: 92px;
+  z-index: 19;
+}
+.tab-nav button {
+  min-width: auto;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--glass-radius);
+  color: #47524b;
+  font-size: 14px;
+  font-weight: 750;
+}
+.tab-nav button:hover { background: rgba(255, 255, 255, .48); }
+.tab-nav button.active {
+  border: 1px solid rgba(255, 255, 255, .34);
+  border-bottom-color: rgba(255, 255, 255, .34);
+  background: linear-gradient(135deg, #1c6a34, #10471f);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 5px 12px rgba(12, 61, 29, .19);
+}
+.main-content { padding-top: 28px; }
+
+.resident-app > header {
+  width: min(calc(100% - 32px), 1240px);
+  min-height: 70px;
+  margin: 12px auto 8px;
+  padding: 10px clamp(14px, 2.5vw, 24px);
+  border-radius: 28px;
+  color: var(--resident-ink);
+  position: sticky;
+  top: 12px;
+  z-index: 30;
+}
+.resident-brand img { width: 46px; height: 46px; border: 1px solid rgba(21, 84, 38, .13); box-shadow: 0 3px 10px rgba(17, 51, 33, .09); }
+.resident-brand strong { color: var(--resident-green); font-size: 16px; letter-spacing: -.01em; }
+.resident-brand span { color: #536158; opacity: 1; }
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  margin-right: 8px;
+  padding: 4px 10px;
+  border-radius: var(--glass-radius);
+  color: var(--resident-green);
+  font-weight: 800;
+}
+.resident-app header .text-button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: var(--glass-radius);
+  color: var(--resident-green);
+}
+.resident-app > nav {
+  width: min(calc(100% - 32px), 900px);
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, .82);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+  backdrop-filter: blur(22px) saturate(155%);
+  position: sticky;
+  top: 92px;
+  z-index: 25;
+}
+.resident-app > nav button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--glass-radius);
+  color: #4d5c52;
+  font-size: 14px;
+  font-weight: 800;
+}
+.resident-app > nav button:hover { background: rgba(255, 255, 255, .48); }
+.resident-app > nav button.active {
+  border: 1px solid rgba(255, 255, 255, .34);
+  border-bottom-color: rgba(255, 255, 255, .34);
+  background: linear-gradient(135deg, #1c6a34, #10471f);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 5px 12px rgba(12, 61, 29, .19);
+}
+.resident-app main { margin-top: 28px; }
+
+/* Opaque information surfaces: never turn tables, forms, or clinical records into glass. */
+.content-panel,
+.resident-panel,
+.dashboard-summary,
+.summary-band,
+.password-card,
+.login-panel,
+.modal-card,
+.legal-card,
+.curriculum-card,
+.student-manager-form,
+.student-manager-list,
+.qr-code-panel {
+  background: #fff;
+  border-color: #dce6df;
+  box-shadow: 0 10px 28px rgba(17, 51, 33, .06);
+}
+.resident-panel, .content-panel, .dashboard-summary, .summary-band { border-radius: 18px; }
+.resident-table-wrap th,
+.procedure-row.table-head,
+.role-procedure-row.table-head { background: #f2f6f3; }
+
+/* Fields are controls, so they receive the lens treatment while their forms stay opaque. */
+.resident-login input,
+.resident-panel input,
+.resident-panel textarea,
+.resident-panel select,
+.record-form input,
+.record-form select,
+.record-form textarea,
+.assessment-form input,
+.assessment-form select,
+.assessment-form textarea,
+.input-wrap,
+.curriculum-card > label > input,
+.curriculum-card > label > select,
+.curriculum-card > label > textarea,
+.staff-manager-form > label > input,
+.staff-manager-form > label > select,
+.student-manager-fields > label > input,
+.student-manager-fields > label > select {
+  border-color: rgba(42, 83, 58, .19);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 -1px 0 rgba(19, 71, 37, .04);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
+  backdrop-filter: blur(12px) saturate(135%);
+}
+.input-wrap { border-radius: 14px; }
+.input-wrap input, .input-wrap select { background: transparent; }
+
+.primary-button {
+  min-height: 42px;
+  border-color: rgba(255, 255, 255, .31);
+  border-radius: var(--glass-radius);
+  background: linear-gradient(135deg, #1e7138, #10451f);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), inset 0 -1px 0 rgba(0, 0, 0, .16), 0 7px 16px rgba(12, 61, 29, .2);
+}
+.primary-button:hover:not(:disabled) { background: linear-gradient(135deg, #238443, #10451f); transform: translateY(-1px); }
+.secondary-button,
+.subtabs button,
+.text-button.icon-button,
+.icon-button {
+  min-height: 42px;
+  border-radius: var(--glass-radius);
+  color: var(--resident-green);
+}
+.secondary-button:hover:not(:disabled), .subtabs button:hover { background: var(--glass-fill-strong); }
+.subtabs button.active { background: rgba(224, 246, 232, .78); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 4px 11px rgba(17, 51, 33, .08); }
+
+/* Keyboard-only focus is never suppressed; it stays high-contrast and separated from its control. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--keyboard-ring) !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 7px rgba(255, 255, 255, .94), 0 0 0 10px rgba(83, 54, 217, .22) !important;
+}
+.input-wrap:focus-within { border-color: #5336d9; box-shadow: 0 0 0 3px rgba(83, 54, 217, .16), inset 0 1px 0 rgba(255,255,255,.95); }
+
+@media (max-width: 800px) {
+  .app-header, .resident-app > header { width: calc(100% - 24px); margin-top: 8px; border-radius: 22px; top: 8px; }
+  .app-header { height: auto; min-height: 64px; }
+  .tab-nav, .resident-app > nav { width: calc(100% - 24px); top: 80px; }
+  .resident-app > header { align-items: center; }
+  .resident-app > header > div:last-child { display: flex; align-items: center; gap: 6px; }
+  .role-chip { margin-right: 0; }
+  .resident-app > nav button, .tab-nav button { padding: 0 14px; }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .app-header,
+  .tab-nav,
+  .resident-app > header,
+  .resident-app > nav,
+  .profile-button,
+  .profile-menu,
+  .resident-app header .text-button,
+  .role-chip,
+  .secondary-button,
+  .subtabs button,
+  .modal-close,
+  .icon-button,
+  .resident-login input,
+  .resident-role-selector > div,
+  .resident-role-selector button,
+  .resident-login .forgot-password-button,
+  .resident-login .login-mode-button,
+  .resident-panel input,
+  .resident-panel textarea,
+  .resident-panel select,
+  .record-form input,
+  .record-form select,
+  .record-form textarea,
+  .assessment-form input,
+  .assessment-form select,
+  .assessment-form textarea,
+  .input-wrap {
+    background: #fff !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .primary-button, .tab-nav button.active, .resident-app > nav button.active { background: #155426; }
+  .resident-role-selector button.active, .resident-login .primary-button { background: #155426 !important; }
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .app-header, .tab-nav, .resident-app > header, .resident-app > nav, .profile-button, .profile-menu, .resident-app header .text-button, .role-chip, .secondary-button, .subtabs button, .modal-close, .icon-button { background: #fff; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}

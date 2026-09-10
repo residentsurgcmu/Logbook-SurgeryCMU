@@ -47,7 +47,7 @@ export default function AppShell({ user, activeTab, onTabChange, onLogout, onCha
       </header>
       <nav className="tab-nav" aria-label="เมนูหลัก">
         {(user.role === "admin" ? adminTabs : user.role === "staff" ? staffTabs : studentTabs).map(([id, label, TabIcon]) => (
-          <button key={id} className={activeTab === id ? "active" : ""} onClick={() => onTabChange(id)}><TabIcon size={17} />{label}</button>
+          <button key={id} type="button" className={activeTab === id ? "active" : ""} aria-current={activeTab === id ? "page" : undefined} onClick={() => onTabChange(id)}><TabIcon size={17} />{label}</button>
         ))}
       </nav>
       <main className="main-content">{children}</main>

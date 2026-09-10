@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hasPasswordRecoveryLink, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
+import { hasPasswordRecoveryLink, isJwtIssuedInFutureError, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, residentSessionClockErrorMessage, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
 
 test("Resident authentication exposes exactly Resident, Staff, and Admin roles", () => {
   assert.deepEqual(residentRoles, ["resident", "staff", "admin"]);
@@ -38,6 +38,16 @@ test("recovery UI obtains only an Auth session before rendering password setup",
 
 test("email normalization is stable before login, invite, and recovery calls", () => {
   assert.equal(normalizeResidentEmail("  Faculty@CMU.AC.TH "), "faculty@cmu.ac.th");
+});
+
+test("future-issued JWT errors are recognized and translated without exposing the backend message", async () => {
+  assert.equal(isJwtIssuedInFutureError(new Error("JWT issued at future")), true);
+  assert.equal(isJwtIssuedInFutureError(new Error("Invalid login credentials")), false);
+  assert.match(residentSessionClockErrorMessage, /ล้างเซสชันเฉพาะอุปกรณ์นี้/);
+  assert.doesNotMatch(residentSessionClockErrorMessage, /JWT issued at future/i);
+  const api = await readFile(new URL("../src/residentApi.js", import.meta.url), "utf8");
+  assert.match(api, /refreshSession\(\)/);
+  assert.match(api, /signOut\(\{ scope: "local" \}\)/);
 });
 
 test("migration keeps legacy evaluator accounts as Staff and imports the workbook directory", async () => {
