@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { residentTemplates } from "../src/generated/residentTemplates.js";
 
@@ -41,6 +43,20 @@ test("all source templates have ordered criteria and source hashes", () => {
       ),
     );
   }
+});
+
+test("each catalog hash matches its current DOCX source", async () => {
+  for (const form of residentTemplates) {
+    assert.match(form.sourceFile, /\.docx$/);
+    const bytes = await readFile(new URL(`../${form.sourceFile}`, import.meta.url));
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), form.sourceHash);
+  }
+});
+
+test("database seed matches every generated form and criterion", async () => {
+  const sql = await readFile(new URL("../supabase/migrations/20260919095717_rebuild_resident_epa_pba_catalog.sql", import.meta.url), "utf8");
+  const seed = JSON.parse(sql.match(/\$catalog_json\$([\s\S]*?)\$catalog_json\$/)[1]);
+  assert.deepEqual(seed, residentTemplates);
 });
 
 test("PBA assessment options preserve the source F/M/E scale", () => {
