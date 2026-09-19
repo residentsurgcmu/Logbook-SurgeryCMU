@@ -26,6 +26,12 @@ const attemptLabel = (request, template) =>
 export function ScoreLegend({ template }) {
   return (
     <div className="score-legend" aria-label="ความหมายของระดับคะแนน">
+      <span>
+        <strong>{template?.template_type}</strong> ={" "}
+        {template?.template_type === "EPA"
+          ? "Entrustable Professional Activities"
+          : "Procedure-Based Assessment"}
+      </span>
       {(template?.score_legend || []).map(([code, meaning]) => (
         <span key={code}>
           <strong>{code}</strong> = {meaning}
@@ -571,6 +577,9 @@ export function AssessmentHistory({
           {selected.resident_pgy} · {timeLabel(selected.signed_at)} ·{" "}
           {request && attemptLabel(request, template)}
         </p>
+        {request?.previous_staff_name && (
+          <p>ครั้งก่อนประเมินโดย {request.previous_staff_name}</p>
+        )}
         <ScoreLegend template={template} />
         {request?.self_submitted_at && (
           <div className="self-assessment-section">

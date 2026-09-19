@@ -420,6 +420,7 @@ function RequestQueue({ requests, profiles, onSelect }) {
               <th>ส่งเมื่อ</th>
               <th>Resident</th>
               <th>แบบประเมิน</th>
+              <th>ครั้งที่</th>
               <th>กิจกรรม</th>
               <th></th>
             </tr>
@@ -433,6 +434,7 @@ function RequestQueue({ requests, profiles, onSelect }) {
                   {request.resident_template_definitions?.template_code} ·{" "}
                   {request.resident_template_definitions?.title}
                 </td>
+                <td>{request.attempt_number}</td>
                 <td>{request.procedure_or_activity}</td>
                 <td>
                   <button
