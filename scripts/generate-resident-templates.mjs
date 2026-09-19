@@ -1,66 +1,243 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sources = [
-  ["EPA-1", "EPA", "EPA 1 Multiple trauma assessment and management", "EPA/EPA1-trauma.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-2", "EPA", "EPA 2 Management of acute surgical abdomen", "EPA/EPA2-acute abdomen.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-3", "EPA", "EPA 3 Management of gastrointestinal bleeding", "EPA/EPA3-Gastrointestinal Bleeding.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-4", "EPA", "EPA 4 Management of common hepato-biliary and pancreatic diseases", "EPA/EPA4-hepato-biliary.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-5", "EPA", "EPA 5 Management of breast mass in women", "EPA/EPA5-breast mass.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-6", "EPA", "EPA 6 Common problem in vascular disease", "EPA/EPA6-vascular.docx", ["L1", "L2", "L3", "L4", "L5"]],
-  ["EPA-7", "EPA", "EPA 7 Basic laparoscopic surgical skill", "EPA/EPA7 Basic Laparoscopic.docx", ["F", "M", "E"]],
-  ["EPA-8", "EPA", "EPA 8 Management of out-patient departments", "EPA/EPA_OPD.pdf", ["L1", "L2", "L3", "L4", "L5"]],
-  ["PBA-01", "PBA", "PBA Amputation", "PBA/1.การประเมินหัตถการ amputation.pdf", ["F", "M", "E"]],
-  ["PBA-02", "PBA", "PBA Appendectomy", "PBA/2.การประเมินหัตถการ appendectomy.pdf", ["F", "M", "E"]],
-  ["PBA-03", "PBA", "PBA AVF", "PBA/3.การประเมินหัตถการ avf.pdf", ["F", "M", "E"]],
-  ["PBA-04", "PBA", "PBA Breast conservative surgery", "PBA/4.การประเมินหัตถการ bcs.pdf", ["F", "M", "E"]],
-  ["PBA-05", "PBA", "PBA Colectomy", "PBA/5.การประเมินหัตถการ colectomy.pdf", ["F", "M", "E"]],
-  ["PBA-06", "PBA", "PBA Colonoscopy", "PBA/6.การประเมินหัตถการ colonoscope.pdf", ["F", "M", "E"]],
-  ["PBA-07", "PBA", "PBA Colostomy", "PBA/7.การประเมินหัตถการ colostomy.pdf", ["F", "M", "E"]],
-  ["PBA-08", "PBA", "PBA EGD", "PBA/8.การประเมินหัตถการ egd.pdf", ["F", "M", "E"]],
-  ["PBA-09", "PBA", "PBA Hemorrhoidectomy", "PBA/9.การประเมินหัตถการ hemorrhoidectomy .pdf", ["F", "M", "E"]],
-  ["PBA-10", "PBA", "PBA Hernia", "PBA/10.การประเมินหัตถการ hernia.pdf", ["F", "M", "E"]],
-  ["PBA-11", "PBA", "PBA Intestinal anastomosis", "PBA/11.การประเมินหัตถการ intestinal anastomosis.pdf", ["F", "M", "E"]],
-  ["PBA-12", "PBA", "PBA Laparoscopic cholecystectomy", "PBA/12.การประเมินหัตถการ lc.pdf", ["F", "M", "E"]],
-  ["PBA-13", "PBA", "PBA Liver resection", "PBA/13.การประเมินหัตถการ liver resection.pdf", ["F", "M", "E"]],
-  ["PBA-14", "PBA", "PBA Modified radical mastectomy", "PBA/14.การประเมินหัตถการ mrm.pdf", ["F", "M", "E"]],
-  ["PBA-15", "PBA", "PBA Open cholecystectomy", "PBA/15.การประเมินหัตถการ oc.pdf", ["F", "M", "E"]],
-  ["PBA-16", "PBA", "PBA Percutaneous endoscopic gastrostomy", "PBA/16.การประเมินหัตถการ peg.pdf", ["F", "M", "E"]],
-  ["PBA-17", "PBA", "PBA Splenectomy", "PBA/17.การประเมินหัตถการ splenectomy.pdf", ["F", "M", "E"]],
-  ["PBA-18", "PBA", "PBA Thyroid surgery", "PBA/18.การประเมินหัตถการ thyroid surgery.pdf", ["F", "M", "E"]],
-  ["PBA-19", "PBA", "PBA Tracheostomy", "PBA/19.การประเมินหัตถการ tracheostomy.pdf", ["F", "M", "E"]],
-  ["PBA-20", "PBA", "PBA Varicose vein", "PBA/20.การประเมินหัตถการ vv.pdf", ["F", "M", "E"]],
-  ["PBA-21", "PBA", "PBA Other procedure", "PBA/21.การประเมินหัตถการอื่นๆ .pdf", ["F", "M", "E"]],
+const epa7 = "EPA/EPA7 ประเมิน 2 ครั้ง-Basic Laparoscopic.docx";
+const epaTitles = [
+  "Multiple trauma assessment and management",
+  "Management of acute abdomen",
+  "Management of Gastrointestinal Bleeding",
+  "Management of common hepato-biliary and pancreatic diseases",
+  "Management of breast mass in women",
+  "Common problem in vascular disease",
 ];
+const pbaTitles = [
+  "Amputation",
+  "Appendectomy",
+  "AVF",
+  "Breast Conservative Surgery (BCS)",
+  "Colectomy",
+  "Colonoscope",
+  "Colostomy",
+  "EGD",
+  "Hemorrhoidectomy",
+  "Hernia",
+  "Intestinal anastomosis",
+  "Laparoscopic cholecystectomy (LC)",
+  "Liver resection",
+  "Modified radical mastectomy (MRM)",
+  "Open cholecystectomy (OC)",
+  "PEG",
+  "Splenectomy",
+  "Thyroid surgery",
+  "Tracheostomy",
+  "Varicose vein (VV)",
+  "Other operation",
+];
+const pgyRecommendations = {
+  1: [2, 19, 16, 10],
+  2: [8, 1, 15, 11],
+  3: [6, 7, 17, 12, 3, 20],
+  4: [5, 9, 4, 14, 13],
+};
+const epaLegend = [
+  ["L1", "ไม่มีความรู้ความเข้าใจ หรือยังไม่สามารถปฏิบัติได้เอง"],
+  [
+    "L2",
+    "ความรู้ความเข้าใจบ้าง หรือสามารถปฏิบัติได้บ้าง ต้องได้รับการควบคุมดูแลใกล้ชิด",
+  ],
+  [
+    "L3",
+    "มีความรู้ความเข้าใจพอควร หรือปฏิบัติได้เองเป็นส่วนใหญ่โดยต้องการคำแนะนำเพียงเล็กน้อย",
+  ],
+  [
+    "L4",
+    "มีความรู้ความเข้าใจเป็นอย่างดี หรือปฏิบัติได้เองเป็นส่วนใหญ่โดยต้องการคำแนะนำเพียงเล็กน้อย",
+  ],
+  [
+    "L5",
+    "มีความรู้ความเข้าใจเป็นอย่างดี สามารถสอนผู้อื่น หรือควบคุมผู้มีประสบการณ์น้อยกว่าปฏิบัติงานได้",
+  ],
+];
+const fmeLegend = [
+  ["F", "Fails"],
+  ["M", "Meets expectation"],
+  ["E", "Exceeds"],
+];
+const epaOutcomes = ["Excellence", "Pass", "Boarderline", "Fail"];
+const pbaOutcomes = ["F", "M", "E"];
 
-const ignored = /^(resident|staff|date|operation|procedure assessment|pba procedure|epa |level of epa|competency and epa|milestone|staff comment|staff comments|comments?|f\s*[–-]\s*fails|m\s*[–-]\s*meets|e\s*[–-]\s*exceeds|fail|meet expectation|exceed|ชื่อ|วัน|ผู้ประเมิน|ผู้สอบ|คะแนน|เกณฑ์การประเมิน)/i;
-const section = /^(preparation|content|pre-operative|intra-operative|post-operative|planning|exposure|technique|patient care|assessment|หัวข้อ|การวัด|ระดับความสามารถ)/i;
-
-function extract(relativePath) {
-  const fullPath = path.join(root, relativePath);
-  if (relativePath.endsWith(".docx")) return execFileSync("textutil", ["-convert", "txt", "-stdout", fullPath], { encoding: "utf8" });
-  return execFileSync("pdftotext", [fullPath, "-"], { encoding: "utf8" });
+function tables(relativePath) {
+  return JSON.parse(
+    execFileSync(
+      "python3",
+      [
+        path.join(root, "scripts/extract-resident-docx.py"),
+        path.join(root, relativePath),
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+}
+function sourceHash(relativePath) {
+  return createHash("sha256")
+    .update(readFileSync(path.join(root, relativePath)))
+    .digest("hex");
+}
+function template(
+  code,
+  type,
+  title,
+  sourceFile,
+  labels,
+  options,
+  legend,
+  outcomes,
+  maxAttempts,
+  recommendedPgy = [],
+) {
+  const present = labels.map((label) => label?.trim()).filter(Boolean);
+  if (!present.length || present.length !== labels.length)
+    throw new Error(`Missing criteria in ${sourceFile}`);
+  return {
+    code,
+    type,
+    title,
+    sourceFile,
+    sourceHash: sourceHash(sourceFile),
+    scoreOptions: options,
+    scoreLegend: legend,
+    outcomeOptions: outcomes,
+    maxAttempts,
+    requiresSelfAssessment: type === "PBA",
+    recommendedPgy,
+    criteria: present.map((label, index) => ({
+      code: `C${index + 1}`,
+      label,
+      section: "Assessment criteria",
+      sortOrder: index + 1,
+    })),
+  };
 }
 
-function criteriaFrom(text) {
-  const lines = text.replace(/\r/g, "\n").split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter((line) => line.length > 3 && line.length < 420 && !ignored.test(line));
-  const unique = [];
-  for (const line of lines) if (!unique.some((item) => item.toLocaleLowerCase() === line.toLocaleLowerCase())) unique.push(line);
-  return unique.map((label, index) => ({ code: `C${index + 1}`, label, section: section.test(label) ? label : "Assessment criteria", sortOrder: index + 1 }));
+const catalog = [];
+const epaFiles = readdirSync(path.join(root, "EPA")).filter((name) =>
+  name.endsWith(".docx"),
+);
+for (let number = 1; number <= 6; number++) {
+  const name = epaFiles.find((entry) => entry.startsWith(`EPA${number}-`));
+  if (!name) throw new Error(`EPA ${number} source is missing`);
+  const relative = `EPA/${name}`;
+  const labels = tables(relative)
+    .filter((table) => table[0]?.[0]?.trim() === "หัวข้อ")
+    .flatMap((table) =>
+      table
+        .slice(1)
+        .map((row) => row[0]?.trim())
+        .filter(Boolean),
+    );
+  catalog.push(
+    template(
+      `EPA-${number}`,
+      "EPA",
+      `EPA ${number} ${epaTitles[number - 1]}`,
+      relative,
+      labels,
+      ["L1", "L2", "L3", "L4", "L5"],
+      epaLegend,
+      epaOutcomes,
+      2,
+    ),
+  );
 }
+const epa7Tables = tables(epa7);
+catalog.push(
+  template(
+    "EPA-7-L1-L2",
+    "EPA",
+    "EPA 7 Basic Laparoscopic surgical skill Level 1–2",
+    epa7,
+    [...epa7Tables[1].slice(1), ...epa7Tables[2].slice(1)].map((row) =>
+      row[0]?.trim(),
+    ),
+    ["F", "M", "E"],
+    fmeLegend,
+    epaOutcomes,
+    1,
+  ),
+);
+catalog.push(
+  template(
+    "EPA-7-L3",
+    "EPA",
+    "EPA 7 Basic Laparoscopic surgical skill Level 3",
+    epa7,
+    epa7Tables[4].slice(1).map((row) => row[0]?.trim()),
+    ["F", "M", "E"],
+    fmeLegend,
+    epaOutcomes,
+    1,
+  ),
+);
 
-const residentTemplates = sources.map(([code, type, title, sourceFile, scoreOptions]) => {
-  const sourceBytes = readFileSync(path.join(root, sourceFile));
-  return { code, type, title, sourceFile, sourceHash: createHash("sha256").update(sourceBytes).digest("hex"), scoreOptions, criteria: criteriaFrom(extract(sourceFile)) };
-});
+const opd = "EPA/EPA_OPD.docx";
+const opdItems = tables(opd)[0][2][0]
+  .split("\n")
+  .filter((line) => /^[๑-๙][.．][๑-๙]/u.test(line));
+if (opdItems.length !== 8)
+  throw new Error(`Expected 8 EPA OPD criteria, found ${opdItems.length}`);
+catalog.push(
+  template(
+    "EPA-8",
+    "EPA",
+    "EPA 8 Management of out-patient departments",
+    opd,
+    opdItems,
+    ["L1", "L2", "L3", "L4", "L5"],
+    epaLegend,
+    ["ผ่านการประเมิน", "ไม่ผ่านการประเมิน"],
+    null,
+  ),
+);
 
-if (residentTemplates.some((template) => template.criteria.length === 0)) throw new Error("A source form produced no assessment criteria");
-mkdirSync(path.join(root, "src/generated"), { recursive: true });
-writeFileSync(path.join(root, "src/generated/residentTemplates.js"), `// Generated from EPA/ and PBA/ source files. Do not edit manually.\nexport const residentTemplates = ${JSON.stringify(residentTemplates, null, 2)};\n`);
-console.log(`Generated ${residentTemplates.length} templates from EPA/PBA source files.`);
+const pbaFiles = readdirSync(path.join(root, "PBA")).filter((name) =>
+  name.endsWith(".docx"),
+);
+for (let number = 1; number <= 21; number++) {
+  const name = pbaFiles.find((entry) => entry.startsWith(`${number}.`));
+  if (!name) throw new Error(`PBA ${number} source is missing`);
+  const relative = `PBA/${name}`;
+  const rows = tables(relative).flatMap((table) => table);
+  const scoredRows = rows.filter(
+    (row) =>
+      row.length >= 3 &&
+      /^F\s*M\s*E$/i.test(row[1]?.replace(/\s+/g, " ").trim()) &&
+      /^F\s*M\s*E$/i.test(row[2]?.replace(/\s+/g, " ").trim()),
+  );
+  catalog.push(
+    template(
+      `PBA-${String(number).padStart(2, "0")}`,
+      "PBA",
+      `PBA ${pbaTitles[number - 1]}`,
+      relative,
+      scoredRows.map((row) => row[0]?.trim()),
+      ["F", "M", "E"],
+      fmeLegend,
+      pbaOutcomes,
+      null,
+      Object.entries(pgyRecommendations)
+        .filter(([, items]) => items.includes(number))
+        .map(([pgy]) => Number(pgy)),
+    ),
+  );
+}
+if (catalog.length !== 30)
+  throw new Error(`Expected 30 templates, found ${catalog.length}`);
+writeFileSync(
+  path.join(root, "src/generated/residentTemplates.js"),
+  `// Generated from the DOCX sources in EPA/ and PBA/. Do not edit manually.\nexport const residentTemplates = ${JSON.stringify(catalog, null, 2)};\n`,
+);
+console.log(`Generated ${catalog.length} source-backed templates.`);

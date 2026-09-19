@@ -1,56 +1,589 @@
 import React, { useMemo, useState } from "react";
-import { completeAssessmentRequest, deleteResidentAssessment, inviteStaff, markNotificationRead, provisionAccount, requestAssessment, saveAssignment, syncSourceTemplates } from "../residentApi";
+import {
+  completeAssessmentRequest,
+  deleteResidentAssessment,
+  inviteStaff,
+  markNotificationRead,
+  provisionAccount,
+  requestAssessment,
+  saveAssignment,
+  syncSourceTemplates,
+} from "../residentApi";
 import ResidentDashboard from "./ResidentDashboard";
+import {
+  AssessmentHistory,
+  ResidentRequestForm,
+  ResidentRequestHistory,
+  StaffEvaluationForm,
+} from "./ResidentAssessmentViews";
 import ResidentExportCenter from "./ResidentExportCenter";
-import { parseResidentQrToken, ResidentQrCard, StaffQrScanner } from "./ResidentQr";
+import {
+  parseResidentQrToken,
+  ResidentQrCard,
+  StaffQrScanner,
+} from "./ResidentQr";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const readableDate = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(new Date(`${value}T00:00:00`));
-const readableDateTime = (value) => value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value)) : "—";
+const readableDate = (value) =>
+  new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(
+    new Date(`${value}T00:00:00`),
+  );
+const readableDateTime = (value) =>
+  value
+    ? new Intl.DateTimeFormat("th-TH", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Bangkok",
+      }).format(new Date(value))
+    : "—";
 const roleLabel = { admin: "Admin", staff: "Staff", resident: "Resident" };
 
 function History({ assessments, user, profiles }) {
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
-  if (!assessments.length) return <section className="resident-panel empty"><h2>ยังไม่มีผลการประเมิน</h2><p>{user.role === "resident" ? "ผล EPA/PBA ที่ Staff ลงนามแล้วจะแสดงที่นี่" : "เลือก Resident และแบบประเมินเพื่อเริ่มบันทึก"}</p></section>;
-  return <section className="resident-panel"><h2>ประวัติการประเมิน</h2><div className="resident-table-wrap"><table><thead><tr><th>วันที่</th><th>Resident</th><th>แบบประเมิน</th><th>ผู้ประเมิน</th><th>Staff ประเมินเมื่อ</th><th>ผลสรุป</th></tr></thead><tbody>{assessments.map((item) => <tr key={item.id}><td>{readableDate(item.assessment_date)}</td><td>{names.get(item.resident_id) || "—"}</td><td>{item.resident_template_definitions?.template_code} · {item.resident_template_definitions?.title}</td><td>{names.get(item.evaluator_id) || "—"}</td><td>{readableDateTime(item.signed_at)}</td><td>{item.overall_outcome || "—"}</td></tr>)}</tbody></table></div></section>;
+  if (!assessments.length)
+    return (
+      <section className="resident-panel empty">
+        <h2>ยังไม่มีผลการประเมิน</h2>
+        <p>
+          {user.role === "resident"
+            ? "ผล EPA/PBA ที่ Staff ลงนามแล้วจะแสดงที่นี่"
+            : "เลือก Resident และแบบประเมินเพื่อเริ่มบันทึก"}
+        </p>
+      </section>
+    );
+  return (
+    <section className="resident-panel">
+      <h2>ประวัติการประเมิน</h2>
+      <div className="resident-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>Resident</th>
+              <th>แบบประเมิน</th>
+              <th>ผู้ประเมิน</th>
+              <th>Staff ประเมินเมื่อ</th>
+              <th>ผลสรุป</th>
+            </tr>
+          </thead>
+          <tbody>
+            {assessments.map((item) => (
+              <tr key={item.id}>
+                <td>{readableDate(item.assessment_date)}</td>
+                <td>{names.get(item.resident_id) || "—"}</td>
+                <td>
+                  {item.resident_template_definitions?.template_code} ·{" "}
+                  {item.resident_template_definitions?.title}
+                </td>
+                <td>{names.get(item.evaluator_id) || "—"}</td>
+                <td>{readableDateTime(item.signed_at)}</td>
+                <td>{item.overall_outcome || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function RequestForm({ templates, staff, onSaved }) {
-  const [templateId, setTemplateId] = useState(templates[0]?.id || ""); const [staffId, setStaffId] = useState(""); const [date, setDate] = useState(today()); const [context, setContext] = useState(""); const [activity, setActivity] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
+  const [templateId, setTemplateId] = useState(templates[0]?.id || "");
+  const [staffId, setStaffId] = useState("");
+  const [date, setDate] = useState(today());
+  const [context, setContext] = useState("");
+  const [activity, setActivity] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const template = templates.find((item) => item.id === templateId);
-  async function submit(event) { event.preventDefault(); if (!template || !staffId || !activity.trim()) return setError("กรุณาเลือกแบบประเมิน เลือก Staff และกรอกชื่อกิจกรรม"); setBusy(true); setError(""); setMessage(""); try { const result = await requestAssessment({ templateId, staffId, date, context, activity }); setMessage(result.emailSent ? "ส่งแบบประเมินและอีเมลแจ้ง Staff แล้ว" : "ส่ง notification ในระบบแล้ว แต่ส่งอีเมลไม่สำเร็จ กรุณาแจ้ง Admin ตรวจการตั้งค่าอีเมล"); setActivity(""); setContext(""); await onSaved(); } catch (nextError) { setError(nextError.message || "ส่งแบบประเมินไม่สำเร็จ"); } finally { setBusy(false); } }
-  if (!templates.length) return <section className="resident-panel empty"><h2>ยังไม่มี catalog</h2><p>Admin ต้องซิงก์ EPA/PBA source ก่อนส่งแบบประเมิน</p></section>;
-  return <form className="resident-panel assessment-form" onSubmit={submit}><div className="section-heading"><h2>ส่งแบบประเมินให้ Staff</h2><p>เลือกได้เฉพาะ Staff ที่ลงทะเบียนและมีบัญชีตรงกับรายชื่อที่อนุมัติแล้ว</p></div><div className="resident-form-grid"><label>แบบประเมิน<select value={templateId} onChange={(event) => setTemplateId(event.target.value)} required><option value="">เลือกแบบประเมิน</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.template_code} · {item.title}</option>)}</select></label><label>Staff ผู้ประเมิน<select value={staffId} onChange={(event) => setStaffId(event.target.value)} required><option value="">เลือกรายชื่อ Staff ที่ลงทะเบียนแล้ว</option>{staff.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name} · {person.unit_name}</option>)}</select></label><label>วันที่ทำกิจกรรม<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label><label>{template?.template_type === "EPA" ? "C3 · ชื่อกิจกรรม" : "ชื่อกิจกรรม/หัตถการ"}<input value={activity} onChange={(event) => setActivity(event.target.value)} maxLength="240" placeholder="กรอกชื่อกิจกรรม" required /></label><label className="wide">บริบททางคลินิกแบบไม่ระบุตัวตน<textarea value={context} onChange={(event) => setContext(event.target.value)} maxLength="500" rows="2" placeholder="ห้ามระบุชื่อผู้ป่วยหรือ HN" /></label></div>{template?.template_type === "EPA" && <div className="epa-note"><strong>รูปแบบ EPA:</strong> C1–C2 เป็นข้อมูลประกอบ ไม่เลือกระดับ; C3 ใช้กรอกชื่อกิจกรรมเท่านั้น; Staff จะเริ่มให้ระดับตั้งแต่ C4</div>}{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<button className="primary-button" disabled={busy || !staff.length}>{busy ? "กำลังส่ง…" : "ส่งให้ Staff ประเมิน"}</button>{!staff.length && <p className="form-error">ยังไม่มี Staff ที่ลงทะเบียนและเปิดใช้งานในระบบ</p>}</form>;
+  async function submit(event) {
+    event.preventDefault();
+    if (!template || !staffId || !activity.trim())
+      return setError("กรุณาเลือกแบบประเมิน เลือก Staff และกรอกชื่อกิจกรรม");
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await requestAssessment({
+        templateId,
+        staffId,
+        date,
+        context,
+        activity,
+      });
+      setMessage(
+        result.emailSent
+          ? "ส่งแบบประเมินและอีเมลแจ้ง Staff แล้ว"
+          : "ส่ง notification ในระบบแล้ว แต่ส่งอีเมลไม่สำเร็จ กรุณาแจ้ง Admin ตรวจการตั้งค่าอีเมล",
+      );
+      setActivity("");
+      setContext("");
+      await onSaved();
+    } catch (nextError) {
+      setError(nextError.message || "ส่งแบบประเมินไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!templates.length)
+    return (
+      <section className="resident-panel empty">
+        <h2>ยังไม่มี catalog</h2>
+        <p>Admin ต้องซิงก์ EPA/PBA source ก่อนส่งแบบประเมิน</p>
+      </section>
+    );
+  return (
+    <form className="resident-panel assessment-form" onSubmit={submit}>
+      <div className="section-heading">
+        <h2>ส่งแบบประเมินให้ Staff</h2>
+        <p>
+          เลือกได้เฉพาะ Staff ที่ลงทะเบียนและมีบัญชีตรงกับรายชื่อที่อนุมัติแล้ว
+        </p>
+      </div>
+      <div className="resident-form-grid">
+        <label>
+          แบบประเมิน
+          <select
+            value={templateId}
+            onChange={(event) => setTemplateId(event.target.value)}
+            required
+          >
+            <option value="">เลือกแบบประเมิน</option>
+            {templates.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.template_code} · {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Staff ผู้ประเมิน
+          <select
+            value={staffId}
+            onChange={(event) => setStaffId(event.target.value)}
+            required
+          >
+            <option value="">เลือกรายชื่อ Staff ที่ลงทะเบียนแล้ว</option>
+            {staff.map((person) => (
+              <option key={person.user_id} value={person.user_id}>
+                {person.full_name} · {person.unit_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          วันที่ทำกิจกรรม
+          <input
+            type="date"
+            value={date}
+            max={today()}
+            onChange={(event) => setDate(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          {template?.template_type === "EPA"
+            ? "C3 · ชื่อกิจกรรม"
+            : "ชื่อกิจกรรม/หัตถการ"}
+          <input
+            value={activity}
+            onChange={(event) => setActivity(event.target.value)}
+            maxLength="240"
+            placeholder="กรอกชื่อกิจกรรม"
+            required
+          />
+        </label>
+        <label className="wide">
+          บริบททางคลินิกแบบไม่ระบุตัวตน
+          <textarea
+            value={context}
+            onChange={(event) => setContext(event.target.value)}
+            maxLength="500"
+            rows="2"
+            placeholder="ห้ามระบุชื่อผู้ป่วยหรือ HN"
+          />
+        </label>
+      </div>
+      {template?.template_type === "EPA" && (
+        <div className="epa-note">
+          <strong>รูปแบบ EPA:</strong> C1–C2 เป็นข้อมูลประกอบ ไม่เลือกระดับ; C3
+          ใช้กรอกชื่อกิจกรรมเท่านั้น; Staff จะเริ่มให้ระดับตั้งแต่ C4
+        </div>
+      )}
+      {error && <p className="form-error">{error}</p>}
+      {message && <p className="form-success">{message}</p>}
+      <button className="primary-button" disabled={busy || !staff.length}>
+        {busy ? "กำลังส่ง…" : "ส่งให้ Staff ประเมิน"}
+      </button>
+      {!staff.length && (
+        <p className="form-error">
+          ยังไม่มี Staff ที่ลงทะเบียนและเปิดใช้งานในระบบ
+        </p>
+      )}
+    </form>
+  );
 }
 
 function EvaluationForm({ request, templates, profiles, onSaved, onCancel }) {
-  const [outcome, setOutcome] = useState(""); const [comment, setComment] = useState(""); const [scores, setScores] = useState({}); const [comments, setComments] = useState({}); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const template = templates.find((item) => item.id === request.template_id); const resident = profiles.find((item) => item.id === request.resident_id);
-  const assessableCriteria = template?.criteria.filter((criterion) => !(template.template_type === "EPA" && ["C1", "C2", "C3"].includes(criterion.criterion_code))) || [];
-  async function submit(event) { event.preventDefault(); if (assessableCriteria.some((criterion) => !scores[criterion.id])) return setError("กรุณาเลือกระดับทุกข้อที่ต้องประเมินก่อนลงนาม"); setBusy(true); setError(""); try { await completeAssessmentRequest({ requestId: request.id, outcome, comment, scores: assessableCriteria.map((criterion) => ({ criterionId: criterion.id, score: scores[criterion.id], comment: comments[criterion.id] || "" })) }); await onSaved(); } catch (nextError) { setError(nextError.message || "บันทึกผลประเมินไม่สำเร็จ"); } finally { setBusy(false); } }
-  if (!template) return <section className="resident-panel empty"><h2>ไม่พบแบบประเมิน</h2></section>;
-  return <form className="resident-panel assessment-form" onSubmit={submit}><div className="section-heading"><h2>{template.template_code} · {template.title}</h2><p>Resident: {resident?.name || "—"} · ส่งเมื่อ {readableDateTime(request.submitted_at)}</p></div><div className="request-summary"><div><small>วันที่กิจกรรม</small><strong>{readableDate(request.assessment_date)}</strong></div><div><small>ชื่อกิจกรรม</small><strong>{request.procedure_or_activity}</strong></div>{request.clinical_context && <div><small>บริบทไม่ระบุตัวตน</small><strong>{request.clinical_context}</strong></div>}</div>{template.template_type === "EPA" && <div className="epa-static"><div><small>C1–C2</small><p>ข้อมูลประกอบของ EPA — ไม่ต้องเลือกระดับ</p></div><div><small>C3 · ชื่อกิจกรรม</small><p>{request.procedure_or_activity}</p></div></div>}<div className="criterion-list" style={{ "--score-count": template.score_options.length }}><div className="criterion-head"><span>เกณฑ์ที่ต้องประเมิน</span>{template.score_options.map((score) => <b key={score}>{score}</b>)}<span>ข้อเสนอแนะ</span></div>{assessableCriteria.map((criterion) => <div className="criterion-row" key={criterion.id}><div><small>{criterion.criterion_code}</small><p>{criterion.criterion_text}</p></div>{template.score_options.map((score) => <label className="score-radio" key={score}><input type="radio" name={criterion.id} value={score} checked={scores[criterion.id] === score} onChange={() => setScores((current) => ({ ...current, [criterion.id]: score }))} /><span>{score}</span></label>)}<input aria-label={`ข้อเสนอแนะ ${criterion.criterion_code}`} value={comments[criterion.id] || ""} onChange={(event) => setComments((current) => ({ ...current, [criterion.id]: event.target.value }))} maxLength="1000" placeholder="ถ้ามี" /></div>)}</div><div className="resident-form-grid footer-fields"><label>ผลสรุป/Overall outcome<input value={outcome} onChange={(event) => setOutcome(event.target.value)} maxLength="80" placeholder="เช่น ผ่านการประเมิน" /></label><label className="wide">ความเห็นสรุป<textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength="2000" rows="3" /></label></div>{error && <p className="form-error">{error}</p>}<div className="button-row"><button className="primary-button" disabled={busy}>{busy ? "กำลังลงนาม…" : "ลงนามและบันทึกผลประเมิน"}</button><button className="secondary-button" type="button" onClick={onCancel} disabled={busy}>กลับไปรายการรอประเมิน</button></div></form>;
+  const [outcome, setOutcome] = useState("");
+  const [comment, setComment] = useState("");
+  const [scores, setScores] = useState({});
+  const [comments, setComments] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const template = templates.find((item) => item.id === request.template_id);
+  const resident = profiles.find((item) => item.id === request.resident_id);
+  const assessableCriteria =
+    template?.criteria.filter(
+      (criterion) =>
+        !(
+          template.template_type === "EPA" &&
+          ["C1", "C2", "C3"].includes(criterion.criterion_code)
+        ),
+    ) || [];
+  async function submit(event) {
+    event.preventDefault();
+    if (assessableCriteria.some((criterion) => !scores[criterion.id]))
+      return setError("กรุณาเลือกระดับทุกข้อที่ต้องประเมินก่อนลงนาม");
+    setBusy(true);
+    setError("");
+    try {
+      await completeAssessmentRequest({
+        requestId: request.id,
+        outcome,
+        comment,
+        scores: assessableCriteria.map((criterion) => ({
+          criterionId: criterion.id,
+          score: scores[criterion.id],
+          comment: comments[criterion.id] || "",
+        })),
+      });
+      await onSaved();
+    } catch (nextError) {
+      setError(nextError.message || "บันทึกผลประเมินไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!template)
+    return (
+      <section className="resident-panel empty">
+        <h2>ไม่พบแบบประเมิน</h2>
+      </section>
+    );
+  return (
+    <form className="resident-panel assessment-form" onSubmit={submit}>
+      <div className="section-heading">
+        <h2>
+          {template.template_code} · {template.title}
+        </h2>
+        <p>
+          Resident: {resident?.name || "—"} · ส่งเมื่อ{" "}
+          {readableDateTime(request.submitted_at)}
+        </p>
+      </div>
+      <div className="request-summary">
+        <div>
+          <small>วันที่กิจกรรม</small>
+          <strong>{readableDate(request.assessment_date)}</strong>
+        </div>
+        <div>
+          <small>ชื่อกิจกรรม</small>
+          <strong>{request.procedure_or_activity}</strong>
+        </div>
+        {request.clinical_context && (
+          <div>
+            <small>บริบทไม่ระบุตัวตน</small>
+            <strong>{request.clinical_context}</strong>
+          </div>
+        )}
+      </div>
+      {template.template_type === "EPA" && (
+        <div className="epa-static">
+          <div>
+            <small>C1–C2</small>
+            <p>ข้อมูลประกอบของ EPA — ไม่ต้องเลือกระดับ</p>
+          </div>
+          <div>
+            <small>C3 · ชื่อกิจกรรม</small>
+            <p>{request.procedure_or_activity}</p>
+          </div>
+        </div>
+      )}
+      <div
+        className="criterion-list"
+        style={{ "--score-count": template.score_options.length }}
+      >
+        <div className="criterion-head">
+          <span>เกณฑ์ที่ต้องประเมิน</span>
+          {template.score_options.map((score) => (
+            <b key={score}>{score}</b>
+          ))}
+          <span>ข้อเสนอแนะ</span>
+        </div>
+        {assessableCriteria.map((criterion) => (
+          <div className="criterion-row" key={criterion.id}>
+            <div>
+              <small>{criterion.criterion_code}</small>
+              <p>{criterion.criterion_text}</p>
+            </div>
+            {template.score_options.map((score) => (
+              <label className="score-radio" key={score}>
+                <input
+                  type="radio"
+                  name={criterion.id}
+                  value={score}
+                  checked={scores[criterion.id] === score}
+                  onChange={() =>
+                    setScores((current) => ({
+                      ...current,
+                      [criterion.id]: score,
+                    }))
+                  }
+                />
+                <span>{score}</span>
+              </label>
+            ))}
+            <input
+              aria-label={`ข้อเสนอแนะ ${criterion.criterion_code}`}
+              value={comments[criterion.id] || ""}
+              onChange={(event) =>
+                setComments((current) => ({
+                  ...current,
+                  [criterion.id]: event.target.value,
+                }))
+              }
+              maxLength="1000"
+              placeholder="ถ้ามี"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="resident-form-grid footer-fields">
+        <label>
+          ผลสรุป/Overall outcome
+          <input
+            value={outcome}
+            onChange={(event) => setOutcome(event.target.value)}
+            maxLength="80"
+            placeholder="เช่น ผ่านการประเมิน"
+          />
+        </label>
+        <label className="wide">
+          ความเห็นสรุป
+          <textarea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            maxLength="2000"
+            rows="3"
+          />
+        </label>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      <div className="button-row">
+        <button className="primary-button" disabled={busy}>
+          {busy ? "กำลังลงนาม…" : "ลงนามและบันทึกผลประเมิน"}
+        </button>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          กลับไปรายการรอประเมิน
+        </button>
+      </div>
+    </form>
+  );
 }
 
 function RequestQueue({ requests, profiles, onSelect }) {
-  const names = new Map(profiles.map((profile) => [profile.id, profile.name])); const pending = requests.filter((request) => request.status === "pending");
-  if (!pending.length) return <section className="resident-panel empty"><h2>ไม่มีแบบประเมินรอดำเนินการ</h2><p>เมื่อ Resident เลือกชื่อ Staff และส่งแบบประเมิน รายการจะปรากฏที่นี่</p></section>;
-  return <section className="resident-panel"><h2>แบบประเมินที่รอดำเนินการ</h2><div className="resident-table-wrap"><table><thead><tr><th>ส่งเมื่อ</th><th>Resident</th><th>แบบประเมิน</th><th>กิจกรรม</th><th></th></tr></thead><tbody>{pending.map((request) => <tr key={request.id}><td>{readableDateTime(request.submitted_at)}</td><td>{names.get(request.resident_id) || "—"}</td><td>{request.resident_template_definitions?.template_code} · {request.resident_template_definitions?.title}</td><td>{request.procedure_or_activity}</td><td><button className="secondary-button" type="button" onClick={() => onSelect(request)}>เปิดประเมิน</button></td></tr>)}</tbody></table></div></section>;
+  const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
+  const pending = requests.filter((request) => request.status === "pending");
+  if (!pending.length)
+    return (
+      <section className="resident-panel empty">
+        <h2>ไม่มีแบบประเมินรอดำเนินการ</h2>
+        <p>
+          เมื่อ Resident เลือกชื่อ Staff และส่งแบบประเมิน รายการจะปรากฏที่นี่
+        </p>
+      </section>
+    );
+  return (
+    <section className="resident-panel">
+      <h2>แบบประเมินที่รอดำเนินการ</h2>
+      <div className="resident-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ส่งเมื่อ</th>
+              <th>Resident</th>
+              <th>แบบประเมิน</th>
+              <th>กิจกรรม</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pending.map((request) => (
+              <tr key={request.id}>
+                <td>{readableDateTime(request.submitted_at)}</td>
+                <td>{names.get(request.resident_id) || "—"}</td>
+                <td>
+                  {request.resident_template_definitions?.template_code} ·{" "}
+                  {request.resident_template_definitions?.title}
+                </td>
+                <td>{request.procedure_or_activity}</td>
+                <td>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() => onSelect(request)}
+                  >
+                    เปิดประเมิน
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function RequestHistory({ requests, profiles }) {
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
   if (!requests.length) return null;
-  return <section className="resident-panel"><h2>สถานะแบบประเมินที่ส่ง</h2><div className="resident-table-wrap"><table><thead><tr><th>ส่งเมื่อ</th><th>แบบประเมิน</th><th>Staff</th><th>สถานะ</th><th>ประเมินเมื่อ</th></tr></thead><tbody>{requests.map((request) => <tr key={request.id}><td>{readableDateTime(request.submitted_at)}</td><td>{request.resident_template_definitions?.template_code} · {request.procedure_or_activity}</td><td>{names.get(request.staff_id) || "—"}</td><td><span className={`status-chip ${request.status}`}>{request.status === "pending" ? "รอประเมิน" : request.status === "completed" ? "ประเมินแล้ว" : "ยกเลิก"}</span></td><td>{readableDateTime(request.assessed_at)}</td></tr>)}</tbody></table></div></section>;
+  return (
+    <section className="resident-panel">
+      <h2>สถานะแบบประเมินที่ส่ง</h2>
+      <div className="resident-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ส่งเมื่อ</th>
+              <th>แบบประเมิน</th>
+              <th>Staff</th>
+              <th>สถานะ</th>
+              <th>ประเมินเมื่อ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requests.map((request) => (
+              <tr key={request.id}>
+                <td>{readableDateTime(request.submitted_at)}</td>
+                <td>
+                  {request.resident_template_definitions?.template_code} ·{" "}
+                  {request.procedure_or_activity}
+                </td>
+                <td>{names.get(request.staff_id) || "—"}</td>
+                <td>
+                  <span className={`status-chip ${request.status}`}>
+                    {request.status === "pending"
+                      ? "รอประเมิน"
+                      : request.status === "completed"
+                        ? "ประเมินแล้ว"
+                        : "ยกเลิก"}
+                  </span>
+                </td>
+                <td>{readableDateTime(request.assessed_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function Notifications({ notifications, onRead }) {
-  if (!notifications.length) return <section className="resident-panel empty"><h2>ยังไม่มี notification</h2></section>;
-  return <section className="resident-panel"><h2>Notification ในระบบ</h2><div className="notification-list">{notifications.map((item) => <button key={item.id} type="button" className={item.read_at ? "notification-card read" : "notification-card"} onClick={() => !item.read_at && onRead(item.id)}><span>{item.title}</span><p>{item.message}</p><small>{readableDateTime(item.created_at)}{item.read_at ? " · อ่านแล้ว" : " · กดเพื่อทำเครื่องหมายว่าอ่านแล้ว"}</small></button>)}</div></section>;
+  if (!notifications.length)
+    return (
+      <section className="resident-panel empty">
+        <h2>ยังไม่มี notification</h2>
+      </section>
+    );
+  return (
+    <section className="resident-panel">
+      <h2>Notification ในระบบ</h2>
+      <div className="notification-list">
+        {notifications.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={
+              item.read_at ? "notification-card read" : "notification-card"
+            }
+            onClick={() => !item.read_at && onRead(item.id)}
+          >
+            <span>{item.title}</span>
+            <p>{item.message}</p>
+            <small>
+              {readableDateTime(item.created_at)}
+              {item.read_at
+                ? " · อ่านแล้ว"
+                : " · กดเพื่อทำเครื่องหมายว่าอ่านแล้ว"}
+            </small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function StaffDirectory({ staffDirectory, onInvite, busyEmail }) {
-  return <section className="resident-panel"><div className="section-heading"><h2>รายชื่อ Staff ที่อนุมัติ</h2><p>นำเข้าจากรายชื่ออาจารย์ ปี 4 แล้ว; Admin ส่งคำเชิญได้รายบุคคลเท่านั้น</p></div><div className="resident-table-wrap"><table><thead><tr><th>หน่วย</th><th>ชื่อ</th><th>อีเมล</th><th>สถานะ</th><th></th></tr></thead><tbody>{staffDirectory.map((staff) => <tr key={staff.email}><td>{staff.unit_name}</td><td>{staff.full_name}</td><td>{staff.email}</td><td>{!staff.active ? "ไม่เปิดใช้งาน" : staff.auth_user_id ? "ส่งคำเชิญแล้ว / มีบัญชี" : "รอส่งคำเชิญ"}</td><td>{staff.active && !staff.auth_user_id && <button className="secondary-button" type="button" onClick={() => onInvite(staff)} disabled={busyEmail === staff.email}>{busyEmail === staff.email ? "กำลังส่ง…" : "ส่งคำเชิญ"}</button>}</td></tr>)}</tbody></table></div></section>;
+  return (
+    <section className="resident-panel">
+      <div className="section-heading">
+        <h2>รายชื่อ Staff ที่อนุมัติ</h2>
+        <p>
+          นำเข้าจากรายชื่ออาจารย์ ปี 4 แล้ว; Admin ส่งคำเชิญได้รายบุคคลเท่านั้น
+        </p>
+      </div>
+      <div className="resident-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>หน่วย</th>
+              <th>ชื่อ</th>
+              <th>อีเมล</th>
+              <th>สถานะ</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {staffDirectory.map((staff) => (
+              <tr key={staff.email}>
+                <td>{staff.unit_name}</td>
+                <td>{staff.full_name}</td>
+                <td>{staff.email}</td>
+                <td>
+                  {!staff.active
+                    ? "ไม่เปิดใช้งาน"
+                    : staff.auth_user_id
+                      ? "ส่งคำเชิญแล้ว / มีบัญชี"
+                      : "รอส่งคำเชิญ"}
+                </td>
+                <td>
+                  {staff.active && !staff.auth_user_id && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => onInvite(staff)}
+                      disabled={busyEmail === staff.email}
+                    >
+                      {busyEmail === staff.email ? "กำลังส่ง…" : "ส่งคำเชิญ"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function AdminAssessmentDeletion({ workspace, onRefresh }) {
@@ -60,19 +593,38 @@ function AdminAssessmentDeletion({ workspace, onRefresh }) {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const names = useMemo(() => new Map(workspace.profiles.map((profile) => [profile.id, profile.name])), [workspace.profiles]);
+  const names = useMemo(
+    () =>
+      new Map(workspace.profiles.map((profile) => [profile.id, profile.name])),
+    [workspace.profiles],
+  );
   const assessments = useMemo(
-    () => workspace.assessments.filter((assessment) => assessment.resident_id === residentId),
+    () =>
+      workspace.assessments.filter(
+        (assessment) => assessment.resident_id === residentId,
+      ),
     [workspace.assessments, residentId],
   );
 
   async function removeAssessment(assessment) {
     const template = assessment.resident_template_definitions;
     const description = `${template?.template_code || "EPA/PBA"} · ${assessment.procedure_or_activity || template?.title || "หัตถการที่เลือก"}`;
-    if (!window.confirm(`ยืนยันลบ ${description} ของ ${names.get(assessment.resident_id) || "Resident ที่เลือก"}? คะแนน ผลประเมิน และข้อมูลที่เชื่อมโยงจะถูกลบออกจากฐานข้อมูลและย้อนกลับไม่ได้`)) return;
-    setBusyId(assessment.id); setError(""); setMessage("");
+    if (
+      !window.confirm(
+        `ยืนยันลบ ${description} ของ ${names.get(assessment.resident_id) || "Resident ที่เลือก"}? คะแนน ผลประเมิน และข้อมูลที่เชื่อมโยงจะถูกลบออกจากฐานข้อมูลและย้อนกลับไม่ได้`,
+      )
+    )
+      return;
+    setBusyId(assessment.id);
+    setError("");
+    setMessage("");
     try {
-      await deleteResidentAssessment(workspace.user, assessment.id, assessment.resident_id, password);
+      await deleteResidentAssessment(
+        workspace.user,
+        assessment.id,
+        assessment.resident_id,
+        password,
+      );
       setPassword("");
       setMessage("ลบหัตถการที่เลือกออกจากฐานข้อมูลแล้ว โดยไม่กระทบรายการอื่น");
       await onRefresh();
@@ -83,34 +635,490 @@ function AdminAssessmentDeletion({ workspace, onRefresh }) {
     }
   }
 
-  return <section className="resident-panel admin-assessment-delete"><div className="section-heading"><h2>ลบหัตถการที่บันทึกแล้ว</h2><p>เฉพาะ Admin · ต้องยืนยันรหัสผ่านอีกครั้งก่อนลบข้อมูลจริงจาก Supabase</p></div><div className="admin-delete-controls"><label>Resident<select value={residentId} onChange={(event) => { setResidentId(event.target.value); setMessage(""); setError(""); }}><option value="">เลือก Resident</option>{residents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label><label>รหัสผ่าน Admin เพื่อยืนยัน<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /></label></div>{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<div className="resident-table-wrap"><table><thead><tr><th>วันที่</th><th>แบบประเมิน</th><th>กิจกรรม/หัตถการ</th><th>ผู้ประเมิน</th><th></th></tr></thead><tbody>{assessments.map((assessment) => <tr key={assessment.id}><td>{readableDate(assessment.assessment_date)}</td><td>{assessment.resident_template_definitions?.template_code} · {assessment.resident_template_definitions?.title}</td><td>{assessment.procedure_or_activity || "—"}</td><td>{names.get(assessment.evaluator_id) || "—"}</td><td><button className="danger-button" type="button" onClick={() => removeAssessment(assessment)} disabled={!password || Boolean(busyId)}>{busyId === assessment.id ? "กำลังลบ…" : "ลบรายการนี้"}</button></td></tr>)}{residentId && !assessments.length && <tr><td className="table-empty" colSpan="5">Resident คนนี้ยังไม่มีผลการประเมินที่บันทึกแล้ว</td></tr>}{!residentId && <tr><td className="table-empty" colSpan="5">กรุณาเลือก Resident</td></tr>}</tbody></table></div></section>;
+  return (
+    <section className="resident-panel admin-assessment-delete">
+      <div className="section-heading">
+        <h2>ลบหัตถการที่บันทึกแล้ว</h2>
+        <p>
+          เฉพาะ Admin · ต้องยืนยันรหัสผ่านอีกครั้งก่อนลบข้อมูลจริงจาก Supabase
+        </p>
+      </div>
+      <div className="admin-delete-controls">
+        <label>
+          Resident
+          <select
+            value={residentId}
+            onChange={(event) => {
+              setResidentId(event.target.value);
+              setMessage("");
+              setError("");
+            }}
+          >
+            <option value="">เลือก Resident</option>
+            {residents.map((resident) => (
+              <option key={resident.id} value={resident.id}>
+                {resident.name} · PGY {resident.pgy}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          รหัสผ่าน Admin เพื่อยืนยัน
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      {message && <p className="form-success">{message}</p>}
+      <div className="resident-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>แบบประเมิน</th>
+              <th>กิจกรรม/หัตถการ</th>
+              <th>ผู้ประเมิน</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {assessments.map((assessment) => (
+              <tr key={assessment.id}>
+                <td>{readableDate(assessment.assessment_date)}</td>
+                <td>
+                  {assessment.resident_template_definitions?.template_code} ·{" "}
+                  {assessment.resident_template_definitions?.title}
+                </td>
+                <td>{assessment.procedure_or_activity || "—"}</td>
+                <td>{names.get(assessment.evaluator_id) || "—"}</td>
+                <td>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    onClick={() => removeAssessment(assessment)}
+                    disabled={!password || Boolean(busyId)}
+                  >
+                    {busyId === assessment.id ? "กำลังลบ…" : "ลบรายการนี้"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {residentId && !assessments.length && (
+              <tr>
+                <td className="table-empty" colSpan="5">
+                  Resident คนนี้ยังไม่มีผลการประเมินที่บันทึกแล้ว
+                </td>
+              </tr>
+            )}
+            {!residentId && (
+              <tr>
+                <td className="table-empty" colSpan="5">
+                  กรุณาเลือก Resident
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function Admin({ workspace, onRefresh }) {
-  const [syncing, setSyncing] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [busyEmail, setBusyEmail] = useState(""); const [account, setAccount] = useState({ fullName: "", email: "", role: "resident", pgy: "1" }); const [assignment, setAssignment] = useState({ staffId: "", residentId: "" });
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busyEmail, setBusyEmail] = useState("");
+  const [account, setAccount] = useState({
+    fullName: "",
+    email: "",
+    role: "resident",
+    pgy: "1",
+  });
+  const [assignment, setAssignment] = useState({ staffId: "", residentId: "" });
   const residents = workspace.profiles.filter((profile) => profile.pgy);
-  const staffIds = new Set(workspace.staffDirectory.filter((staff) => staff.active && staff.auth_user_id).map((staff) => staff.auth_user_id));
-  const staff = workspace.profiles.filter((profile) => profile.id !== workspace.user.id && staffIds.has(profile.id));
-  async function sync() { setSyncing(true); setError(""); try { await syncSourceTemplates(); await onRefresh(); setMessage("ซิงก์ EPA/PBA source สำเร็จ"); } catch (nextError) { setError(nextError.message); } finally { setSyncing(false); } }
-  async function addAccount(event) { event.preventDefault(); setError(""); try { const result = await provisionAccount({ ...account, pgy: Number(account.pgy) }); setMessage(result.invitationSent ? "ส่งคำเชิญเปิดบัญชีแล้ว" : "อัปเดตสิทธิ์บัญชีแล้ว"); setAccount({ fullName: "", email: "", role: "resident", pgy: "1" }); await onRefresh(); } catch (nextError) { setError(nextError.message); } }
-  async function assign(event) { event.preventDefault(); setError(""); try { await saveAssignment(assignment.staffId, assignment.residentId); setMessage("บันทึกการมอบหมาย Staff แล้ว"); await onRefresh(); } catch (nextError) { setError(nextError.message); } }
-  async function invite(staffMember) { setBusyEmail(staffMember.email); setError(""); try { const result = await inviteStaff(staffMember.email); setMessage(result.invitationSent ? `ส่งคำเชิญให้ ${staffMember.full_name} แล้ว` : `${staffMember.full_name} มีบัญชีอยู่แล้ว`); await onRefresh(); } catch (nextError) { setError(nextError.message); } finally { setBusyEmail(""); } }
-  return <><section className="resident-panel admin-summary"><div><h2>Catalog EPA/PBA</h2><p>{workspace.templates.length} แบบประเมิน · สร้างจากไฟล์ใน EPA/ และ PBA/ เท่านั้น</p></div><button className="primary-button" onClick={sync} disabled={syncing}>{syncing ? "กำลังซิงก์…" : "ซิงก์ source catalog"}</button></section><AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} /><div className="admin-grid"><form className="resident-panel" onSubmit={addAccount}><h2>เพิ่มบัญชี Resident / Admin</h2><label>ชื่อ–นามสกุล<input value={account.fullName} onChange={(event) => setAccount({ ...account, fullName: event.target.value })} required /></label><label>อีเมล<input type="email" value={account.email} onChange={(event) => setAccount({ ...account, email: event.target.value })} required /></label><label>บทบาท<select value={account.role} onChange={(event) => setAccount({ ...account, role: event.target.value })}><option value="resident">Resident</option><option value="admin">Admin</option></select></label>{account.role === "resident" && <label>PGY<select value={account.pgy} onChange={(event) => setAccount({ ...account, pgy: event.target.value })}>{[1,2,3,4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select></label>}<button className="primary-button">ส่งคำเชิญ</button></form><form className="resident-panel" onSubmit={assign}><h2>มอบหมาย Staff</h2><label>Staff<select value={assignment.staffId} onChange={(event) => setAssignment({ ...assignment, staffId: event.target.value })} required><option value="">เลือก Staff</option>{staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label>Resident<select value={assignment.residentId} onChange={(event) => setAssignment({ ...assignment, residentId: event.target.value })} required><option value="">เลือก Resident</option>{residents.map((person) => <option key={person.id} value={person.id}>{person.name} · PGY {person.pgy}</option>)}</select></label><button className="primary-button">บันทึกการมอบหมาย</button></form></div>{(message || error) && <p className={error ? "form-error" : "form-success"}>{error || message}</p>}<StaffDirectory staffDirectory={workspace.staffDirectory} onInvite={invite} busyEmail={busyEmail} /><section className="resident-panel"><h2>สถานะบัญชี</h2><div className="resident-table-wrap"><table><thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บทบาท/PGY</th></tr></thead><tbody>{workspace.profiles.map((person) => <tr key={person.id}><td>{person.name}</td><td>{person.email}</td><td>{person.pgy ? `Resident · PGY ${person.pgy}` : staffIds.has(person.id) ? "Staff" : "Admin"}</td></tr>)}</tbody></table></div></section></>;
+  const staffIds = new Set(
+    workspace.staffDirectory
+      .filter((staff) => staff.active && staff.auth_user_id)
+      .map((staff) => staff.auth_user_id),
+  );
+  const staff = workspace.profiles.filter(
+    (profile) => profile.id !== workspace.user.id && staffIds.has(profile.id),
+  );
+  async function sync() {
+    setSyncing(true);
+    setError("");
+    try {
+      await syncSourceTemplates();
+      await onRefresh();
+      setMessage("ซิงก์ EPA/PBA source สำเร็จ");
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+  async function addAccount(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      const result = await provisionAccount({
+        ...account,
+        pgy: Number(account.pgy),
+      });
+      setMessage(
+        result.invitationSent
+          ? "ส่งคำเชิญเปิดบัญชีแล้ว"
+          : "อัปเดตสิทธิ์บัญชีแล้ว",
+      );
+      setAccount({ fullName: "", email: "", role: "resident", pgy: "1" });
+      await onRefresh();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+  async function assign(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await saveAssignment(assignment.staffId, assignment.residentId);
+      setMessage("บันทึกการมอบหมาย Staff แล้ว");
+      await onRefresh();
+    } catch (nextError) {
+      setError(nextError.message);
+    }
+  }
+  async function invite(staffMember) {
+    setBusyEmail(staffMember.email);
+    setError("");
+    try {
+      const result = await inviteStaff(staffMember.email);
+      setMessage(
+        result.invitationSent
+          ? `ส่งคำเชิญให้ ${staffMember.full_name} แล้ว`
+          : `${staffMember.full_name} มีบัญชีอยู่แล้ว`,
+      );
+      await onRefresh();
+    } catch (nextError) {
+      setError(nextError.message);
+    } finally {
+      setBusyEmail("");
+    }
+  }
+  return (
+    <>
+      <section className="resident-panel admin-summary">
+        <div>
+          <h2>Catalog EPA/PBA</h2>
+          <p>
+            {workspace.templates.length} แบบประเมิน · สร้างจากไฟล์ใน EPA/ และ
+            PBA/ เท่านั้น
+          </p>
+        </div>
+        <button className="primary-button" onClick={sync} disabled={syncing}>
+          {syncing ? "กำลังซิงก์…" : "ซิงก์ source catalog"}
+        </button>
+      </section>
+      <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
+      <div className="admin-grid">
+        <form className="resident-panel" onSubmit={addAccount}>
+          <h2>เพิ่มบัญชี Resident / Admin</h2>
+          <label>
+            ชื่อ–นามสกุล
+            <input
+              value={account.fullName}
+              onChange={(event) =>
+                setAccount({ ...account, fullName: event.target.value })
+              }
+              required
+            />
+          </label>
+          <label>
+            อีเมล
+            <input
+              type="email"
+              value={account.email}
+              onChange={(event) =>
+                setAccount({ ...account, email: event.target.value })
+              }
+              required
+            />
+          </label>
+          <label>
+            บทบาท
+            <select
+              value={account.role}
+              onChange={(event) =>
+                setAccount({ ...account, role: event.target.value })
+              }
+            >
+              <option value="resident">Resident</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          {account.role === "resident" && (
+            <label>
+              PGY
+              <select
+                value={account.pgy}
+                onChange={(event) =>
+                  setAccount({ ...account, pgy: event.target.value })
+                }
+              >
+                {[1, 2, 3, 4].map((year) => (
+                  <option key={year} value={year}>
+                    PGY {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <button className="primary-button">ส่งคำเชิญ</button>
+        </form>
+        <form className="resident-panel" onSubmit={assign}>
+          <h2>มอบหมาย Staff</h2>
+          <label>
+            Staff
+            <select
+              value={assignment.staffId}
+              onChange={(event) =>
+                setAssignment({ ...assignment, staffId: event.target.value })
+              }
+              required
+            >
+              <option value="">เลือก Staff</option>
+              {staff.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Resident
+            <select
+              value={assignment.residentId}
+              onChange={(event) =>
+                setAssignment({ ...assignment, residentId: event.target.value })
+              }
+              required
+            >
+              <option value="">เลือก Resident</option>
+              {residents.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name} · PGY {person.pgy}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="primary-button">บันทึกการมอบหมาย</button>
+        </form>
+      </div>
+      {(message || error) && (
+        <p className={error ? "form-error" : "form-success"}>
+          {error || message}
+        </p>
+      )}
+      <StaffDirectory
+        staffDirectory={workspace.staffDirectory}
+        onInvite={invite}
+        busyEmail={busyEmail}
+      />
+      <section className="resident-panel">
+        <h2>สถานะบัญชี</h2>
+        <div className="resident-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ชื่อ</th>
+                <th>อีเมล</th>
+                <th>บทบาท/PGY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workspace.profiles.map((person) => (
+                <tr key={person.id}>
+                  <td>{person.name}</td>
+                  <td>{person.email}</td>
+                  <td>
+                    {person.pgy
+                      ? `Resident · PGY ${person.pgy}`
+                      : staffIds.has(person.id)
+                        ? "Staff"
+                        : "Admin"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
 }
 
 export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   const routeToken = parseResidentQrToken(window.location.pathname);
-  const initialTab = workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
-  const [tab, setTab] = useState(initialTab); const [selectedRequest, setSelectedRequest] = useState(null);
-  const unreadCount = useMemo(() => workspace.notifications.filter((item) => !item.read_at).length, [workspace.notifications]);
-  const nav = [["dashboard", "Dashboard"], ["history", "ผลการประเมิน"]];
-  if (workspace.user.role === "resident") nav.unshift(["request", "ส่งแบบประเมิน"]);
+  const initialTab =
+    workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
+  const [tab, setTab] = useState(initialTab);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [historyFocus, setHistoryFocus] = useState("completed");
+  const unreadCount = useMemo(
+    () => workspace.notifications.filter((item) => !item.read_at).length,
+    [workspace.notifications],
+  );
+  const nav = [
+    ["dashboard", "Dashboard"],
+    ["history", "ผลการประเมิน"],
+  ];
+  if (workspace.user.role === "resident")
+    nav.unshift(["request", "ส่งแบบประเมิน"]);
   if (workspace.user.role === "resident") nav.splice(2, 0, ["qr", "QR ของฉัน"]);
-  if (workspace.user.role === "staff") nav.unshift(["pending", `รอประเมิน (${workspace.requests.filter((item) => item.status === "pending").length})`], ["scan", "สแกน QR"]);
-  nav.push(["notifications", `Notification${unreadCount ? ` (${unreadCount})` : ""}`]);
-  if (workspace.user.role === "admin") nav.push(["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
-  const titles = { dashboard: "Dashboard การประเมิน", request: "ส่งแบบประเมิน EPA/PBA", pending: "รายการรอ Staff ประเมิน", scan: "สแกน QR เพื่อประเมิน", qr: "QR สำหรับ Staff", history: "ผลการประเมินของฉัน", notifications: "Notification", export: "Export ข้อมูลการประเมิน", admin: "จัดการระบบ Resident" };
-  async function readNotification(id) { await markNotificationRead(id); await onRefresh(); }
-  const openScannedRequest = (request) => { setSelectedRequest(request); setTab("pending"); };
-  return <div className="resident-app"><header><div className="resident-brand"><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><div><strong>Resident Surgery Assessment</strong><span>EPA · PBA · ภาควิชาศัลยศาสตร์ มหาวิทยาลัยเชียงใหม่</span></div></div><div><span className="role-chip">{roleLabel[workspace.user.role]}</span><button className="text-button" type="button" onClick={onLogout}>ออกจากระบบ</button></div></header><nav aria-label="เมนู Resident Surgery Assessment">{nav.map(([id, label]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => { setTab(id); setSelectedRequest(null); }}>{label}</button>)}</nav><main><div className="page-heading"><div><h1>{titles[tab]}</h1><p>{workspace.user.name}{workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}</p></div></div>{tab === "dashboard" ? <ResidentDashboard workspace={workspace} /> : tab === "export" ? <ResidentExportCenter workspace={workspace} /> : tab === "qr" ? <ResidentQrCard user={workspace.user} /> : tab === "scan" ? <StaffQrScanner workspace={workspace} initialToken={routeToken} onOpenRequest={openScannedRequest} /> : tab === "admin" ? <Admin workspace={workspace} onRefresh={onRefresh} /> : tab === "request" ? <><RequestForm templates={workspace.templates} staff={workspace.registeredStaff} onSaved={onRefresh} /><RequestHistory requests={workspace.requests} profiles={workspace.profiles} /></> : tab === "pending" ? selectedRequest ? <EvaluationForm request={selectedRequest} templates={workspace.templates} profiles={workspace.profiles} onSaved={async () => { setSelectedRequest(null); await onRefresh(); }} onCancel={() => setSelectedRequest(null)} /> : <RequestQueue requests={workspace.requests} profiles={workspace.profiles} onSelect={setSelectedRequest} /> : tab === "notifications" ? <Notifications notifications={workspace.notifications} onRead={readNotification} /> : <History assessments={workspace.assessments} user={workspace.user} profiles={workspace.profiles} />}</main><footer>ข้อมูลการประเมินใช้เพื่อการศึกษาและการพัฒนาวิชาชีพ ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</footer></div>;
+  if (workspace.user.role === "staff")
+    nav.unshift(
+      [
+        "pending",
+        `รอประเมิน (${workspace.requests.filter((item) => item.status === "pending").length})`,
+      ],
+      ["scan", "สแกน QR"],
+    );
+  nav.push([
+    "notifications",
+    `Notification${unreadCount ? ` (${unreadCount})` : ""}`,
+  ]);
+  if (workspace.user.role === "admin")
+    nav.push(["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
+  const titles = {
+    dashboard: "Dashboard การประเมิน",
+    request: "ส่งแบบประเมิน EPA/PBA",
+    pending: "รายการรอ Staff ประเมิน",
+    scan: "สแกน QR เพื่อประเมิน",
+    qr: "QR สำหรับ Staff",
+    history:
+      workspace.user.role === "staff"
+        ? "ประวัติการประเมิน"
+        : "ผลการประเมินของฉัน",
+    notifications: "Notification",
+    export: "Export ข้อมูลการประเมิน",
+    admin: "จัดการระบบ Resident",
+  };
+  async function readNotification(id) {
+    await markNotificationRead(id);
+    await onRefresh();
+  }
+  const openScannedRequest = (request) => {
+    setSelectedRequest(request);
+    setTab("pending");
+  };
+  return (
+    <div className="resident-app">
+      <header>
+        <div className="resident-brand">
+          <img src="/surgery-cmu-logo.png" alt="Surgery CMU" />
+          <div>
+            <strong>Resident Surgery Assessment</strong>
+            <span>EPA · PBA · ภาควิชาศัลยศาสตร์ มหาวิทยาลัยเชียงใหม่</span>
+          </div>
+        </div>
+        <div>
+          <span className="role-chip">{roleLabel[workspace.user.role]}</span>
+          <button className="text-button" type="button" onClick={onLogout}>
+            ออกจากระบบ
+          </button>
+        </div>
+      </header>
+      <nav aria-label="เมนู Resident Surgery Assessment">
+        {nav.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={tab === id ? "active" : ""}
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => {
+              setTab(id);
+              setSelectedRequest(null);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <main>
+        <div className="page-heading">
+          <div>
+            <h1>{titles[tab]}</h1>
+            <p>
+              {workspace.user.name}
+              {workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}
+            </p>
+          </div>
+        </div>
+        {tab === "dashboard" ? (
+          <ResidentDashboard
+            workspace={workspace}
+            onNavigateHistory={(focus) => {
+              setHistoryFocus(focus);
+              setTab("history");
+            }}
+          />
+        ) : tab === "export" ? (
+          <ResidentExportCenter workspace={workspace} />
+        ) : tab === "qr" ? (
+          <ResidentQrCard user={workspace.user} />
+        ) : tab === "scan" ? (
+          <StaffQrScanner
+            workspace={workspace}
+            initialToken={routeToken}
+            onOpenRequest={openScannedRequest}
+          />
+        ) : tab === "admin" ? (
+          <Admin workspace={workspace} onRefresh={onRefresh} />
+        ) : tab === "request" ? (
+          <>
+            <ResidentRequestForm workspace={workspace} onSaved={onRefresh} />
+            <ResidentRequestHistory workspace={workspace} />
+          </>
+        ) : tab === "pending" ? (
+          selectedRequest ? (
+            <StaffEvaluationForm
+              request={selectedRequest}
+              templates={workspace.templates}
+              profiles={workspace.profiles}
+              onSaved={async () => {
+                setSelectedRequest(null);
+                await onRefresh();
+              }}
+              onCancel={() => setSelectedRequest(null)}
+            />
+          ) : (
+            <RequestQueue
+              requests={workspace.requests}
+              profiles={workspace.profiles}
+              onSelect={setSelectedRequest}
+            />
+          )
+        ) : tab === "notifications" ? (
+          <Notifications
+            notifications={workspace.notifications}
+            onRead={readNotification}
+          />
+        ) : (
+          <AssessmentHistory
+            workspace={workspace}
+            staffFocus={historyFocus}
+            onStaffFocus={setHistoryFocus}
+          />
+        )}
+      </main>
+      <footer>
+        ข้อมูลการประเมินใช้เพื่อการศึกษาและการพัฒนาวิชาชีพ
+        ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย
+      </footer>
+    </div>
+  );
 }
