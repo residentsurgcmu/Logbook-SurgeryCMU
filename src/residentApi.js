@@ -290,6 +290,54 @@ export async function resolveResidentQr(token) {
   return data[0];
 }
 
+export async function loadRoundAdminData() {
+  const { data: sessions, error: sessionsError } = await supabase.from("resident_round_sessions")
+    .select("id,meeting_date,opened_at,closed_at").order("meeting_date", { ascending: false }).limit(100);
+  fail(sessionsError);
+  const attendance = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.from("resident_round_attendance")
+      .select("session_id,user_id,role_at_check_in,checked_in_at,resident_profiles(full_name,email,pgy)")
+      .order("checked_in_at", { ascending: true }).order("session_id", { ascending: true })
+      .order("user_id", { ascending: true }).range(offset, offset + pageSize - 1);
+    fail(error);
+    attendance.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { sessions: sessions || [], attendance };
+}
+
+export async function openRound() {
+  const { data, error } = await supabase.rpc("open_resident_round");
+  fail(error);
+  return data;
+}
+
+export async function closeRound(sessionId) {
+  const { error } = await supabase.rpc("close_resident_round", { p_session_id: sessionId });
+  fail(error);
+}
+
+export async function currentRoundQr() {
+  const { data, error } = await supabase.rpc("current_resident_round_qr");
+  fail(error);
+  return data?.[0] || null;
+}
+
+export async function checkInRound(token) {
+  const { data, error } = await supabase.rpc("check_in_resident_round", { p_token: token });
+  fail(error);
+  return data?.[0] || null;
+}
+
+export async function loadOwnRoundAttendance() {
+  const { data, error } = await supabase.from("resident_round_attendance")
+    .select("session_id,checked_in_at").order("checked_in_at", { ascending: false }).limit(20);
+  fail(error);
+  return data || [];
+}
+
 export async function saveAssignment(staffId, residentId) {
   const { error } = await supabase
     .from("resident_evaluator_assignments")

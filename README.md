@@ -85,6 +85,12 @@ pnpm test
 pnpm build
 ```
 
+### MM & Grand Round attendance
+
+Admin เปิด session ในเมนู “MM & Grand Round” ได้เฉพาะวันศุกร์ก่อน 11:00 น. ตามเวลา Asia/Bangkok จากนั้นแสดง QR บนจอประชุม Resident และ Staff ที่ลงชื่อเข้าใช้สแกน QR เพื่อบันทึกเวลาเข้า ระบบเปลี่ยน QR ทุก 1 นาที และปิดรับเวลา 11:00:00 น. โดยใช้เวลาเซิร์ฟเวอร์ สแกนซ้ำใน session เดียวกันจะแสดงเวลาครั้งแรก Admin ดูรายชื่อแยกตามวันและดาวน์โหลด CSV/Excel ได้
+
+Backend migration คือ `supabase/migrations/20260920102939_mm_grand_round_attendance.sql` และตรวจโครงสร้าง/ขอบเวลาด้วย `npx supabase db query --linked --file tests/round-attendance-db.sql` หลัง apply migration
+
 ทดสอบบน Chrome ที่ desktop และ mobile: login ของ Resident/Staff/Admin, ลืมรหัสผ่านและการตั้งรหัสผ่านจาก recovery link, ประวัติของ Resident, การจำกัด Staff ตาม assignment, การบันทึก assessment ที่คะแนนครบทุกข้อ, และ Admin provision/Staff invitation/assignment/sync catalog. ทดสอบ RLS โดยใช้ผู้ใช้ต่าง role อย่างน้อยสองบัญชี และยืนยันว่า Resident/Staff อ่าน Staff directory หรือส่งคำเชิญไม่ได้
 
 ## Privacy

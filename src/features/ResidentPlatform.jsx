@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   completeAssessmentRequest,
   deleteResidentAssessment,
@@ -17,6 +17,7 @@ import {
   StaffEvaluationForm,
 } from "./ResidentAssessmentViews";
 import ResidentExportCenter from "./ResidentExportCenter";
+import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
 import {
   parseResidentQrToken,
   ResidentQrCard,
@@ -965,9 +966,16 @@ function Admin({ workspace, onRefresh }) {
 
 export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   const routeToken = parseResidentQrToken(window.location.pathname);
+  const roundToken = window.location.pathname.match(/^\/attendance\/([0-9a-f-]{36})\/?$/i)?.[1] || "";
   const initialTab =
-    workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
+    workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
   const [tab, setTab] = useState(initialTab);
+  const navRef = useRef(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (nav && active) nav.scrollTo({ left: active.offsetLeft - nav.offsetLeft - (nav.clientWidth - active.clientWidth) / 2, behavior: "smooth" });
+  }, [tab]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [historyFocus, setHistoryFocus] = useState("completed");
   const unreadCount = useMemo(
@@ -989,12 +997,14 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
       ],
       ["scan", "สแกน QR"],
     );
+  if (workspace.user.role === "resident" || workspace.user.role === "staff")
+    nav.push(["attendance", "เช็กชื่อประชุม"]);
   nav.push([
     "notifications",
     `Notification${unreadCount ? ` (${unreadCount})` : ""}`,
   ]);
   if (workspace.user.role === "admin")
-    nav.push(["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
+    nav.push(["round-admin", "MM & Grand Round"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
   const titles = {
     dashboard: "Dashboard การประเมิน",
     request: "ส่งแบบประเมิน EPA/PBA",
@@ -1008,6 +1018,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     notifications: "Notification",
     export: "Export ข้อมูลการประเมิน",
     admin: "จัดการระบบ Resident",
+    attendance: "เช็กชื่อ MM & Grand Round",
+    "round-admin": "MM & Grand Round",
   };
   async function readNotification(id) {
     await markNotificationRead(id);
@@ -1034,7 +1046,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
           </button>
         </div>
       </header>
-      <nav aria-label="เมนู Resident Surgery Assessment">
+      <nav ref={navRef} aria-label="เมนู Resident Surgery Assessment">
         {nav.map(([id, label]) => (
           <button
             key={id}
@@ -1070,6 +1082,10 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
           />
         ) : tab === "export" ? (
           <ResidentExportCenter workspace={workspace} />
+        ) : tab === "round-admin" ? (
+          <RoundAdmin />
+        ) : tab === "attendance" ? (
+          <RoundCheckIn token={roundToken} />
         ) : tab === "qr" ? (
           <ResidentQrCard user={workspace.user} />
         ) : tab === "scan" ? (
