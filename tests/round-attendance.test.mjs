@@ -9,6 +9,9 @@ test("MM & Grand Round schedule is controlled by Admin on any meeting day", asyn
   assert.match(migration, /drop constraint if exists resident_round_friday/i);
   assert.match(migration, /time '11:00:00'/);
   assert.doesNotMatch(migration, /extract\s*\(\s*isodow/i);
+  assert.match(migration, /resident\.surgerycmu@gmail\.com/);
+  assert.match(migration, /'admin'::public\.resident_system_role/);
+  assert.match(migration, /on conflict \(user_id\) do update[\s\S]*role = excluded\.role, active = true/i);
   assert.match(ui, /Admin กำหนดวันประชุมและกดเปิดรับด้วยตนเอง/);
   assert.doesNotMatch(ui, /เช็กชื่อวันศุกร์/);
 });

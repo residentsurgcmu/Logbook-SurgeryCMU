@@ -31,3 +31,19 @@ end;
 $$;
 revoke all on function public.open_resident_round() from public, anon;
 grant execute on function public.open_resident_round() to authenticated;
+
+-- Restore the dedicated Resident Surgery owner account as an active Admin.
+-- The Auth identity is the source of truth, so this is a no-op if the account
+-- has not been created in this project.
+insert into public.resident_user_roles (user_id, role, active)
+select id, 'admin'::public.resident_system_role, true
+from auth.users
+where lower(email) = 'resident.surgerycmu@gmail.com'
+on conflict (user_id) do update
+set role = excluded.role, active = true, updated_at = clock_timestamp();
+
+update public.resident_profiles p
+set email = lower(u.email), active = true, updated_at = clock_timestamp()
+from auth.users u
+where p.user_id = u.id
+  and lower(u.email) = 'resident.surgerycmu@gmail.com';
