@@ -109,8 +109,8 @@ export function RoundAdmin() {
   }
   return <div className="round-layout">
     <section className="resident-panel round-admin-panel">
-      <h2>MM &amp; Grand Round · เช็กชื่อวันศุกร์</h2>
-      <p>Admin เปิดรับเมื่อเริ่มประชุม ระบบหยุดรับสแกนเวลา 11:00 น. ตามเวลาไทย</p>
+      <h2>MM &amp; Grand Round · เช็กชื่อเข้าประชุม</h2>
+      <p>Admin กำหนดวันประชุมและกดเปิดรับด้วยตนเองในวันที่มีประชุม ระบบหยุดรับสแกนเวลา 11:00 น. ตามเวลาไทย</p>
       {!latestSession && <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={start}>{busy === "open" ? "กำลังเปิด…" : "เปิดรับเช็กชื่อวันนี้"}</button>}
       {latestSession && <p>ประชุมวันที่ {thaiDate(latestSession.meeting_date)} · {latestSession.closed_at ? `ปิดรับแล้ว ${thaiTime(latestSession.closed_at)}` : "เปิดรับแล้ว"}</p>}
       {qr && remaining > 0 && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
