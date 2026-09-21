@@ -6,10 +6,28 @@ export const residentRoleLabels = {
   admin: "Admin",
 };
 
-export const residentSessionClockErrorMessage = "เซสชันเดิมมีข้อมูลเวลาไม่สอดคล้อง ระบบล้างเซสชันเฉพาะอุปกรณ์นี้แล้ว กรุณาตั้งวันที่และเวลาเป็นอัตโนมัติ แล้วเข้าสู่ระบบใหม่";
+export const residentSessionClockErrorMessage = "ระบบยืนยันตัวตนกับฐานข้อมูลตรวจเวลาไม่ตรงกันชั่วคราว กรุณารอสักครู่แล้วกดตรวจสอบเซสชันอีกครั้ง หากยังเกิดซ้ำ กรุณาแจ้ง Admin";
 
 export function isJwtIssuedInFutureError(error) {
   return /jwt\s+issued\s+at\s+future/i.test(String(error?.message || error || ""));
+}
+
+export function residentSessionClockError() {
+  const error = new Error(residentSessionClockErrorMessage);
+  error.code = "RESIDENT_SESSION_CLOCK_SKEW";
+  return error;
+}
+
+export async function retryResidentClockSkew(operation, { delays = [1000, 2000, 3000], wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isJwtIssuedInFutureError(error)) throw error;
+      if (attempt === delays.length) throw residentSessionClockError();
+      await wait(delays[attempt]);
+    }
+  }
 }
 
 export function normalizeResidentEmail(email) {

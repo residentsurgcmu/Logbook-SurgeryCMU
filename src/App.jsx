@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getResidentSession, onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
 import ResidentPlatform from "./features/ResidentPlatform";
-import { isPasswordSetupRoute, residentRoleLabels, residentRoles, shouldLoadResidentWorkspace } from "./residentAuth";
+import { isPasswordSetupRoute, residentRoleLabels, residentRoles, retryResidentClockSkew, shouldLoadResidentWorkspace } from "./residentAuth";
 
-function Login({ onLogin, onRequestReset, error, initialMessage }) {
+function Login({ onLogin, onRequestReset, onRetrySession, recoverable, error, initialMessage }) {
   const [role, setRole] = useState("resident"); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [mode, setMode] = useState("login"); const [busy, setBusy] = useState(false); const [localError, setLocalError] = useState(""); const [message, setMessage] = useState(initialMessage || "");
   async function submit(event) {
     event.preventDefault(); setBusy(true); setLocalError(""); setMessage("");
@@ -12,7 +12,11 @@ function Login({ onLogin, onRequestReset, error, initialMessage }) {
       else await onLogin({ email, password, role });
     } catch (nextError) { setLocalError(nextError.message === "Invalid login credentials" ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : nextError.message); } finally { setBusy(false); }
   }
-  return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>Resident Surgery Assessment</h1><p>ระบบประเมินแพทย์ประจำบ้านศัลยศาสตร์ด้วย EPA และ PBA</p><small>ใช้เฉพาะบัญชีที่ Admin ของภาควิชาสร้างหรือเชิญให้</small></section><form onSubmit={submit}><h2>{mode === "reset" ? "ลืมรหัสผ่าน" : `เข้าสู่ระบบ ${residentRoleLabels[role]}`}</h2>{mode === "login" && <fieldset className="resident-role-selector"><legend>บทบาทผู้ใช้งาน</legend><div>{residentRoles.map((item) => <button key={item} type="button" className={role === item ? "active" : ""} aria-pressed={role === item} onClick={() => { setRole(item); setLocalError(""); }}>{residentRoleLabels[item]}</button>)}</div></fieldset>}<label>อีเมล<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username" /></label>{mode === "login" && <label>รหัสผ่าน<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label>}{mode === "login" && <button className="forgot-password-button" type="button" onClick={() => { setMode("reset"); setLocalError(""); setMessage(""); }}>ลืมรหัสผ่าน?</button>}{localError && <p className="form-error" role="alert">{localError || error}</p>}{!localError && error && <p className="form-error" role="alert">{error}</p>}{message && <p className="form-success" role="status">{message}</p>}<button className="primary-button" disabled={busy}>{busy ? "กำลังดำเนินการ…" : mode === "reset" ? "ส่งลิงก์ตั้งรหัสผ่านใหม่" : "เข้าสู่ระบบ"}</button>{mode === "reset" && <button className="login-mode-button" type="button" onClick={() => { setMode("login"); setLocalError(""); setMessage(""); }}>กลับไปเข้าสู่ระบบ</button>}</form></main>;
+  async function retrySession() {
+    setBusy(true); setLocalError("");
+    try { await onRetrySession(); } finally { setBusy(false); }
+  }
+  return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>Resident Surgery Assessment</h1><p>ระบบประเมินแพทย์ประจำบ้านศัลยศาสตร์ด้วย EPA และ PBA</p><small>ใช้เฉพาะบัญชีที่ Admin ของภาควิชาสร้างหรือเชิญให้</small></section><form onSubmit={submit}><h2>{mode === "reset" ? "ลืมรหัสผ่าน" : `เข้าสู่ระบบ ${residentRoleLabels[role]}`}</h2>{mode === "login" && <fieldset className="resident-role-selector"><legend>บทบาทผู้ใช้งาน</legend><div>{residentRoles.map((item) => <button key={item} type="button" className={role === item ? "active" : ""} aria-pressed={role === item} onClick={() => { setRole(item); setLocalError(""); }}>{residentRoleLabels[item]}</button>)}</div></fieldset>}<label>อีเมล<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="username" /></label>{mode === "login" && <label>รหัสผ่าน<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required autoComplete="current-password" /></label>}{mode === "login" && <button className="forgot-password-button" type="button" onClick={() => { setMode("reset"); setLocalError(""); setMessage(""); }}>ลืมรหัสผ่าน?</button>}{localError && <p className="form-error" role="alert">{localError || error}</p>}{!localError && error && <p className="form-error" role="alert">{error}</p>}{message && <p className="form-success" role="status">{message}</p>}{recoverable && mode === "login" && <button className="secondary-button" type="button" disabled={busy} onClick={retrySession}>{busy ? "กำลังตรวจสอบ…" : "ตรวจสอบเซสชันอีกครั้ง"}</button>}<button className="primary-button" disabled={busy}>{busy ? "กำลังดำเนินการ…" : mode === "reset" ? "ส่งลิงก์ตั้งรหัสผ่านใหม่" : "เข้าสู่ระบบ"}</button>{mode === "reset" && <button className="login-mode-button" type="button" onClick={() => { setMode("login"); setLocalError(""); setMessage(""); }}>กลับไปเข้าสู่ระบบ</button>}</form></main>;
 }
 
 function PasswordSetup({ onSave }) {
@@ -31,8 +35,19 @@ function PasswordSetupUnavailable({ onReturnToLogin }) {
 }
 
 export default function App() {
-  const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
-  async function refresh() { setError(""); try { setWorkspace(await loadResidentWorkspace()); } catch (nextError) { setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setWorkspace(null); } }
+  const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [recoverable, setRecoverable] = useState(false); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
+  const refreshInFlight = useRef(null);
+  function refresh() {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const pending = (async () => {
+      setError(""); setRecoverable(false);
+      try { setWorkspace(await retryResidentClockSkew(loadResidentWorkspace)); }
+      catch (nextError) { setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setRecoverable(nextError.code === "RESIDENT_SESSION_CLOCK_SKEW"); setWorkspace(null); }
+    })();
+    refreshInFlight.current = pending;
+    void pending.finally(() => { if (refreshInFlight.current === pending) refreshInFlight.current = null; });
+    return pending;
+  }
   useEffect(() => {
     let active = true;
     const startPasswordSetup = (session) => { if (!active) return; setNeedsPassword(true); setPasswordSession(session || null); };
@@ -53,6 +68,6 @@ export default function App() {
     return <PasswordSetup onSave={async (password) => { await updatePassword(password); await signOut(); window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setPasswordSession(null); setAuthMessage("ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง"); setWorkspace(null); }} />;
   }
   if (workspace === undefined) return <div className="resident-loading">กำลังเชื่อมต่อ Resident Surgery Assessment…</div>;
-  if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} onLogin={async (credentials) => { setAuthMessage(""); await signIn(credentials); await refresh(); }} onRequestReset={requestPasswordReset} />;
+  if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} recoverable={recoverable} onRetrySession={refresh} onLogin={async (credentials) => { setAuthMessage(""); await signIn(credentials); await refresh(); }} onRequestReset={requestPasswordReset} />;
   return <ResidentPlatform workspace={workspace} onRefresh={refresh} onLogout={async () => { await signOut(); setWorkspace(null); }} />;
 }

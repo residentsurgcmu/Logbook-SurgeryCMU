@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hasPasswordRecoveryLink, isJwtIssuedInFutureError, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, residentSessionClockErrorMessage, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
+import { hasPasswordRecoveryLink, isJwtIssuedInFutureError, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, residentSessionClockErrorMessage, retryResidentClockSkew, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
 
 test("Resident authentication exposes exactly Resident, Staff, and Admin roles", () => {
   assert.deepEqual(residentRoles, ["resident", "staff", "admin"]);
@@ -40,14 +40,27 @@ test("email normalization is stable before login, invite, and recovery calls", (
   assert.equal(normalizeResidentEmail("  Faculty@CMU.AC.TH "), "faculty@cmu.ac.th");
 });
 
-test("future-issued JWT errors are recognized and translated without exposing the backend message", async () => {
+test("fresh JWT timing errors retry reads without discarding the session", async () => {
   assert.equal(isJwtIssuedInFutureError(new Error("JWT issued at future")), true);
+  assert.equal(isJwtIssuedInFutureError({ code: "PGRST303", message: "JWT issued at future" }), true);
   assert.equal(isJwtIssuedInFutureError(new Error("Invalid login credentials")), false);
-  assert.match(residentSessionClockErrorMessage, /ล้างเซสชันเฉพาะอุปกรณ์นี้/);
+  assert.match(residentSessionClockErrorMessage, /ตรวจสอบเซสชันอีกครั้ง/);
   assert.doesNotMatch(residentSessionClockErrorMessage, /JWT issued at future/i);
+  let attempts = 0;
+  const result = await retryResidentClockSkew(async () => {
+    attempts += 1;
+    if (attempts < 3) throw { code: "PGRST303", message: "JWT issued at future" };
+    return "workspace";
+  }, { delays: [0, 0], wait: async () => {} });
+  assert.equal(result, "workspace");
+  assert.equal(attempts, 3);
+  await assert.rejects(() => retryResidentClockSkew(async () => { throw new Error("Invalid login credentials"); }, { delays: [0], wait: async () => {} }), /Invalid login credentials/);
+  await assert.rejects(() => retryResidentClockSkew(async () => { throw new Error("JWT issued at future"); }, { delays: [0], wait: async () => {} }), (error) => error.code === "RESIDENT_SESSION_CLOCK_SKEW" && error.message === residentSessionClockErrorMessage);
   const api = await readFile(new URL("../src/residentApi.js", import.meta.url), "utf8");
-  assert.match(api, /refreshSession\(\)/);
-  assert.match(api, /signOut\(\{ scope: "local" \}\)/);
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(api.slice(api.indexOf("export async function loadResidentWorkspace"), api.indexOf("export async function syncSourceTemplates")), /refreshSession\(\)|signOut\(/);
+  assert.match(app, /retryResidentClockSkew\(loadResidentWorkspace\)/);
+  assert.match(app, /onRetrySession=\{refresh\}/);
 });
 
 test("migration keeps legacy evaluator accounts as Staff and imports the workbook directory", async () => {

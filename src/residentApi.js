@@ -4,7 +4,6 @@ import {
   isJwtIssuedInFutureError,
   normalizeResidentEmail,
   passwordResetRedirect,
-  residentSessionClockErrorMessage,
 } from "./residentAuth";
 
 const fail = (error) => {
@@ -24,6 +23,7 @@ export async function signIn({ email, password }) {
     email: normalizeResidentEmail(email),
     password,
   });
+  if (isJwtIssuedInFutureError(error)) throw new Error("ระบบยืนยันตัวตนตรวจเวลาไม่ตรงกันชั่วคราว กรุณารอสักครู่แล้วลองเข้าสู่ระบบอีกครั้ง");
   fail(error);
   return data.user;
 }
@@ -67,26 +67,9 @@ export async function loadResidentWorkspace() {
   // sign-in state rather than surfacing Supabase's "Auth session missing".
   const session = await getResidentSession();
   if (!session) return null;
-  let { data: authData, error: authError } = await supabase.auth.getUser(
+  const { data: authData, error: authError } = await supabase.auth.getUser(
     session.access_token,
   );
-  if (isJwtIssuedInFutureError(authError)) {
-    // A persisted access token can become unusable when clocks drift. Ask Auth
-    // for one fresh token before clearing only this browser's broken session.
-    const { data: refreshed, error: refreshError } =
-      await supabase.auth.refreshSession();
-    if (!refreshError && refreshed.session) {
-      ({ data: authData, error: authError } = await supabase.auth.getUser(
-        refreshed.session.access_token,
-      ));
-    }
-    if (isJwtIssuedInFutureError(authError) || refreshError) {
-      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-      const clockError = new Error(residentSessionClockErrorMessage);
-      clockError.code = "RESIDENT_SESSION_CLOCK_SKEW";
-      throw clockError;
-    }
-  }
   fail(authError);
   if (!authData.user) return null;
   const [
