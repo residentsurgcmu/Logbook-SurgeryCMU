@@ -274,11 +274,17 @@ export async function resolveResidentQr(token) {
 }
 
 export async function loadRoundAdminData() {
-  const { data: sessions, error: sessionsError } = await supabase.from("resident_round_sessions")
-    .select("id,meeting_date,opened_at,closed_at").order("meeting_date", { ascending: false }).limit(100);
-  fail(sessionsError);
-  const attendance = [];
+  const sessions = [];
   const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.from("resident_round_sessions")
+      .select("id,meeting_date,opened_at,closed_at").order("meeting_date", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    fail(error);
+    sessions.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  const attendance = [];
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase.from("resident_round_attendance")
       .select("session_id,user_id,role_at_check_in,checked_in_at,resident_profiles(full_name,email,pgy)")
@@ -288,7 +294,7 @@ export async function loadRoundAdminData() {
     attendance.push(...(data || []));
     if (!data || data.length < pageSize) break;
   }
-  return { sessions: sessions || [], attendance };
+  return { sessions, attendance };
 }
 
 export async function openRound() {

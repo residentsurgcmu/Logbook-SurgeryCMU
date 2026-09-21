@@ -7,9 +7,9 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 
 const records = [
-  { id: "a", residentId: "r1", templateId: "e1", templateType: "EPA", assessmentDate: "2026-09-01" },
-  { id: "b", residentId: "r1", templateId: "p1", templateType: "PBA", assessmentDate: "2026-09-02" },
-  { id: "c", residentId: "r2", templateId: "e1", templateType: "EPA", assessmentDate: "2026-09-03" },
+  { id: "a", residentId: "r1", pgy: 1, templateId: "e1", templateType: "EPA", assessmentDate: "2026-09-01" },
+  { id: "b", residentId: "r1", pgy: 1, templateId: "p1", templateType: "PBA", assessmentDate: "2026-09-02" },
+  { id: "c", residentId: "r2", pgy: 2, templateId: "e1", templateType: "EPA", assessmentDate: "2026-09-03" },
 ];
 
 test("Admin export supports the five requested scopes", () => {
@@ -22,6 +22,17 @@ test("Admin export supports the five requested scopes", () => {
 
 test("Admin export applies an inclusive activity-date range", () => {
   assert.deepEqual(filterExportRecords(records, { scope: "resident-all", dateFrom: "2026-09-02", dateTo: "2026-09-03" }).map((item) => item.id), ["b", "c"]);
+});
+
+test("EPA/PBA export combines optional Resident and PGY filters with scope and date range", () => {
+  assert.deepEqual(
+    filterExportRecords(records, { scope: "epa-all", residentId: "r1", pgy: 1, dateFrom: "2026-09-01", dateTo: "2026-09-02" }).map((item) => item.id),
+    ["a"],
+  );
+  assert.deepEqual(
+    filterExportRecords(records, { scope: "resident-all", pgy: 2 }).map((item) => item.id),
+    ["c"],
+  );
 });
 
 test("dashboard derives live counts without synthetic placeholder data", () => {

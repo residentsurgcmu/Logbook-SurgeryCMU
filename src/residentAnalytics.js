@@ -121,6 +121,10 @@ export function buildExportRecords(workspace) {
 
 export function filterExportRecords(records, filters) {
   return records.filter((record) => {
+    if (filters.residentId && record.residentId !== filters.residentId)
+      return false;
+    if (filters.pgy && Number(record.pgy) !== Number(filters.pgy))
+      return false;
     if (
       filters.scope === "resident-one" &&
       record.residentId !== filters.residentId

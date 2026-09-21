@@ -26,6 +26,12 @@ button,input,textarea,select { font:inherit; }
 .round-qr span { color:var(--resident-muted); }
 .round-export { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:18px 0; }
 .round-export span { margin-right:auto; font-weight:800; }
+.round-pdf-export { margin:22px 0; padding:18px; border:1px solid var(--resident-line); border-radius:12px; background:var(--resident-soft); }
+.round-pdf-export h3 { margin:0 0 6px; color:var(--resident-green); font-size:16px; }
+.round-pdf-export p { margin:0; color:var(--resident-muted); font-size:13px; line-height:1.5; }
+.round-date-range { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+.round-filter-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+@media (max-width:560px) { .round-date-range,.round-filter-grid { grid-template-columns:1fr; } }
 .round-checkin { max-width:700px; margin-inline:auto; }
 .round-checkin h3 { margin-top:28px; }
 .round-checkin li { margin:8px 0; }
