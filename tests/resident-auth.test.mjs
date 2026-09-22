@@ -72,11 +72,22 @@ test("migration keeps legacy evaluator accounts as Staff and imports the workboo
   assert.match(sql, /revoke all on table public\.resident_staff_directory from anon, authenticated/);
 });
 
-test("Staff invitations are server-authorized and constrained to the imported directory", async () => {
+test("Admin can provision Staff with a unit without overwriting existing Resident or Admin roles", async () => {
   const functionSource = await readFile(new URL("../supabase/functions/resident-admin/index.ts", import.meta.url), "utf8");
+  const platformSource = await readFile(new URL("../src/features/ResidentPlatform.jsx", import.meta.url), "utf8");
+  const apiSource = await readFile(new URL("../src/residentApi.js", import.meta.url), "utf8");
   assert.match(functionSource, /callerRole\.role !== "admin"/);
   assert.match(functionSource, /action === "invite_staff"/);
   assert.match(functionSource, /resident_staff_directory/);
   assert.match(functionSource, /redirectTo: resetPasswordUrl\(\)/);
-  assert.match(functionSource, /\["resident", "admin"\]\.includes\(role\)/);
+  assert.match(functionSource, /\["resident", "staff", "admin"\]\.includes\(role\)/);
+  assert.match(functionSource, /role === "staff" && !hasLength\(unitName, 2, 80\)/);
+  assert.match(functionSource, /existingRole && existingRole\.role !== "staff"/);
+  assert.match(functionSource, /insert\(\{ email, full_name: fullName, unit_name: unitName, active: true \}\)/);
+  assert.match(functionSource, /auth_user_id: invitedUserId/);
+  assert.match(platformSource, /เพิ่มบัญชี Resident \/ Staff \/ Admin/);
+  assert.match(platformSource, /<option value="staff">Staff<\/option>/);
+  assert.match(platformSource, /account\.role === "staff"[\s\S]*?minLength="2"[\s\S]*?maxLength="80"[\s\S]*?required/);
+  assert.match(apiSource, /\{ fullName, email, role, pgy, unitName \}/);
+  assert.match(apiSource, /email: normalizeResidentEmail\(email\)/);
 });

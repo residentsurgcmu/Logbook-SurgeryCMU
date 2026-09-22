@@ -15,6 +15,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const resetPasswordUrl = () => `${appUrl}/reset-password`;
 const normalizedEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : "";
+const normalizedText = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const hasLength = (value: string, minimum: number, maximum: number) => value.length >= minimum && value.length <= maximum;
 const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 Deno.serve(async (request) => {
@@ -98,28 +100,99 @@ Deno.serve(async (request) => {
     }
 
     if (action !== "provision_account") throw new Error("Invalid action");
-    const { fullName, role, pgy } = payload;
-    if (!["resident", "admin"].includes(role) || !email || typeof fullName !== "string" || !fullName.trim()) throw new Error("Invalid account data");
+    const { role, pgy } = payload;
+    const fullName = normalizedText(payload?.fullName);
+    const unitName = normalizedText(payload?.unitName);
+    if (!["resident", "staff", "admin"].includes(role) || !email || !hasLength(fullName, 2, 160)) throw new Error("Invalid account data");
     if (role === "resident" && ![1, 2, 3, 4].includes(Number(pgy))) throw new Error("Resident PGY must be 1–4");
+    if (role === "staff" && !hasLength(unitName, 2, 80)) throw new Error("Staff unit must be 2–80 characters");
 
-    const { data: directory, error: directoryError } = await adminClient.from("resident_staff_directory").select("email").eq("email", email).maybeSingle();
+    const { data: directory, error: directoryError } = await adminClient
+      .from("resident_staff_directory")
+      .select("email,full_name,unit_name,active,auth_user_id")
+      .eq("email", email)
+      .maybeSingle();
     if (directoryError) throw directoryError;
-    if (directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
 
     const { data: existing, error: existingError } = await adminClient.from("resident_profiles").select("user_id").eq("email", email).maybeSingle();
     if (existingError) throw existingError;
+    const { data: existingRole, error: existingRoleError } = existing
+      ? await adminClient.from("resident_user_roles").select("role,active").eq("user_id", existing.user_id).maybeSingle()
+      : { data: null, error: null };
+    if (existingRoleError) throw existingRoleError;
+
+    if (role === "staff") {
+      if (existingRole && existingRole.role !== "staff") {
+        throw new Error("This email already belongs to a Resident or Admin account");
+      }
+      if (directory && !directory.active) throw new Error("This Staff directory entry is inactive");
+
+      let staffDirectory = directory;
+      if (!staffDirectory) {
+        const { data: createdDirectory, error: createDirectoryError } = await adminClient
+          .from("resident_staff_directory")
+          .insert({ email, full_name: fullName, unit_name: unitName, active: true })
+          .select("email,full_name,unit_name,active,auth_user_id")
+          .single();
+        if (createDirectoryError) throw createDirectoryError;
+        staffDirectory = createdDirectory;
+      }
+
+      if (staffDirectory.auth_user_id) {
+        if (existing && existing.user_id !== staffDirectory.auth_user_id) {
+          throw new Error("Staff directory account does not match the existing account");
+        }
+        const { data: linkedRole, error: linkedRoleError } = await adminClient
+          .from("resident_user_roles")
+          .select("role,active")
+          .eq("user_id", staffDirectory.auth_user_id)
+          .maybeSingle();
+        if (linkedRoleError) throw linkedRoleError;
+        if (!linkedRole || linkedRole.role !== "staff") {
+          throw new Error("Staff directory account has an incompatible role");
+        }
+        return json({ ok: true, userId: staffDirectory.auth_user_id, invitationSent: false, alreadyProvisioned: true });
+      }
+
+      const userId = existing?.user_id;
+      if (userId) {
+        const { error: linkError } = await adminClient
+          .from("resident_staff_directory")
+          .update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("email", staffDirectory.email);
+        if (linkError) throw linkError;
+        return json({ ok: true, userId, invitationSent: false, alreadyProvisioned: true });
+      }
+
+      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(staffDirectory.email, {
+        data: { full_name: staffDirectory.full_name },
+        redirectTo: resetPasswordUrl(),
+      });
+      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite Staff account");
+
+      const invitedUserId = invitation.user.id;
+      const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: invitedUserId, email: staffDirectory.email, full_name: staffDirectory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
+      if (profileError) throw profileError;
+      const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: invitedUserId, role: "staff", active: true }, { onConflict: "user_id" });
+      if (roleError) throw roleError;
+      const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: invitedUserId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", staffDirectory.email);
+      if (linkError) throw linkError;
+      return json({ ok: true, userId: invitedUserId, invitationSent: true });
+    }
+
+    if (directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
     let userId = existing?.user_id;
     let invitationSent = false;
     if (!userId) {
       const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { full_name: fullName.trim() },
+        data: { full_name: fullName },
         redirectTo: resetPasswordUrl(),
       });
       if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite account");
       userId = invitation.user.id;
       invitationSent = true;
     }
-    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email, full_name: fullName.trim(), pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
+    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email, full_name: fullName, pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
     if (profileError) throw profileError;
     const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role, active: true }, { onConflict: "user_id" });
     if (roleError) throw roleError;

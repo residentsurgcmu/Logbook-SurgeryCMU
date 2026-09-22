@@ -741,6 +741,7 @@ function Admin({ workspace, onRefresh }) {
     email: "",
     role: "resident",
     pgy: "1",
+    unitName: "",
   });
   const [assignment, setAssignment] = useState({ staffId: "", residentId: "" });
   const residents = workspace.profiles.filter((profile) => profile.pgy);
@@ -776,9 +777,17 @@ function Admin({ workspace, onRefresh }) {
       setMessage(
         result.invitationSent
           ? "ส่งคำเชิญเปิดบัญชีแล้ว"
-          : "อัปเดตสิทธิ์บัญชีแล้ว",
+          : result.alreadyProvisioned
+            ? "Staff นี้มีบัญชีในระบบแล้ว"
+            : "อัปเดตสิทธิ์บัญชีแล้ว",
       );
-      setAccount({ fullName: "", email: "", role: "resident", pgy: "1" });
+      setAccount({
+        fullName: "",
+        email: "",
+        role: "resident",
+        pgy: "1",
+        unitName: "",
+      });
       await onRefresh();
     } catch (nextError) {
       setError(nextError.message);
@@ -829,7 +838,7 @@ function Admin({ workspace, onRefresh }) {
       <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
       <div className="admin-grid">
         <form className="resident-panel" onSubmit={addAccount}>
-          <h2>เพิ่มบัญชี Resident / Admin</h2>
+          <h2>เพิ่มบัญชี Resident / Staff / Admin</h2>
           <label>
             ชื่อ–นามสกุล
             <input
@@ -860,6 +869,7 @@ function Admin({ workspace, onRefresh }) {
               }
             >
               <option value="resident">Resident</option>
+              <option value="staff">Staff</option>
               <option value="admin">Admin</option>
             </select>
           </label>
@@ -878,6 +888,20 @@ function Admin({ workspace, onRefresh }) {
                   </option>
                 ))}
               </select>
+            </label>
+          )}
+          {account.role === "staff" && (
+            <label>
+              หน่วย
+              <input
+                value={account.unitName}
+                onChange={(event) =>
+                  setAccount({ ...account, unitName: event.target.value })
+                }
+                minLength="2"
+                maxLength="80"
+                required
+              />
             </label>
           )}
           <button className="primary-button">ส่งคำเชิญ</button>

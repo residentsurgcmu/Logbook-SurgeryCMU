@@ -337,9 +337,16 @@ export async function saveAssignment(staffId, residentId) {
   fail(error);
 }
 
-export async function provisionAccount(payload) {
+export async function provisionAccount({ fullName, email, role, pgy, unitName }) {
   const { data, error } = await supabase.functions.invoke("resident-admin", {
-    body: { action: "provision_account", ...payload },
+    body: {
+      action: "provision_account",
+      fullName,
+      email: normalizeResidentEmail(email),
+      role,
+      pgy,
+      unitName,
+    },
   });
   fail(error);
   if (!data?.ok) throw new Error(data?.error || "Could not provision account");
