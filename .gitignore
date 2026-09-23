@@ -27,3 +27,5 @@ supabase/private/
 supabase/.temp/
 *.doc
 *.xlsx
+.vercel
+.env*
