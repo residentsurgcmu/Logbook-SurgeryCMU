@@ -41,7 +41,7 @@ export function ScoreLegend({ template }) {
   );
 }
 
-function ScoreGrid({
+export function ScoreGrid({
   template,
   scores,
   onScore,
@@ -103,7 +103,7 @@ function ScoreGrid({
   );
 }
 
-function OutcomeSelect({ template, value, onChange, label }) {
+export function OutcomeSelect({ template, value, onChange, label }) {
   return (
     <label>
       {label}

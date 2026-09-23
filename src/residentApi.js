@@ -108,6 +108,7 @@ export async function loadResidentWorkspace() {
     { data: registeredStaff, error: registeredStaffError },
     { data: requests, error: requestsError },
     { data: notifications, error: notificationsError },
+    { data: examRecords, error: examRecordsError },
   ] = await Promise.all([
     supabase
       .from("resident_template_definitions")
@@ -142,6 +143,7 @@ export async function loadResidentWorkspace() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase.rpc("list_resident_exam_records"),
   ]);
   fail(templatesError);
   fail(assessmentsError);
@@ -151,6 +153,7 @@ export async function loadResidentWorkspace() {
   fail(registeredStaffError);
   fail(requestsError);
   fail(notificationsError);
+  fail(examRecordsError);
   return {
     user: { ...mapProfile(profile), role: role.role },
     templates: (templates || []).map((template) => ({
@@ -166,6 +169,7 @@ export async function loadResidentWorkspace() {
     registeredStaff: registeredStaff || [],
     requests: requests || [],
     notifications: notifications || [],
+    examRecords: examRecords || [],
   };
 }
 
@@ -294,7 +298,66 @@ export async function loadRoundAdminData() {
     attendance.push(...(data || []));
     if (!data || data.length < pageSize) break;
   }
-  return { sessions, attendance };
+  const { data: cmeQr, error: cmeQrError } = await supabase
+    .from("resident_round_cme_qr")
+    .select("session_id,storage_path,uploaded_by,uploaded_at,updated_at");
+  fail(cmeQrError);
+  return { sessions, attendance, cmeQr: cmeQr || [] };
+}
+
+const CME_QR_BUCKET = "resident-round-cme-qr";
+const cmeQrExtensions = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+export async function uploadRoundCmeQr(sessionId, adminId, file) {
+  if (!sessionId || !adminId || !file) throw new Error("กรุณาเลือกภาพ QR CME");
+  const extension = cmeQrExtensions[file.type];
+  if (!extension) throw new Error("QR CME ต้องเป็นภาพ JPEG, PNG หรือ WebP");
+  if (file.size > 5 * 1024 * 1024) throw new Error("QR CME ต้องมีขนาดไม่เกิน 5 MB");
+  const path = `${adminId}/${sessionId}/${crypto.randomUUID()}.${extension}`;
+  const { error: uploadError } = await supabase.storage
+    .from(CME_QR_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  fail(uploadError);
+  try {
+    const { data: previousPath, error } = await supabase.rpc(
+      "set_resident_round_cme_qr",
+      { p_session_id: sessionId, p_storage_path: path },
+    );
+    fail(error);
+    if (previousPath && previousPath !== path)
+      await supabase.storage.from(CME_QR_BUCKET).remove([previousPath]);
+    return path;
+  } catch (error) {
+    await supabase.storage.from(CME_QR_BUCKET).remove([path]);
+    throw error;
+  }
+}
+
+export async function loadRoundCmeQrUrl(storagePath) {
+  if (!storagePath) return "";
+  const { data, error } = await supabase.storage
+    .from(CME_QR_BUCKET)
+    .createSignedUrl(storagePath, 10 * 60);
+  fail(error);
+  return data?.signedUrl || "";
+}
+
+export async function clearRoundCmeQr(sessionId) {
+  const { data: storagePath, error } = await supabase.rpc(
+    "clear_resident_round_cme_qr",
+    { p_session_id: sessionId },
+  );
+  fail(error);
+  if (storagePath) {
+    const { error: removeError } = await supabase.storage
+      .from(CME_QR_BUCKET)
+      .remove([storagePath]);
+    fail(removeError);
+  }
 }
 
 export async function openRound() {
@@ -325,6 +388,54 @@ export async function loadOwnRoundAttendance() {
     .select("session_id,checked_in_at").order("checked_in_at", { ascending: false }).limit(20);
   fail(error);
   return data || [];
+}
+
+export async function recordHistoricalAssessment(form) {
+  const { data, error } = await supabase.rpc(
+    "admin_record_historical_resident_assessment",
+    {
+      p_template_id: form.templateId,
+      p_resident_id: form.residentId,
+      p_evaluator_id: form.evaluatorId,
+      p_assessment_date: form.date,
+      p_clinical_context: form.context.trim(),
+      p_procedure_or_activity: form.activity.trim(),
+      p_overall_outcome: form.outcome,
+      p_overall_comment: form.comment.trim(),
+      p_scores: form.scores,
+    },
+  );
+  fail(error);
+  return data;
+}
+
+export async function createResidentExam(form) {
+  const { data, error } = await supabase.rpc("create_resident_exam_event", {
+    p_exam_type: form.type,
+    p_exam_date: form.date,
+    p_title: form.title.trim(),
+    p_max_score: form.type === "mcq" ? Number(form.maxScore) : null,
+    p_part_names: form.type === "xray_anatomy" ? form.partNames : [],
+    p_participant_ids: form.participantIds,
+  });
+  fail(error);
+  return data;
+}
+
+export async function saveResidentExamResults(eventId, results) {
+  const { error } = await supabase.rpc("save_resident_exam_results", {
+    p_event_id: eventId,
+    p_results: results,
+  });
+  fail(error);
+}
+
+export async function setResidentExamPublication(eventId, publish) {
+  const { error } = await supabase.rpc("set_resident_exam_publication", {
+    p_event_id: eventId,
+    p_publish: publish,
+  });
+  fail(error);
 }
 
 export async function saveAssignment(staffId, residentId) {

@@ -24,6 +24,10 @@ button,input,textarea,select { font:inherit; }
 .round-qr svg { max-width:100%; height:auto; background:white; }
 .round-qr strong { color:var(--resident-green); }
 .round-qr span { color:var(--resident-muted); }
+.round-cme-qr { display:grid; gap:12px; margin-top:20px; padding-top:20px; border-top:1px solid var(--resident-line); }
+.round-cme-qr h3 { margin:0; color:var(--resident-green); font-size:16px; }.round-cme-qr p { margin:0; color:var(--resident-muted); font-size:13px; line-height:1.5; }
+.round-cme-qr img { width:min(100%,420px); max-height:420px; object-fit:contain; justify-self:center; padding:14px; border:1px solid var(--resident-line); border-radius:12px; background:#fff; }
+.cme-upload-control { width:max-content; cursor:pointer; }.cme-upload-control input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
 .round-export { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:18px 0; }
 .round-export span { margin-right:auto; font-weight:800; }
 .round-pdf-export { margin:22px 0; padding:18px; border:1px solid var(--resident-line); border-radius:12px; background:var(--resident-soft); }
@@ -75,7 +79,14 @@ button,input,textarea,select { font:inherit; }
 .danger-button { min-height:38px; border:1px solid #b93838; border-radius:8px; background:#fff; color:#9c2626; cursor:pointer; font-weight:800; padding:8px 12px; white-space:nowrap; }
 .danger-button:hover { background:#fff2f2; }.danger-button:disabled { opacity:.55; cursor:not-allowed; }
 
+/* Examination management and published-score views stay opaque, because they
+   carry educational records. */
+.exam-layout { display:grid; gap:20px; }.exam-create-form { margin-bottom:0; }.exam-parts { display:grid; gap:10px; }.exam-parts > strong { font-size:14px; }.exam-part-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; }.exam-part-row .text-button { color:#8c2727; }
+.exam-participants { margin:0; padding:14px; border:1px solid var(--resident-line); border-radius:10px; }.exam-participants legend { padding:0 6px; color:var(--resident-green); font-size:14px; font-weight:800; }.exam-participant-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; margin-top:14px; }.exam-participant-option { display:flex !important; align-items:center; gap:9px !important; padding:10px; border:1px solid var(--resident-line); border-radius:8px; background:#fff; cursor:pointer; font-weight:600 !important; }.exam-participant-option input { width:17px !important; min-width:17px; height:17px; padding:0 !important; accent-color:var(--resident-green); }
+.exam-event-picker { margin-bottom:0; }.exam-event-picker h2 { margin-bottom:14px; }.exam-editor { margin-bottom:0; }.exam-editor-table input,.exam-editor-table select { min-width:115px; }.exam-editor-table th { white-space:nowrap; }.exam-published-result { margin-bottom:20px; }.exam-published-result .section-heading { margin-bottom:14px; }.status-chip.draft { color:#654600; background:#fff1c9; }.status-chip.published { color:#176b36; background:#e5f5e9; }.exam-filters { margin-bottom:20px; }.exam-filters h2 { margin-bottom:14px; }
+
 @media (max-width:800px) { .epa-static,.admin-delete-controls { grid-template-columns:1fr; } }
+@media (max-width:560px) { .exam-participant-list { grid-template-columns:1fr; }.exam-part-row { grid-template-columns:1fr; }.cme-upload-control { width:100%; text-align:center; } }
 
 /* Dashboard, export center, and privacy-preserving Resident QR workflow. */
 .dashboard-stack { display:grid; gap:20px; }

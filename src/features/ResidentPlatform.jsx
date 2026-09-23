@@ -5,6 +5,7 @@ import {
   inviteStaff,
   markNotificationRead,
   provisionAccount,
+  recordHistoricalAssessment,
   requestAssessment,
   saveAssignment,
   syncSourceTemplates,
@@ -12,10 +13,14 @@ import {
 import ResidentDashboard from "./ResidentDashboard";
 import {
   AssessmentHistory,
+  OutcomeSelect,
   ResidentRequestForm,
   ResidentRequestHistory,
+  ScoreGrid,
+  ScoreLegend,
   StaffEvaluationForm,
 } from "./ResidentAssessmentViews";
+import ResidentExams from "./ResidentExams";
 import ResidentExportCenter from "./ResidentExportCenter";
 import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
 import {
@@ -731,6 +736,93 @@ function AdminAssessmentDeletion({ workspace, onRefresh }) {
   );
 }
 
+function HistoricalAssessmentEntry({ workspace, onRefresh }) {
+  const residents = workspace.profiles.filter((profile) => profile.pgy);
+  const staff = workspace.registeredStaff || [];
+  const [templateId, setTemplateId] = useState(workspace.templates[0]?.id || "");
+  const [residentId, setResidentId] = useState(residents[0]?.id || "");
+  const [evaluatorId, setEvaluatorId] = useState(staff[0]?.user_id || "");
+  const [date, setDate] = useState(today());
+  const [activity, setActivity] = useState("");
+  const [context, setContext] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [comment, setComment] = useState("");
+  const [scores, setScores] = useState({});
+  const [comments, setComments] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const template = workspace.templates.find((item) => item.id === templateId);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!template || !residentId || !evaluatorId || !activity.trim() || !outcome)
+      return setError("กรุณาระบุ Resident, Staff ผู้ประเมิน, กิจกรรม และผลสรุป");
+    if (template.criteria.some((criterion) => !scores[criterion.id]))
+      return setError("กรุณากรอกคะแนนทุกเกณฑ์ของแบบประเมิน");
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await recordHistoricalAssessment({
+        templateId,
+        residentId,
+        evaluatorId,
+        date,
+        activity,
+        context,
+        outcome,
+        comment,
+        scores: template.criteria.map((criterion) => ({
+          criterionId: criterion.id,
+          score: scores[criterion.id],
+          comment: comments[criterion.id] || "",
+        })),
+      });
+      setActivity("");
+      setContext("");
+      setOutcome("");
+      setComment("");
+      setScores({});
+      setComments({});
+      setMessage("บันทึกผล EPA/PBA ย้อนหลังแล้ว โดยคง Staff ผู้ประเมินเดิมไว้");
+      await onRefresh();
+    } catch (nextError) {
+      setError(nextError.message || "บันทึก EPA/PBA ย้อนหลังไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="resident-panel assessment-form historical-assessment" onSubmit={submit}>
+      <div className="section-heading">
+        <h2>บันทึก EPA/PBA ย้อนหลัง</h2>
+        <p>Admin เป็นผู้นำเข้า แต่ระบบจะแสดง Staff ที่เลือกเป็นผู้ประเมินเดิม</p>
+      </div>
+      {!residents.length || !staff.length || !template ? (
+        <p className="form-error">ต้องมี Resident, Staff ที่ลงทะเบียน และ catalog EPA/PBA ก่อนบันทึกรายการย้อนหลัง</p>
+      ) : <>
+        <div className="resident-form-grid">
+          <label>Resident<select value={residentId} onChange={(event) => setResidentId(event.target.value)} required>{residents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label>
+          <label>Staff ผู้ประเมินเดิม<select value={evaluatorId} onChange={(event) => setEvaluatorId(event.target.value)} required>{staff.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}{person.unit_name ? ` · ${person.unit_name}` : ""}</option>)}</select></label>
+          <label>วันที่ประเมิน<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
+          <label>แบบประเมิน<select value={templateId} onChange={(event) => { setTemplateId(event.target.value); setScores({}); setComments({}); setOutcome(""); }} required>{workspace.templates.map((item) => <option key={item.id} value={item.id}>{item.template_code} · {item.title}</option>)}</select></label>
+          <label className="wide">กิจกรรม/หัตถการ<input value={activity} maxLength="240" onChange={(event) => setActivity(event.target.value)} required /></label>
+          <label className="wide">บริบททางคลินิก (ถ้ามี)<textarea value={context} maxLength="500" onChange={(event) => setContext(event.target.value)} /></label>
+          <OutcomeSelect template={template} value={outcome} onChange={setOutcome} label="ผลสรุป" />
+          <label>ความเห็นเพิ่มเติม (ถ้ามี)<textarea value={comment} maxLength="2000" onChange={(event) => setComment(event.target.value)} /></label>
+        </div>
+        <ScoreLegend template={template} />
+        <ScoreGrid template={template} scores={scores} onScore={(id, value) => setScores((current) => ({ ...current, [id]: value }))} comments={comments} onComment={(id, value) => setComments((current) => ({ ...current, [id]: value }))} />
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {message && <p className="form-success" role="status">{message}</p>}
+        <button className="primary-button" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกผล EPA/PBA ย้อนหลัง"}</button>
+      </>}
+    </form>
+  );
+}
+
 function Admin({ workspace, onRefresh }) {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
@@ -836,6 +928,7 @@ function Admin({ workspace, onRefresh }) {
         </button>
       </section>
       <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
+      <HistoricalAssessmentEntry workspace={workspace} onRefresh={onRefresh} />
       <div className="admin-grid">
         <form className="resident-panel" onSubmit={addAccount}>
           <h2>เพิ่มบัญชี Resident / Staff / Admin</h2>
@@ -1028,7 +1121,9 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     `Notification${unreadCount ? ` (${unreadCount})` : ""}`,
   ]);
   if (workspace.user.role === "admin")
-    nav.push(["round-admin", "MM & Grand Round"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
+    nav.push(["round-admin", "MM & Grand Round"], ["exams", "การสอบ"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
+  else
+    nav.push(["exams", workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "ผลการสอบ"]);
   const titles = {
     dashboard: "Dashboard การประเมิน",
     request: "ส่งแบบประเมิน EPA/PBA",
@@ -1044,6 +1139,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     admin: "จัดการระบบ Resident",
     attendance: "เช็กชื่อ MM & Grand Round",
     "round-admin": "MM & Grand Round",
+    exams: workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "การสอบ",
   };
   async function readNotification(id) {
     await markNotificationRead(id);
@@ -1107,7 +1203,9 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         ) : tab === "export" ? (
           <ResidentExportCenter workspace={workspace} />
         ) : tab === "round-admin" ? (
-          <RoundAdmin />
+          <RoundAdmin user={workspace.user} />
+        ) : tab === "exams" ? (
+          <ResidentExams workspace={workspace} onRefresh={onRefresh} />
         ) : tab === "attendance" ? (
           <RoundCheckIn token={roundToken} />
         ) : tab === "qr" ? (
