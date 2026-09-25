@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, uploadRoundCmeQr } from "../residentApi";
+import { checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
 
 const thaiTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const thaiDate = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "full", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T00:00:00+07:00`));
 const bangkokDate = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date());
+const thaiHM = (value) => new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
+const toTimeInputValue = (value) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" }).format(new Date(value));
 const safeCell = (value) => /^[=+@\-\t\r]/.test(String(value || "")) ? `'${value}` : String(value ?? "");
 
 function download(blob, filename) {
@@ -59,11 +61,17 @@ export function RoundAdmin({ user }) {
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [cmeUrl, setCmeUrl] = useState("");
+  const [cmeUrls, setCmeUrls] = useState({});
+  const [scheduleForm, setScheduleForm] = useState({ date: "", start: "", end: "" });
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useState({ date: "", start: "", end: "" });
   const mounted = useRef(true);
   const hasInitialPdfDateRange = useRef(false);
-  const latestSession = data.sessions.find((item) => item.meeting_date === bangkokDate());
-  const cmeQr = latestSession ? data.cmeQr.find((item) => item.session_id === latestSession.id) : null;
+  const openSessions = useMemo(
+    () => data.sessions.filter((item) => !item.closed_at).sort((a, b) => a.meeting_date.localeCompare(b.meeting_date)),
+    [data.sessions],
+  );
+  const cmeQrFor = (sessionId) => data.cmeQr.find((item) => item.session_id === sessionId) || null;
   const selected = data.sessions.find((item) => item.id === selectedId) || data.sessions[0];
   const [pdfDateFrom, setPdfDateFrom] = useState("");
   const [pdfDateTo, setPdfDateTo] = useState("");
@@ -108,55 +116,71 @@ export function RoundAdmin({ user }) {
     const clock = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => { mounted.current = false; window.clearInterval(poll); window.clearInterval(clock); };
   }, []);
+  const cmeQrKey = data.cmeQr.map((item) => `${item.session_id}:${item.storage_path}`).join(",");
   useEffect(() => {
     let active = true;
-    async function loadCmeQr() {
-      if (!cmeQr?.storage_path) {
-        if (active) setCmeUrl("");
-        return;
-      }
-      try {
-        const nextUrl = await loadRoundCmeQrUrl(cmeQr.storage_path);
-        if (active) setCmeUrl(nextUrl);
-      } catch (nextError) {
-        if (active) setError(nextError.message || "ไม่สามารถโหลด QR CME ได้");
-      }
+    async function loadCmeUrls() {
+      const entries = await Promise.all(data.cmeQr.map(async (item) => {
+        try { return [item.session_id, await loadRoundCmeQrUrl(item.storage_path)]; }
+        catch (nextError) {
+          if (active) setError(nextError.message || "ไม่สามารถโหลด QR CME ได้");
+          return [item.session_id, ""];
+        }
+      }));
+      if (active) setCmeUrls(Object.fromEntries(entries));
     }
-    loadCmeQr();
+    loadCmeUrls();
     return () => { active = false; };
-  }, [cmeQr?.storage_path]);
+  }, [cmeQrKey]);
   const remaining = qr ? Math.max(0, new Date(qr.valid_until).getTime() - (Date.now() + offsetMs)) : 0;
   useEffect(() => {
     if (!qr) return undefined;
     const timer = window.setTimeout(() => { setQr(null); refresh(); }, Math.max(0, remaining));
     return () => window.clearTimeout(timer);
   }, [qr?.token, qr?.valid_until]);
-  async function start() {
+  async function createSchedule(event) {
+    event.preventDefault();
     setBusy("open"); setError("");
-    try { const id = await openRound(); setSelectedId(id); await refresh(); }
-    catch (nextError) { setError(nextError.message || "เปิดการเช็กชื่อไม่สำเร็จ"); }
+    try {
+      const id = await openRound(scheduleForm.date, scheduleForm.start, scheduleForm.end);
+      setScheduleForm({ date: "", start: "", end: "" });
+      setSelectedId(id);
+      await refresh();
+    } catch (nextError) { setError(nextError.message || "ตั้งตารางสแกนไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
-  async function stop() {
-    if (!latestSession || !window.confirm("ปิดรับเช็กชื่อวันนี้ก่อน 11:00 น.? จะเปิดอีกครั้งในวันนี้ไม่ได้")) return;
+  function startEdit(session) {
+    setError("");
+    setEditingId(session.id);
+    setEditForm({ date: session.meeting_date, start: toTimeInputValue(session.starts_at), end: toTimeInputValue(session.ends_at) });
+  }
+  async function saveEdit(event) {
+    event.preventDefault();
+    setBusy("edit"); setError("");
+    try { await updateRoundSession(editingId, editForm.date, editForm.start, editForm.end); setEditingId(""); await refresh(); }
+    catch (nextError) { setError(nextError.message || "แก้ไขตารางสแกนไม่สำเร็จ"); }
+    finally { setBusy(""); }
+  }
+  async function stop(session) {
+    if (!window.confirm(`ปิดรับสแกน QR สำหรับวันที่ ${thaiDate(session.meeting_date)} ก่อนกำหนดเวลา (${thaiHM(session.ends_at)} น.)? จะแก้ไขหรือเปิดใหม่สำหรับวันนี้ไม่ได้อีก`)) return;
     setBusy("close"); setError("");
-    try { await closeRound(latestSession.id); setQr(null); await refresh(); }
+    try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
     catch (nextError) { setError(nextError.message || "ปิดการเช็กชื่อไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
-  async function uploadCme(event) {
+  async function uploadCme(session, event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || !latestSession) return;
-    setBusy("cme-upload"); setError("");
-    try { await uploadRoundCmeQr(latestSession.id, user.id, file); await refresh(); }
+    if (!file) return;
+    setBusy(`cme-upload-${session.id}`); setError("");
+    try { await uploadRoundCmeQr(session.id, user.id, file); await refresh(); }
     catch (nextError) { setError(nextError.message || "อัปโหลด QR CME ไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
-  async function removeCme() {
-    if (!latestSession || !window.confirm("ลบ QR CME ของการประชุมวันนี้?")) return;
-    setBusy("cme-remove"); setError("");
-    try { await clearRoundCmeQr(latestSession.id); setCmeUrl(""); await refresh(); }
+  async function removeCme(session) {
+    if (!window.confirm(`ลบ QR CME ของวันที่ ${thaiDate(session.meeting_date)}?`)) return;
+    setBusy(`cme-remove-${session.id}`); setError("");
+    try { await clearRoundCmeQr(session.id); await refresh(); }
     catch (nextError) { setError(nextError.message || "ลบ QR CME ไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
@@ -181,20 +205,40 @@ export function RoundAdmin({ user }) {
   return <div className="round-layout">
     <section className="resident-panel round-admin-panel">
       <h2>MM &amp; Grand Round · เช็กชื่อเข้าประชุม</h2>
-      <p>Admin กำหนดวันประชุมและกดเปิดรับด้วยตนเองในวันที่มีประชุม ระบบหยุดรับสแกนเวลา 11:00 น. ตามเวลาไทย</p>
-      {!latestSession && <button className="primary-button" type="button" disabled={Boolean(busy)} onClick={start}>{busy === "open" ? "กำลังเปิด…" : "เปิดรับเช็กชื่อวันนี้"}</button>}
-      {latestSession && <p>ประชุมวันที่ {thaiDate(latestSession.meeting_date)} · {latestSession.closed_at ? `ปิดรับแล้ว ${thaiTime(latestSession.closed_at)}` : "เปิดรับแล้ว"}</p>}
-      {qr && remaining > 0 && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
-      {latestSession && !latestSession.closed_at && !qr && <p role="status">ขณะนี้ไม่มี QR ที่ใช้งานได้ (ปิดรับเวลา 11:00 น.)</p>}
-      {latestSession && !latestSession.closed_at && qr && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={stop}>ปิดรับก่อนเวลา</button>}
-      <section className="round-cme-qr" aria-labelledby="round-cme-title">
-        <h3 id="round-cme-title">QR CME สำหรับฉายในห้องประชุม</h3>
-        <p>เป็นภาพ QR แยกจาก QR เช็กชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
-        {!latestSession && <p className="muted-empty">เปิด session การประชุมวันนี้ก่อน จึงจะเพิ่ม QR CME ได้</p>}
-        {latestSession && cmeUrl && <img src={cmeUrl} alt="QR CME สำหรับการประชุมวันนี้" />}
-        {latestSession && <label className="secondary-button cme-upload-control">{busy === "cme-upload" ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={uploadCme} /></label>}
-        {latestSession && cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={removeCme}>{busy === "cme-remove" ? "กำลังลบ…" : "ลบ QR CME"}</button>}
-      </section>
+      <p>Admin ตั้งวันที่และช่วงเวลาที่ต้องการเปิดรับสแกน QR ล่วงหน้าได้ ไม่จำกัดเฉพาะวันศุกร์หรือเวลา 11:00 น. ระบบจะเปิด-ปิดการสแกนให้อัตโนมัติตามเวลาที่ตั้งไว้</p>
+      <form className="round-schedule-form" onSubmit={createSchedule}>
+        <label>วันที่ประชุม<input type="date" required value={scheduleForm.date} onChange={(event) => setScheduleForm({ ...scheduleForm, date: event.target.value })} /></label>
+        <label>เวลาเริ่มสแกน<input type="time" required value={scheduleForm.start} onChange={(event) => setScheduleForm({ ...scheduleForm, start: event.target.value })} /></label>
+        <label>เวลาสิ้นสุดสแกน<input type="time" required value={scheduleForm.end} onChange={(event) => setScheduleForm({ ...scheduleForm, end: event.target.value })} /></label>
+        <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "open" ? "กำลังบันทึก…" : "ตั้งตารางสแกน"}</button>
+      </form>
+      {!openSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนที่เปิดอยู่ ตั้งตารางใหม่ด้านบนได้เลย</p>}
+      {openSessions.map((session) => {
+        const isEditing = editingId === session.id;
+        const cmeQr = cmeQrFor(session.id);
+        const isLiveNow = qr?.session_id === session.id && remaining > 0;
+        return <section className="round-session-card" key={session.id} aria-labelledby={`round-session-${session.id}`}>
+          <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)}</h3>
+          {!isEditing && <p>สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></p>}
+          {isEditing && <form className="round-schedule-form" onSubmit={saveEdit}>
+            <label>วันที่ประชุม<input type="date" required value={editForm.date} onChange={(event) => setEditForm({ ...editForm, date: event.target.value })} /></label>
+            <label>เวลาเริ่มสแกน<input type="time" required value={editForm.start} onChange={(event) => setEditForm({ ...editForm, start: event.target.value })} /></label>
+            <label>เวลาสิ้นสุดสแกน<input type="time" required value={editForm.end} onChange={(event) => setEditForm({ ...editForm, end: event.target.value })} /></label>
+            <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
+            <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button>
+          </form>}
+          {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
+          {!isLiveNow && <p role="status">ขณะนี้ไม่มี QR ที่ใช้งานได้ (นอกช่วงเวลาที่ตั้งไว้)</p>}
+          <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรับก่อนกำหนดเวลา</button>
+          <section className="round-cme-qr" aria-labelledby={`round-cme-title-${session.id}`}>
+            <h4 id={`round-cme-title-${session.id}`}>QR CME สำหรับฉายในห้องประชุม</h4>
+            <p>เป็นภาพ QR แยกจาก QR เช็กชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
+            {cmeUrls[session.id] && <img src={cmeUrls[session.id]} alt={`QR CME สำหรับวันที่ ${session.meeting_date}`} />}
+            <label className="secondary-button cme-upload-control">{busy === `cme-upload-${session.id}` ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={(event) => uploadCme(session, event)} /></label>
+            {cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => removeCme(session)}>{busy === `cme-remove-${session.id}` ? "กำลังลบ…" : "ลบ QR CME"}</button>}
+          </section>
+        </section>;
+      })}
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
     <section className="resident-panel">
