@@ -35,15 +35,46 @@ export async function exportResidentExcel(records, label) {
   downloadBlob(new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${safeName(label)}.xlsx`);
 }
 
-function wrapText(text, font, size, maxWidth) {
-  const words = String(text ?? "—").split(/\s+/);
+// Thai has no spaces between words, so a long Thai sentence is one "word".
+// Break such runs at Thai word boundaries (Intl.Segmenter), and fall back to
+// grapheme clusters so vowels/tone marks never split from their consonant.
+function segments(value, granularity) {
+  if (typeof Intl !== "undefined" && typeof Intl.Segmenter === "function") {
+    return Array.from(new Intl.Segmenter("th", { granularity }).segment(value), (item) => item.segment);
+  }
+  return Array.from(value);
+}
+
+function splitToFit(word, font, size, maxWidth) {
+  if (font.widthOfTextAtSize(word, size) <= maxWidth) return [word];
+  const pieces = [];
+  let current = "";
+  const pushPiece = (piece) => {
+    if (current && font.widthOfTextAtSize(current + piece, size) > maxWidth) { pieces.push(current); current = ""; }
+    if (font.widthOfTextAtSize(piece, size) <= maxWidth) { current += piece; return; }
+    for (const grapheme of segments(piece, "grapheme")) {
+      if (current && font.widthOfTextAtSize(current + grapheme, size) > maxWidth) { pieces.push(current); current = ""; }
+      current += grapheme;
+    }
+  };
+  segments(word, "word").forEach(pushPiece);
+  if (current) pieces.push(current);
+  return pieces;
+}
+
+export function wrapText(text, font, size, maxWidth) {
+  const source = String(text ?? "—").trim() || "—";
   const lines = [];
   let line = "";
-  words.forEach((word) => {
-    const next = line ? `${line} ${word}` : word;
-    if (line && font.widthOfTextAtSize(next, size) > maxWidth) { lines.push(line); line = word; } else line = next;
-  });
-  if (line) lines.push(line);
+  for (const paragraph of source.split(/\r?\n/)) {
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      for (const piece of splitToFit(word, font, size, maxWidth)) {
+        const next = line ? `${line} ${piece}` : piece;
+        if (line && font.widthOfTextAtSize(next, size) > maxWidth) { lines.push(line); line = piece; } else line = next;
+      }
+    }
+    if (line) { lines.push(line); line = ""; }
+  }
   return lines.length ? lines : ["—"];
 }
 

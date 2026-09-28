@@ -29,7 +29,7 @@ import {
   StaffQrScanner,
 } from "./ResidentQr";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date());
 const readableDate = (value) =>
   new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(
     new Date(`${value}T00:00:00`),

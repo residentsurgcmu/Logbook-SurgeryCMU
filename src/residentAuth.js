@@ -51,3 +51,14 @@ export function isPasswordSetupRoute(location) {
 export function shouldLoadResidentWorkspace(location) {
   return !isPasswordSetupRoute(location);
 }
+
+// Decide whether a failed workspace reload should keep the user on the
+// current screen (transient network/server hiccup) instead of logging out.
+export function keepWorkspaceOnRefreshError(currentWorkspace, error) {
+  if (!currentWorkspace || currentWorkspace.unauthorized) return false;
+  const status = Number(error?.status || error?.statusCode || 0);
+  if (status === 401 || status === 403) return false;
+  const message = String(error?.message || "");
+  if (/jwt expired|invalid jwt|refresh token|not authenticated|auth session missing/i.test(message)) return false;
+  return true;
+}

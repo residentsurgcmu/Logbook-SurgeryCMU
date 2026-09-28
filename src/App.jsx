@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getResidentSession, onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
 import ResidentPlatform from "./features/ResidentPlatform";
-import { isPasswordSetupRoute, residentRoleLabels, residentRoles, retryResidentClockSkew, shouldLoadResidentWorkspace } from "./residentAuth";
+import { isPasswordSetupRoute, keepWorkspaceOnRefreshError, residentRoleLabels, residentRoles, retryResidentClockSkew, shouldLoadResidentWorkspace } from "./residentAuth";
 
 function Login({ onLogin, onRequestReset, onRetrySession, recoverable, error, initialMessage }) {
   const [role, setRole] = useState("resident"); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [mode, setMode] = useState("login"); const [busy, setBusy] = useState(false); const [localError, setLocalError] = useState(""); const [message, setMessage] = useState(initialMessage || "");
@@ -37,12 +37,21 @@ function PasswordSetupUnavailable({ onReturnToLogin }) {
 export default function App() {
   const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [recoverable, setRecoverable] = useState(false); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
   const refreshInFlight = useRef(null);
+  const workspaceRef = useRef(undefined);
+  useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
   function refresh() {
     if (refreshInFlight.current) return refreshInFlight.current;
     const pending = (async () => {
       setError(""); setRecoverable(false);
       try { setWorkspace(await retryResidentClockSkew(loadResidentWorkspace)); }
-      catch (nextError) { setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setRecoverable(nextError.code === "RESIDENT_SESSION_CLOCK_SKEW"); setWorkspace(null); }
+      catch (nextError) {
+        // A background reload (token refresh, tab wake-up) that fails on a flaky
+        // network must not throw a signed-in user back to Login and lose their
+        // unsaved form. Keep the current workspace; the next refresh retries.
+        // A real sign-out still arrives as SIGNED_OUT and clears the workspace.
+        if (keepWorkspaceOnRefreshError(workspaceRef.current, nextError)) { console.warn("Resident workspace refresh failed; keeping current workspace", nextError); return; }
+        setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setRecoverable(nextError.code === "RESIDENT_SESSION_CLOCK_SKEW"); setWorkspace(null);
+      }
     })();
     refreshInFlight.current = pending;
     void pending.finally(() => { if (refreshInFlight.current === pending) refreshInFlight.current = null; });
