@@ -43,3 +43,12 @@ test("migration moves assessment dates to Bangkok and opens CME QR ahead of time
   assert.match(setFn, /closed_at is null\s+and ends_at >= clock_timestamp\(\)/);
   assert.doesNotMatch(setFn, /meeting_date = \(clock_timestamp\(\)/);
 });
+
+test("no migration grants admin to the mistyped owner email", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const dir = new URL("../supabase/migrations/", import.meta.url);
+  for (const name of await readdir(dir)) {
+    const sql = await readFile(new URL(name, dir), "utf8");
+    assert.doesNotMatch(sql, /resident\.surgerycmu@gmail\.com/i, name);
+  }
+});
