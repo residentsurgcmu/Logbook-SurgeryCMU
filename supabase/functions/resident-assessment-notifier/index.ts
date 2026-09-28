@@ -116,6 +116,10 @@ function emailHtml(staffName: string, residentName: string, templateCode: string
 
 type AdminClient = ReturnType<typeof createClient>;
 
+// Emails sent per cron run (every 15 minutes); anything left over is picked
+// up by the next run because only unsent deliveries are selected.
+const MAX_DELIVERIES_PER_RUN = 200;
+
 async function deliver(admin: AdminClient, requestId: string, deliveryType: "initial" | "reminder") {
   const { data: request, error: requestError } = await admin.from("resident_assessment_requests")
     .select("id,template_id,resident_id,staff_id,status,submitted_at,procedure_or_activity")
@@ -192,15 +196,31 @@ Deno.serve(async (request) => {
       }
       if (!authorized) return json({ error: "Unauthorized" }, 401);
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: pending, error } = await admin.from("resident_assessment_requests").select("id,submitted_at").eq("status", "pending").order("submitted_at").limit(200);
-      if (error) throw error;
+      // Read every pending request with its delivery rows and keep only the ones
+      // whose due email has not been sent yet. Limiting the raw query to the
+      // oldest 200 pending rows starved newer requests once more than 200
+      // already-reminded requests stayed pending.
+      const due: { id: string; type: "initial" | "reminder" }[] = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        const { data: page, error } = await admin.from("resident_assessment_requests")
+          .select("id,submitted_at,resident_assessment_email_deliveries(delivery_type,status)")
+          .eq("status", "pending").order("submitted_at").order("id").range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        for (const item of page || []) {
+          const type = item.submitted_at <= cutoff ? "reminder" : "initial";
+          const deliveries = (item.resident_assessment_email_deliveries || []) as { delivery_type: string; status: string }[];
+          if (!deliveries.some((row) => row.delivery_type === type && row.status === "sent")) due.push({ id: item.id, type });
+        }
+        if (!page || page.length < pageSize) break;
+      }
+      const batch = due.slice(0, MAX_DELIVERIES_PER_RUN);
       let sent = 0; const failures: string[] = [];
-      for (const item of pending || []) {
-        const type = item.submitted_at <= cutoff ? "reminder" : "initial";
-        try { const result = await deliver(admin, item.id, type); if (result.sent) sent += 1; }
+      for (const item of batch) {
+        try { const result = await deliver(admin, item.id, item.type); if (result.sent) sent += 1; }
         catch (error) { failures.push(`${item.id}: ${error instanceof Error ? error.message : "delivery failed"}`); }
       }
-      return json({ ok: failures.length === 0, processed: (pending || []).length, sent, failures });
+      return json({ ok: failures.length === 0, processed: batch.length, remaining: due.length - batch.length, sent, failures });
     }
 
     if (payload.action !== "deliver_initial" || typeof payload.requestId !== "string") return json({ error: "Invalid action" }, 400);

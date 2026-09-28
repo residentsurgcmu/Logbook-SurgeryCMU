@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
-import { bangkokIsoDate, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate } from "../roundSchedule";
+import { bangkokIsoDate, roundCheckInErrorMessage, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate } from "../roundSchedule";
 
 const thaiTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const thaiDate = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "full", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T00:00:00+07:00`));
@@ -290,7 +290,7 @@ export function RoundAdmin({ user }) {
       {selected && <div className="round-export"><span>{rows.length} คน</span><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("csv")}>ดาวน์โหลด CSV</button><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("xlsx")}>ดาวน์โหลด Excel</button></div>}
       <section className="round-pdf-export" aria-labelledby="round-pdf-title">
         <h3 id="round-pdf-title">รายงาน PDF</h3>
-        <p>เลือกวันเดียวหรือช่วงวันที่ที่ต้องการ แล้วดาวน์โหลดเป็น PDF รวม หรือแยกหนึ่งไฟล์ต่อวัน</p>
+        <p>เลือกวันเดียวหรือช่วงวันที่ที่ต้องการ แล้วดาวน์โหลดเป็น PDF รวม หรือแยกหนึ่งไฟล์ต่อวัน (หลายวันจะรวมเป็นไฟล์ .zip ไฟล์เดียว)</p>
         <div className="round-date-range">
           <label>ตั้งแต่วันที่<input type="date" value={pdfDateFrom} onChange={(event) => setPdfDateFrom(event.target.value)} /></label>
           <label>ถึงวันที่<input type="date" value={pdfDateTo} onChange={(event) => setPdfDateTo(event.target.value)} /></label>
@@ -302,23 +302,44 @@ export function RoundAdmin({ user }) {
   </div>;
 }
 
-export function RoundCheckIn({ token }) {
+export function RoundCheckIn({ token, onTokenUsed }) {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(Boolean(token));
+  const submittedToken = useRef("");
+  const mounted = useRef(false);
   useEffect(() => {
-    let active = true;
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
     async function run() {
+      // Submit each scanned token exactly once (StrictMode runs effects twice
+      // in development). onTokenUsed clears the token and the URL, which
+      // re-runs this effect without a token and refreshes the history.
+      if (token) {
+        if (submittedToken.current === token) return;
+        submittedToken.current = token;
+        setBusy(true);
+        try {
+          const next = await checkInRound(token);
+          if (mounted.current) { setResult(next); setError(""); }
+        } catch (nextError) {
+          if (mounted.current) setError(roundCheckInErrorMessage(nextError));
+        } finally {
+          if (mounted.current) setBusy(false);
+          onTokenUsed?.();
+        }
+        return;
+      }
       try {
-        if (token) { const next = await checkInRound(token); if (active) setResult(next); }
         const records = await loadOwnRoundAttendance();
-        if (active) setHistory(records);
-      } catch (nextError) { if (active) setError(nextError.message || "เช็กชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง"); }
-      finally { if (active) setBusy(false); }
+        if (mounted.current) setHistory(records);
+      } catch (nextError) { if (mounted.current) setError(nextError.message || "โหลดประวัติการเช็กชื่อไม่สำเร็จ"); }
+      finally { if (mounted.current) setBusy(false); }
     }
     run();
-    return () => { active = false; };
   }, [token]);
   return <section className="resident-panel round-checkin">
     <h2>เช็กชื่อ MM &amp; Grand Round</h2>

@@ -38,7 +38,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -151,7 +151,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -234,7 +234,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -329,7 +329,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -412,7 +412,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -525,7 +525,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 2,
@@ -610,7 +610,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 1,
@@ -701,7 +701,7 @@ export const residentTemplates = [
     "outcomeOptions": [
       "Excellence",
       "Pass",
-      "Boarderline",
+      "Borderline",
       "Fail"
     ],
     "maxAttempts": 1,

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { residentTemplates } from "./generated/residentTemplates";
+import { fetchAllRows } from "./supabasePaging";
 import {
   isJwtIssuedInFutureError,
   normalizeResidentEmail,
@@ -99,6 +100,8 @@ export async function loadResidentWorkspace() {
           .order("unit_name")
           .order("full_name")
       : Promise.resolve({ data: [], error: null });
+  // Supabase/PostgREST returns at most 1,000 rows per request. Page through
+  // the tables that grow over time so dashboards and exports stay complete.
   const [
     { data: templates, error: templatesError },
     { data: assessments, error: assessmentsError },
@@ -115,35 +118,49 @@ export async function loadResidentWorkspace() {
       .select("*,resident_template_criteria(*)")
       .eq("active", true)
       .order("template_code"),
-    supabase
-      .from("resident_assessments")
-      .select(
-        "*,resident_template_definitions(template_code,title,template_type),resident_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))",
-      )
-      .order("assessment_date", { ascending: false }),
-    supabase
-      .from("resident_profiles")
-      .select("user_id,full_name,email,pgy,active")
-      .eq("active", true)
-      .order("full_name"),
-    supabase
-      .from("resident_evaluator_assignments")
-      .select("*")
-      .eq("active", true),
+    fetchAllRows(() =>
+      supabase
+        .from("resident_assessments")
+        .select(
+          "*,resident_template_definitions(template_code,title,template_type),resident_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))",
+        )
+        .order("assessment_date", { ascending: false })
+        .order("id"),
+    ),
+    fetchAllRows(() =>
+      supabase
+        .from("resident_profiles")
+        .select("user_id,full_name,email,pgy,active")
+        .eq("active", true)
+        .order("full_name")
+        .order("user_id"),
+    ),
+    fetchAllRows(() =>
+      supabase
+        .from("resident_evaluator_assignments")
+        .select("*")
+        .eq("active", true)
+        .order("evaluator_id")
+        .order("resident_id"),
+    ),
     directoryQuery,
     supabase.rpc("list_registered_resident_staff"),
-    supabase
-      .from("resident_assessment_requests")
-      .select(
-        "*,resident_template_definitions(template_code,title,template_type),resident_self_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))",
-      )
-      .order("submitted_at", { ascending: false }),
+    fetchAllRows(() =>
+      supabase
+        .from("resident_assessment_requests")
+        .select(
+          "*,resident_template_definitions(template_code,title,template_type),resident_self_assessment_scores(*,resident_template_criteria(criterion_code,criterion_text,sort_order))",
+        )
+        .order("submitted_at", { ascending: false })
+        .order("id"),
+    ),
     supabase
       .from("resident_notifications")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(100),
-    supabase.rpc("list_resident_exam_records"),
+    // The RPC orders its rows deterministically, so offset paging is stable.
+    fetchAllRows(() => supabase.rpc("list_resident_exam_records")),
   ]);
   fail(templatesError);
   fail(assessmentsError);
@@ -156,12 +173,18 @@ export async function loadResidentWorkspace() {
   fail(examRecordsError);
   return {
     user: { ...mapProfile(profile), role: role.role },
-    templates: (templates || []).map((template) => ({
-      ...template,
-      criteria: (template.resident_template_criteria || []).sort(
+    templates: (templates || []).map((template) => {
+      const allCriteria = [...(template.resident_template_criteria || [])].sort(
         (a, b) => a.sort_order - b.sort_order,
-      ),
-    })),
+      );
+      // The database scores only active criteria; sending an inactive one made
+      // every submission fail the "one score per criterion" check.
+      return {
+        ...template,
+        allCriteria,
+        criteria: allCriteria.filter((criterion) => criterion.active !== false),
+      };
+    }),
     assessments: assessments || [],
     profiles: (profiles || []).map(mapProfile),
     assignments: assignments || [],
@@ -209,6 +232,15 @@ export async function syncSourceTemplates() {
       .from("resident_template_criteria")
       .upsert(criteria, { onConflict: "template_id,criterion_code" });
     fail(criteriaError);
+    // Criteria removed from the source document stop being required, but are
+    // kept (inactive) so signed assessments still show their original scores.
+    const { error: retireError } = await supabase
+      .from("resident_template_criteria")
+      .update({ active: false })
+      .eq("template_id", template.id)
+      .eq("active", true)
+      .not("criterion_code", "in", `(${source.criteria.map((criterion) => criterion.code).join(",")})`);
+    fail(retireError);
   }
 }
 

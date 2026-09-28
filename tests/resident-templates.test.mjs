@@ -55,7 +55,8 @@ test("each catalog hash matches its current DOCX source", async () => {
 
 test("database seed matches every generated form and criterion", async () => {
   const sql = await readFile(new URL("../supabase/migrations/20260919095717_rebuild_resident_epa_pba_catalog.sql", import.meta.url), "utf8");
-  const seed = JSON.parse(sql.match(/\$catalog_json\$([\s\S]*?)\$catalog_json\$/)[1]);
+  // 20260928140000_code_review_fixes.sql renames the "Boarderline" typo in place.
+  const seed = JSON.parse(sql.match(/\$catalog_json\$([\s\S]*?)\$catalog_json\$/)[1].replaceAll('"Boarderline"', '"Borderline"'));
   assert.deepEqual(seed, residentTemplates);
 });
 

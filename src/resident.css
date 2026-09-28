@@ -91,6 +91,7 @@ button,input,textarea,select { font:inherit; }
 .status-chip { display:inline-block; padding:4px 8px; border-radius:999px; font-weight:800; }
 .status-chip.pending { color:#8a5a00; background:#fff4d6; }
 .status-chip.completed { color:#176b36; background:#e5f5e9; }
+.status-chip.cancelled { color:#5f6368; background:#eef0ef; }
 .admin-assessment-delete { border-color:#e4c4c4; }
 .admin-assessment-delete h2 { color:#8c2727; }
 .admin-delete-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-bottom:18px; }

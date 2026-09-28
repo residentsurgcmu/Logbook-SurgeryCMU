@@ -18,6 +18,12 @@ const timeLabel = (value) =>
         timeZone: "Asia/Bangkok",
       }).format(new Date(value))
     : "—";
+export const requestStatusLabel = (status) =>
+  status === "completed"
+    ? "ประเมินแล้ว"
+    : status === "cancelled"
+      ? "ยกเลิก"
+      : "รอประเมิน";
 const attemptLabel = (request, template) =>
   template?.max_attempts
     ? `ครั้งที่ ${request.attempt_number} จาก ${template.max_attempts}`
@@ -502,7 +508,9 @@ export function ResidentRequestHistory({ workspace }) {
                 <td>{names.get(request.staff_id) || "—"}</td>
                 <td>{request.previous_staff_name || "—"}</td>
                 <td>
-                  {request.status === "completed" ? "ประเมินแล้ว" : "รอประเมิน"}
+                  <span className={`status-chip ${request.status}`}>
+                    {requestStatusLabel(request.status)}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -597,7 +605,15 @@ export function AssessmentHistory({
               </tr>
             </thead>
             <tbody>
-              {(template?.criteria || []).map((criterion) => {
+              {(template?.allCriteria || template?.criteria || [])
+                .filter(
+                  (criterion) =>
+                    criterion.active !== false ||
+                    selected.resident_assessment_scores?.some(
+                      (row) => row.criterion_id === criterion.id,
+                    ),
+                )
+                .map((criterion) => {
                 const self = request?.resident_self_assessment_scores?.find(
                   (row) => row.criterion_id === criterion.id,
                 );

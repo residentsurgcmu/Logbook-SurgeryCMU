@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  completeAssessmentRequest,
   deleteResidentAssessment,
   inviteStaff,
   markNotificationRead,
   provisionAccount,
   recordHistoricalAssessment,
-  requestAssessment,
   saveAssignment,
   syncSourceTemplates,
 } from "../residentApi";
@@ -23,6 +21,7 @@ import {
 import ResidentExams from "./ResidentExams";
 import ResidentExportCenter from "./ResidentExportCenter";
 import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
+import { parseRoundToken } from "../roundSchedule";
 import {
   parseResidentQrToken,
   ResidentQrCard,
@@ -43,366 +42,6 @@ const readableDateTime = (value) =>
       }).format(new Date(value))
     : "—";
 const roleLabel = { admin: "Admin", staff: "Staff", resident: "Resident" };
-
-function History({ assessments, user, profiles }) {
-  const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
-  if (!assessments.length)
-    return (
-      <section className="resident-panel empty">
-        <h2>ยังไม่มีผลการประเมิน</h2>
-        <p>
-          {user.role === "resident"
-            ? "ผล EPA/PBA ที่ Staff ลงนามแล้วจะแสดงที่นี่"
-            : "เลือก Resident และแบบประเมินเพื่อเริ่มบันทึก"}
-        </p>
-      </section>
-    );
-  return (
-    <section className="resident-panel">
-      <h2>ประวัติการประเมิน</h2>
-      <div className="resident-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>วันที่</th>
-              <th>Resident</th>
-              <th>แบบประเมิน</th>
-              <th>ผู้ประเมิน</th>
-              <th>Staff ประเมินเมื่อ</th>
-              <th>ผลสรุป</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assessments.map((item) => (
-              <tr key={item.id}>
-                <td>{readableDate(item.assessment_date)}</td>
-                <td>{names.get(item.resident_id) || "—"}</td>
-                <td>
-                  {item.resident_template_definitions?.template_code} ·{" "}
-                  {item.resident_template_definitions?.title}
-                </td>
-                <td>{names.get(item.evaluator_id) || "—"}</td>
-                <td>{readableDateTime(item.signed_at)}</td>
-                <td>{item.overall_outcome || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function RequestForm({ templates, staff, onSaved }) {
-  const [templateId, setTemplateId] = useState(templates[0]?.id || "");
-  const [staffId, setStaffId] = useState("");
-  const [date, setDate] = useState(today());
-  const [context, setContext] = useState("");
-  const [activity, setActivity] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const template = templates.find((item) => item.id === templateId);
-  async function submit(event) {
-    event.preventDefault();
-    if (!template || !staffId || !activity.trim())
-      return setError("กรุณาเลือกแบบประเมิน เลือก Staff และกรอกชื่อกิจกรรม");
-    setBusy(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await requestAssessment({
-        templateId,
-        staffId,
-        date,
-        context,
-        activity,
-      });
-      setMessage(
-        result.emailSent
-          ? "ส่งแบบประเมินและอีเมลแจ้ง Staff แล้ว"
-          : "ส่ง notification ในระบบแล้ว แต่ส่งอีเมลไม่สำเร็จ กรุณาแจ้ง Admin ตรวจการตั้งค่าอีเมล",
-      );
-      setActivity("");
-      setContext("");
-      await onSaved();
-    } catch (nextError) {
-      setError(nextError.message || "ส่งแบบประเมินไม่สำเร็จ");
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (!templates.length)
-    return (
-      <section className="resident-panel empty">
-        <h2>ยังไม่มี catalog</h2>
-        <p>Admin ต้องซิงก์ EPA/PBA source ก่อนส่งแบบประเมิน</p>
-      </section>
-    );
-  return (
-    <form className="resident-panel assessment-form" onSubmit={submit}>
-      <div className="section-heading">
-        <h2>ส่งแบบประเมินให้ Staff</h2>
-        <p>
-          เลือกได้เฉพาะ Staff ที่ลงทะเบียนและมีบัญชีตรงกับรายชื่อที่อนุมัติแล้ว
-        </p>
-      </div>
-      <div className="resident-form-grid">
-        <label>
-          แบบประเมิน
-          <select
-            value={templateId}
-            onChange={(event) => setTemplateId(event.target.value)}
-            required
-          >
-            <option value="">เลือกแบบประเมิน</option>
-            {templates.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.template_code} · {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Staff ผู้ประเมิน
-          <select
-            value={staffId}
-            onChange={(event) => setStaffId(event.target.value)}
-            required
-          >
-            <option value="">เลือกรายชื่อ Staff ที่ลงทะเบียนแล้ว</option>
-            {staff.map((person) => (
-              <option key={person.user_id} value={person.user_id}>
-                {person.full_name} · {person.unit_name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          วันที่ทำกิจกรรม
-          <input
-            type="date"
-            value={date}
-            max={today()}
-            onChange={(event) => setDate(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          {template?.template_type === "EPA"
-            ? "C3 · ชื่อกิจกรรม"
-            : "ชื่อกิจกรรม/หัตถการ"}
-          <input
-            value={activity}
-            onChange={(event) => setActivity(event.target.value)}
-            maxLength="240"
-            placeholder="กรอกชื่อกิจกรรม"
-            required
-          />
-        </label>
-        <label className="wide">
-          บริบททางคลินิกแบบไม่ระบุตัวตน
-          <textarea
-            value={context}
-            onChange={(event) => setContext(event.target.value)}
-            maxLength="500"
-            rows="2"
-            placeholder="ห้ามระบุชื่อผู้ป่วยหรือ HN"
-          />
-        </label>
-      </div>
-      {template?.template_type === "EPA" && (
-        <div className="epa-note">
-          <strong>รูปแบบ EPA:</strong> C1–C2 เป็นข้อมูลประกอบ ไม่เลือกระดับ; C3
-          ใช้กรอกชื่อกิจกรรมเท่านั้น; Staff จะเริ่มให้ระดับตั้งแต่ C4
-        </div>
-      )}
-      {error && <p className="form-error">{error}</p>}
-      {message && <p className="form-success">{message}</p>}
-      <button className="primary-button" disabled={busy || !staff.length}>
-        {busy ? "กำลังส่ง…" : "ส่งให้ Staff ประเมิน"}
-      </button>
-      {!staff.length && (
-        <p className="form-error">
-          ยังไม่มี Staff ที่ลงทะเบียนและเปิดใช้งานในระบบ
-        </p>
-      )}
-    </form>
-  );
-}
-
-function EvaluationForm({ request, templates, profiles, onSaved, onCancel }) {
-  const [outcome, setOutcome] = useState("");
-  const [comment, setComment] = useState("");
-  const [scores, setScores] = useState({});
-  const [comments, setComments] = useState({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const template = templates.find((item) => item.id === request.template_id);
-  const resident = profiles.find((item) => item.id === request.resident_id);
-  const assessableCriteria =
-    template?.criteria.filter(
-      (criterion) =>
-        !(
-          template.template_type === "EPA" &&
-          ["C1", "C2", "C3"].includes(criterion.criterion_code)
-        ),
-    ) || [];
-  async function submit(event) {
-    event.preventDefault();
-    if (assessableCriteria.some((criterion) => !scores[criterion.id]))
-      return setError("กรุณาเลือกระดับทุกข้อที่ต้องประเมินก่อนลงนาม");
-    setBusy(true);
-    setError("");
-    try {
-      await completeAssessmentRequest({
-        requestId: request.id,
-        outcome,
-        comment,
-        scores: assessableCriteria.map((criterion) => ({
-          criterionId: criterion.id,
-          score: scores[criterion.id],
-          comment: comments[criterion.id] || "",
-        })),
-      });
-      await onSaved();
-    } catch (nextError) {
-      setError(nextError.message || "บันทึกผลประเมินไม่สำเร็จ");
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (!template)
-    return (
-      <section className="resident-panel empty">
-        <h2>ไม่พบแบบประเมิน</h2>
-      </section>
-    );
-  return (
-    <form className="resident-panel assessment-form" onSubmit={submit}>
-      <div className="section-heading">
-        <h2>
-          {template.template_code} · {template.title}
-        </h2>
-        <p>
-          Resident: {resident?.name || "—"} · ส่งเมื่อ{" "}
-          {readableDateTime(request.submitted_at)}
-        </p>
-      </div>
-      <div className="request-summary">
-        <div>
-          <small>วันที่กิจกรรม</small>
-          <strong>{readableDate(request.assessment_date)}</strong>
-        </div>
-        <div>
-          <small>ชื่อกิจกรรม</small>
-          <strong>{request.procedure_or_activity}</strong>
-        </div>
-        {request.clinical_context && (
-          <div>
-            <small>บริบทไม่ระบุตัวตน</small>
-            <strong>{request.clinical_context}</strong>
-          </div>
-        )}
-      </div>
-      {template.template_type === "EPA" && (
-        <div className="epa-static">
-          <div>
-            <small>C1–C2</small>
-            <p>ข้อมูลประกอบของ EPA — ไม่ต้องเลือกระดับ</p>
-          </div>
-          <div>
-            <small>C3 · ชื่อกิจกรรม</small>
-            <p>{request.procedure_or_activity}</p>
-          </div>
-        </div>
-      )}
-      <div
-        className="criterion-list"
-        style={{ "--score-count": template.score_options.length }}
-      >
-        <div className="criterion-head">
-          <span>เกณฑ์ที่ต้องประเมิน</span>
-          {template.score_options.map((score) => (
-            <b key={score}>{score}</b>
-          ))}
-          <span>ข้อเสนอแนะ</span>
-        </div>
-        {assessableCriteria.map((criterion) => (
-          <div className="criterion-row" key={criterion.id}>
-            <div>
-              <small>{criterion.criterion_code}</small>
-              <p>{criterion.criterion_text}</p>
-            </div>
-            {template.score_options.map((score) => (
-              <label className="score-radio" key={score}>
-                <input
-                  type="radio"
-                  name={criterion.id}
-                  value={score}
-                  checked={scores[criterion.id] === score}
-                  onChange={() =>
-                    setScores((current) => ({
-                      ...current,
-                      [criterion.id]: score,
-                    }))
-                  }
-                />
-                <span>{score}</span>
-              </label>
-            ))}
-            <input
-              aria-label={`ข้อเสนอแนะ ${criterion.criterion_code}`}
-              value={comments[criterion.id] || ""}
-              onChange={(event) =>
-                setComments((current) => ({
-                  ...current,
-                  [criterion.id]: event.target.value,
-                }))
-              }
-              maxLength="1000"
-              placeholder="ถ้ามี"
-            />
-          </div>
-        ))}
-      </div>
-      <div className="resident-form-grid footer-fields">
-        <label>
-          ผลสรุป/Overall outcome
-          <input
-            value={outcome}
-            onChange={(event) => setOutcome(event.target.value)}
-            maxLength="80"
-            placeholder="เช่น ผ่านการประเมิน"
-          />
-        </label>
-        <label className="wide">
-          ความเห็นสรุป
-          <textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            maxLength="2000"
-            rows="3"
-          />
-        </label>
-      </div>
-      {error && <p className="form-error">{error}</p>}
-      <div className="button-row">
-        <button className="primary-button" disabled={busy}>
-          {busy ? "กำลังลงนาม…" : "ลงนามและบันทึกผลประเมิน"}
-        </button>
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-        >
-          กลับไปรายการรอประเมิน
-        </button>
-      </div>
-    </form>
-  );
-}
 
 function RequestQueue({ requests, profiles, onSelect }) {
   const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
@@ -451,51 +90,6 @@ function RequestQueue({ requests, profiles, onSelect }) {
                     เปิดประเมิน
                   </button>
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function RequestHistory({ requests, profiles }) {
-  const names = new Map(profiles.map((profile) => [profile.id, profile.name]));
-  if (!requests.length) return null;
-  return (
-    <section className="resident-panel">
-      <h2>สถานะแบบประเมินที่ส่ง</h2>
-      <div className="resident-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>ส่งเมื่อ</th>
-              <th>แบบประเมิน</th>
-              <th>Staff</th>
-              <th>สถานะ</th>
-              <th>ประเมินเมื่อ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((request) => (
-              <tr key={request.id}>
-                <td>{readableDateTime(request.submitted_at)}</td>
-                <td>
-                  {request.resident_template_definitions?.template_code} ·{" "}
-                  {request.procedure_or_activity}
-                </td>
-                <td>{names.get(request.staff_id) || "—"}</td>
-                <td>
-                  <span className={`status-chip ${request.status}`}>
-                    {request.status === "pending"
-                      ? "รอประเมิน"
-                      : request.status === "completed"
-                        ? "ประเมินแล้ว"
-                        : "ยกเลิก"}
-                  </span>
-                </td>
-                <td>{readableDateTime(request.assessed_at)}</td>
               </tr>
             ))}
           </tbody>
@@ -1094,7 +688,10 @@ function Admin({ workspace, onRefresh }) {
 
 export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   const routeToken = parseResidentQrToken(window.location.pathname);
-  const roundToken = window.location.pathname.match(/^\/attendance\/([0-9a-f-]{36})\/?$/i)?.[1] || "";
+  // Read the attendance token once. RoundCheckIn clears it (and the URL) after
+  // the first check-in so switching tabs or reloading never re-submits an
+  // expired, rotating QR token.
+  const [roundToken, setRoundToken] = useState(() => parseRoundToken(window.location.pathname));
   const initialTab =
     workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
   const [tab, setTab] = useState(initialTab);
@@ -1218,7 +815,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         ) : tab === "exams" ? (
           <ResidentExams workspace={workspace} onRefresh={onRefresh} />
         ) : tab === "attendance" ? (
-          <RoundCheckIn token={roundToken} />
+          <RoundCheckIn
+            token={roundToken}
+            onTokenUsed={() => {
+              setRoundToken("");
+              window.history.replaceState({}, document.title, "/");
+            }}
+          />
         ) : tab === "qr" ? (
           <ResidentQrCard user={workspace.user} />
         ) : tab === "scan" ? (

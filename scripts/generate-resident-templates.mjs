@@ -67,7 +67,7 @@ const fmeLegend = [
   ["M", "Meets expectation"],
   ["E", "Exceeds"],
 ];
-const epaOutcomes = ["Excellence", "Pass", "Boarderline", "Fail"];
+const epaOutcomes = ["Excellence", "Pass", "Borderline", "Fail"];
 const pbaOutcomes = ["F", "M", "E"];
 
 function tables(relativePath) {

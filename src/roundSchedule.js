@@ -42,3 +42,15 @@ export function roundSessionStatus(session, nowMs = Date.now()) {
   if (nowMs < starts) return "upcoming";
   return "live";
 }
+
+// Attendance QR links look like /attendance/<uuid>.
+export function parseRoundToken(pathname) {
+  return String(pathname || "").match(/^\/attendance\/([0-9a-f-]{36})\/?$/i)?.[1] || "";
+}
+
+export function roundCheckInErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (/expired or is invalid/i.test(message)) return "QR หมดอายุหรือไม่ถูกต้อง กรุณาสแกน QR ที่แสดงอยู่ตอนนี้อีกครั้ง";
+  if (/Active Resident or Staff account required/i.test(message)) return "บัญชีนี้ไม่ใช่ Resident หรือ Staff ที่เปิดใช้งาน จึงเช็กชื่อไม่ได้";
+  return message || "เช็กชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง";
+}

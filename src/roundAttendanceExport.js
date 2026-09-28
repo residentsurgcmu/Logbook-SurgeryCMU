@@ -1,3 +1,8 @@
+// Shared with the assessment PDF: breaks Thai at word boundaries and never
+// separates a vowel or tone mark from its consonant.
+import { wrapText } from "./residentExport.js";
+import { createZip } from "./zipStore.js";
+
 const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 const A4_LANDSCAPE = [841.89, 595.28];
 const PAGE_LEFT = 36;
@@ -32,39 +37,6 @@ function download(blob, filename) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function wrapText(value, font, size, maxWidth) {
-  const source = String(value ?? "—").trim() || "—";
-  const lines = [];
-  let line = "";
-  const append = (part) => {
-    const candidate = line ? `${line} ${part}` : part;
-    if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
-      lines.push(line);
-      line = part;
-    } else {
-      line = candidate;
-    }
-  };
-  for (const word of source.split(/\s+/)) {
-    if (font.widthOfTextAtSize(word, size) <= maxWidth) {
-      append(word);
-      continue;
-    }
-    let fragment = "";
-    for (const character of Array.from(word)) {
-      if (fragment && font.widthOfTextAtSize(fragment + character, size) > maxWidth) {
-        append(fragment);
-        fragment = character;
-      } else {
-        fragment += character;
-      }
-    }
-    if (fragment) append(fragment);
-  }
-  if (line) lines.push(line);
-  return lines.length ? lines : ["—"];
 }
 
 export function roundSessionsInDateRange(sessions, dateFrom, dateTo) {
@@ -213,9 +185,18 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
 export async function exportRoundAttendancePdf({ sessions, attendance, splitByDate }) {
   if (!sessions.length) throw new Error("ไม่พบวันประชุมตามช่วงวันที่ที่เลือก");
   if (splitByDate) {
+    const files = [];
     for (const session of sessions) {
       const bytes = await createRoundAttendancePdf([session], attendance, `วันที่ประชุม: ${thaiDate(session.meeting_date)}`);
-      download(new Blob([bytes], { type: "application/pdf" }), `${safeFilename(`MM-Grand-Round-${session.meeting_date}`)}.pdf`);
+      files.push({ name: `${safeFilename(`MM-Grand-Round-${session.meeting_date}`)}.pdf`, data: bytes });
+    }
+    if (files.length === 1) {
+      download(new Blob([files[0].data], { type: "application/pdf" }), files[0].name);
+    } else {
+      // One download: browsers block a burst of automatic downloads.
+      const first = sessions[0].meeting_date;
+      const last = sessions[sessions.length - 1].meeting_date;
+      download(new Blob([createZip(files)], { type: "application/zip" }), `${safeFilename(`MM-Grand-Round-${first}-to-${last}-แยกวัน`)}.zip`);
     }
     return sessions.length;
   }

@@ -62,6 +62,13 @@ Deno.serve(async (request) => {
     return { userId: existingUserId as string, invitationSent: false, linkedExistingAccount: true };
   };
 
+  const ensureStaffAccess = async (userId: string, staffEmail: string, fullName: string) => {
+    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: staffEmail, full_name: fullName, pgy: null, active: true }, { onConflict: "user_id" });
+    if (profileError) throw profileError;
+    const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role: "staff", active: true }, { onConflict: "user_id" });
+    if (roleError) throw roleError;
+  };
+
   try {
     const payload = await request.json();
     const action = payload?.action;
@@ -165,14 +172,20 @@ Deno.serve(async (request) => {
           .eq("user_id", staffDirectory.auth_user_id)
           .maybeSingle();
         if (linkedRoleError) throw linkedRoleError;
-        if (!linkedRole || linkedRole.role !== "staff") {
+        if (linkedRole && linkedRole.role !== "staff") {
           throw new Error("Staff directory account has an incompatible role");
         }
+        // Re-adding a linked Staff also repairs a missing/inactive profile or role.
+        await ensureStaffAccess(staffDirectory.auth_user_id, staffDirectory.email, staffDirectory.full_name);
         return json({ ok: true, userId: staffDirectory.auth_user_id, invitationSent: false, alreadyProvisioned: true });
       }
 
       const userId = existing?.user_id;
       if (userId) {
+        // The profile existed without an active Staff role (e.g. created by an
+        // older flow). Linking the directory alone left the account unable to
+        // sign in, so grant the Staff profile and role here as well.
+        await ensureStaffAccess(userId, staffDirectory.email, staffDirectory.full_name);
         const { error: linkError } = await adminClient
           .from("resident_staff_directory")
           .update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -182,10 +195,7 @@ Deno.serve(async (request) => {
       }
 
       const { userId: invitedUserId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(staffDirectory.email, staffDirectory.full_name);
-      const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: invitedUserId, email: staffDirectory.email, full_name: staffDirectory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
-      if (profileError) throw profileError;
-      const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: invitedUserId, role: "staff", active: true }, { onConflict: "user_id" });
-      if (roleError) throw roleError;
+      await ensureStaffAccess(invitedUserId, staffDirectory.email, staffDirectory.full_name);
       const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: invitedUserId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", staffDirectory.email);
       if (linkError) throw linkError;
       return json({ ok: true, userId: invitedUserId, invitationSent, linkedExistingAccount });

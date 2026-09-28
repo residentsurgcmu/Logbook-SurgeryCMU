@@ -16,8 +16,10 @@ begin
   ) then raise exception 'Admin-scheduled start/end window constraint regression'; end if;
 
   if not private.resident_round_token_is_current('2026-09-18T03:59:00Z'::timestamptz, '2026-09-18T03:59:59Z'::timestamptz)
-     or private.resident_round_token_is_current('2026-09-18T03:59:00Z'::timestamptz, '2026-09-18T04:00:00Z'::timestamptz)
-  then raise exception 'One-minute QR validity regression'; end if;
+     or not private.resident_round_token_is_current('2026-09-18T03:59:00Z'::timestamptz, '2026-09-18T04:00:30Z'::timestamptz)
+     or private.resident_round_token_is_current('2026-09-18T03:59:00Z'::timestamptz, '2026-09-18T04:01:00Z'::timestamptz)
+     or private.resident_round_token_is_current('2026-09-18T03:59:00Z'::timestamptz, '2026-09-18T03:58:59Z'::timestamptz)
+  then raise exception 'QR validity window (own minute + 60 s grace) regression'; end if;
 
   if has_function_privilege('anon', 'public.open_resident_round(date, time, time)', 'execute')
      or has_function_privilege('anon', 'public.update_resident_round_session(uuid, date, time, time)', 'execute')
