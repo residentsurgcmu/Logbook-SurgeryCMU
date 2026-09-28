@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2.57.4";
+import nodemailer from "npm:nodemailer@6.9.16";
 
 const APP_URL = (Deno.env.get("APP_URL") || "https://resident-surgery-logbook.vercel.app").replace(/\/$/, "");
 const corsHeaders = {
@@ -38,6 +39,42 @@ async function gmailAccessToken() {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || "Google OAuth token exchange failed");
   return String(payload.access_token);
+}
+
+// Preferred transport: the same Gmail SMTP account (App Password) that
+// Supabase Auth uses. Supabase Edge Functions block outbound ports 25 and 587,
+// so use implicit TLS on 465.
+function smtpConfig() {
+  const host = Deno.env.get("SMTP_HOST") || "";
+  const user = Deno.env.get("SMTP_USER") || "";
+  const pass = Deno.env.get("SMTP_PASS") || "";
+  if (!host || !user || !pass) return null;
+  const port = Number(Deno.env.get("SMTP_PORT") || "465");
+  return { host, port, user, pass, from: Deno.env.get("SMTP_FROM") || user };
+}
+
+async function sendSmtp(config: NonNullable<ReturnType<typeof smtpConfig>>, to: string, subject: string, html: string) {
+  if (config.port === 25 || config.port === 587) throw new Error("SMTP_PORT must be 465: Supabase Edge Functions block ports 25 and 587");
+  const transport = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: true,
+    auth: { user: config.user, pass: config.pass },
+  });
+  const info = await transport.sendMail({
+    from: { name: "Resident Surgery Assessment", address: config.from },
+    to,
+    subject,
+    html,
+  });
+  return String(info.messageId || "smtp");
+}
+
+async function sendMail(to: string, subject: string, html: string) {
+  const smtp = smtpConfig();
+  if (smtp) return await sendSmtp(smtp, to, subject, html);
+  if (Deno.env.get("GOOGLE_GMAIL_REFRESH_TOKEN")) return await sendGmail(to, subject, html);
+  throw new Error("Email is not configured: set SMTP_HOST, SMTP_USER and SMTP_PASS secrets");
 }
 
 async function sendGmail(to: string, subject: string, html: string) {
@@ -116,7 +153,7 @@ async function deliver(admin: AdminClient, requestId: string, deliveryType: "ini
 
   try {
     const reminder = deliveryType === "reminder";
-    const messageId = await sendGmail(
+    const messageId = await sendMail(
       directory.email,
       reminder ? `Reminder: ${template.template_code} รอการประเมินครบ 24 ชั่วโมง` : `${template.template_code}: มีแบบประเมินใหม่`,
       emailHtml(directory.full_name, resident.full_name, template.template_code, request.procedure_or_activity, reminder),
@@ -142,8 +179,18 @@ Deno.serve(async (request) => {
   try {
     const payload = await request.json().catch(() => ({}));
     if (payload.action === "deliver_due") {
+      // The cron job reads its secret from Supabase Vault; verify it against
+      // Vault too, so no extra Edge Function secret is required. An explicit
+      // RESIDENT_REMINDER_CRON_SECRET env value is still accepted.
+      const provided = request.headers.get("x-reminder-secret") || "";
       const expected = Deno.env.get("RESIDENT_REMINDER_CRON_SECRET") || "";
-      if (!expected || request.headers.get("x-reminder-secret") !== expected) return json({ error: "Unauthorized" }, 401);
+      let authorized = Boolean(provided) && Boolean(expected) && provided === expected;
+      if (!authorized && provided) {
+        const { data: matches, error: secretError } = await admin.rpc("resident_reminder_secret_matches", { p_secret: provided });
+        if (secretError) throw secretError;
+        authorized = matches === true;
+      }
+      if (!authorized) return json({ error: "Unauthorized" }, 401);
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: pending, error } = await admin.from("resident_assessment_requests").select("id,submitted_at").eq("status", "pending").order("submitted_at").limit(200);
       if (error) throw error;

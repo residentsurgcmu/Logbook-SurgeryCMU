@@ -108,3 +108,16 @@ test("round 2 fixes: ended sessions editable, invite links existing accounts, ex
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   assert.match(app, /setStaleRefresh\(true\)/);
 });
+
+test("assessment notifier sends via Gmail SMTP on port 465 and is scheduled", async () => {
+  const fn = await readFile(new URL("../supabase/functions/resident-assessment-notifier/index.ts", import.meta.url), "utf8");
+  assert.match(fn, /npm:nodemailer/);
+  assert.match(fn, /const messageId = await sendMail\(/);
+  assert.match(fn, /secure: true/);
+  assert.match(fn, /resident_reminder_secret_matches/);
+  const sql = await readFile(new URL("../supabase/migrations/20260928130000_schedule_assessment_email_delivery.sql", import.meta.url), "utf8");
+  assert.match(sql, /'resident-assessment-email-delivery',\s*'\*\/15 \* \* \* \*'/);
+  assert.match(sql, /grant execute on function public\.resident_reminder_secret_matches\(text\) to service_role/);
+  assert.match(sql, /revoke all on function public\.resident_reminder_secret_matches\(text\) from public, anon, authenticated/);
+  assert.match(sql, /"action":"deliver_due"/);
+});

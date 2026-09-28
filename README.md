@@ -72,11 +72,12 @@ Migration ใหม่เปลี่ยนชื่อ role `evaluator` เด�
 | Function | หน้าที่ | Secrets ที่ต้องตั้ง |
 |---|---|---|
 | `resident-admin` | Admin สร้าง/เชิญบัญชี (ถ้าอีเมลมีบัญชี Auth อยู่แล้วจะผูกบัญชีเดิมและส่งลิงก์ตั้งรหัสผ่าน), ลบการประเมิน | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL` |
-| `resident-assessment-notifier` | ส่งอีเมลแจ้ง Staff เมื่อมีคำขอประเมิน (`deliver_initial`) และอีเมลเตือน/ส่งซ้ำ (`deliver_due`) | `GOOGLE_GMAIL_CLIENT_ID`, `GOOGLE_GMAIL_CLIENT_SECRET`, `GOOGLE_GMAIL_REFRESH_TOKEN`, `GOOGLE_GMAIL_FROM_EMAIL`, `RESIDENT_REMINDER_CRON_SECRET` |
+| `resident-assessment-notifier` | ส่งอีเมลแจ้ง Staff เมื่อมีคำขอประเมิน (`deliver_initial`) และอีเมลเตือน/ส่งซ้ำ (`deliver_due`) ผ่าน Gmail SMTP (App Password เดียวกับ Supabase Auth) | `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASS`, (`SMTP_FROM` ไม่บังคับ) — deploy ด้วย `--no-verify-jwt` |
 | `auth-send-email-gmail` | Supabase Auth Send Email Hook (เชิญ, รีเซ็ตรหัสผ่าน ฯลฯ) ส่งผ่าน Gmail API | `GOOGLE_GMAIL_*` ชุดเดียวกัน, `SEND_EMAIL_HOOK_SECRET` |
 
 - ตั้ง `GOOGLE_GMAIL_FROM_EMAIL` ให้ตรงกับบัญชี Gmail เจ้าของ refresh token เสมอ (สอง function มีค่า default ต่างกัน)
-- `deliver_due` ต้องมี scheduler เรียกเป็นระยะ (เช่น Supabase Cron → HTTP POST พร้อม header `x-reminder-secret`) repo นี้ไม่ได้ตั้งให้ ตรวจสอบใน Dashboard
+- `deliver_due` ถูกเรียกทุก 15 นาทีโดย cron job `resident-assessment-email-delivery` (migration `20260928130000`) secret ของ cron เก็บใน Supabase Vault (`resident_reminder_cron_secret`) และ function ตรวจกับ Vault เอง ไม่ต้องตั้ง secret เพิ่ม
+- Supabase Edge Functions บล็อกพอร์ต 25 และ 587 ต้องใช้ SMTP พอร์ต 465
 - ระบบใช้การเชิญเท่านั้น ให้ปิด "Allow new users to sign up" ใน Authentication settings
 - ระบบเก่า Year 4 / Breast logbook ถูกปิดใน migration `20260928110000_retire_legacy_year4_breast.sql` (ถอนสิทธิ์ client, ข้อมูลยังอยู่)
 
