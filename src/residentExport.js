@@ -98,7 +98,8 @@ export async function exportResidentPdf(records, label) {
       `กิจกรรม: ${record.activity}`,
       `ผลสรุป: ${record.outcome}${record.comment ? ` · ${record.comment}` : ""}`,
     ];
-    const lineGroups = details.map((text) => wrapText(text, font, 9, 505));
+    // The heading line is drawn at 10pt, so wrap it at 10pt too.
+    const lineGroups = details.map((text, detailIndex) => wrapText(text, font, detailIndex === 0 ? 10 : 9, 505));
     const needed = lineGroups.reduce((sum, lines) => sum + lines.length * 13, 18);
     if (y - needed < 48) addPage();
     lineGroups.forEach((lines, detailIndex) => lines.forEach((line) => { page.drawText(line, { x: 42, y, size: detailIndex === 0 ? 10 : 9, font, color: detailIndex === 0 ? green : rgb(0.1, 0.14, 0.11) }); y -= 13; }));

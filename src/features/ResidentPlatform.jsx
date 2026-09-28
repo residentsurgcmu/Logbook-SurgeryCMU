@@ -876,7 +876,9 @@ function Admin({ workspace, onRefresh }) {
       setMessage(
         result.invitationSent
           ? "ส่งคำเชิญเปิดบัญชีแล้ว"
-          : result.alreadyProvisioned
+          : result.linkedExistingAccount
+            ? "ผูกบัญชีเดิมของอีเมลนี้แล้ว และส่งลิงก์ตั้งรหัสผ่านไปทางอีเมล"
+            : result.alreadyProvisioned
             ? "Staff นี้มีบัญชีในระบบแล้ว"
             : "อัปเดตสิทธิ์บัญชีแล้ว",
       );
@@ -911,7 +913,9 @@ function Admin({ workspace, onRefresh }) {
       setMessage(
         result.invitationSent
           ? `ส่งคำเชิญให้ ${staffMember.full_name} แล้ว`
-          : `${staffMember.full_name} มีบัญชีอยู่แล้ว`,
+          : result.linkedExistingAccount
+            ? `ผูกบัญชีเดิมของ ${staffMember.full_name} แล้ว และส่งลิงก์ตั้งรหัสผ่านไปทางอีเมล`
+            : `${staffMember.full_name} มีบัญชีอยู่แล้ว`,
       );
       await onRefresh();
     } catch (nextError) {

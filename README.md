@@ -67,6 +67,19 @@ Migration ใหม่เปลี่ยนชื่อ role `evaluator` เด�
 
 ห้ามใส่ service role, SMTP password หรือ secret ใดใน Vercel browser environment variables หรือ source code ฝั่ง client.
 
+## Edge Functions และ secrets
+
+| Function | หน้าที่ | Secrets ที่ต้องตั้ง |
+|---|---|---|
+| `resident-admin` | Admin สร้าง/เชิญบัญชี (ถ้าอีเมลมีบัญชี Auth อยู่แล้วจะผูกบัญชีเดิมและส่งลิงก์ตั้งรหัสผ่าน), ลบการประเมิน | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL` |
+| `resident-assessment-notifier` | ส่งอีเมลแจ้ง Staff เมื่อมีคำขอประเมิน (`deliver_initial`) และอีเมลเตือน/ส่งซ้ำ (`deliver_due`) | `GOOGLE_GMAIL_CLIENT_ID`, `GOOGLE_GMAIL_CLIENT_SECRET`, `GOOGLE_GMAIL_REFRESH_TOKEN`, `GOOGLE_GMAIL_FROM_EMAIL`, `RESIDENT_REMINDER_CRON_SECRET` |
+| `auth-send-email-gmail` | Supabase Auth Send Email Hook (เชิญ, รีเซ็ตรหัสผ่าน ฯลฯ) ส่งผ่าน Gmail API | `GOOGLE_GMAIL_*` ชุดเดียวกัน, `SEND_EMAIL_HOOK_SECRET` |
+
+- ตั้ง `GOOGLE_GMAIL_FROM_EMAIL` ให้ตรงกับบัญชี Gmail เจ้าของ refresh token เสมอ (สอง function มีค่า default ต่างกัน)
+- `deliver_due` ต้องมี scheduler เรียกเป็นระยะ (เช่น Supabase Cron → HTTP POST พร้อม header `x-reminder-secret`) repo นี้ไม่ได้ตั้งให้ ตรวจสอบใน Dashboard
+- ระบบใช้การเชิญเท่านั้น ให้ปิด "Allow new users to sign up" ใน Authentication settings
+- ระบบเก่า Year 4 / Breast logbook ถูกปิดใน migration `20260928110000_retire_legacy_year4_breast.sql` (ถอนสิทธิ์ client, ข้อมูลยังอยู่)
+
 ## Vercel deployment
 
 สร้าง project ใหม่ชื่อ `resident-surgery-logbook` ภายใต้บัญชี `resident.surgcmu@gmail.com` และตั้ง environment variables สำหรับ Production/Preview:

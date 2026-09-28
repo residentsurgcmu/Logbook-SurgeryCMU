@@ -39,6 +39,29 @@ Deno.serve(async (request) => {
   if (callerRoleError) return json({ error: "Could not verify caller role" }, 500);
   if (!callerRole?.active || callerRole.role !== "admin") return json({ error: "Admin role required" }, 403);
 
+  // Invite a new Auth user, or link the Auth account that already exists for
+  // this email (e.g. Staff who had a login in the retired Year 4 system).
+  // An existing account gets a set-password link instead of an invitation.
+  const inviteOrLinkUser = async (inviteEmail: string, fullName: string) => {
+    const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(inviteEmail, {
+      data: { full_name: fullName },
+      redirectTo: resetPasswordUrl(),
+    });
+    if (!invitationError && invitation?.user) return { userId: invitation.user.id, invitationSent: true, linkedExistingAccount: false };
+    const alreadyRegistered = invitationError && (
+      (invitationError as { code?: string }).code === "email_exists"
+      || (invitationError as { status?: number }).status === 422
+      || /already (been )?registered|already exists/i.test(invitationError.message)
+    );
+    if (!alreadyRegistered) throw invitationError || new Error("Could not invite account");
+    const { data: existingUserId, error: lookupError } = await adminClient.rpc("admin_find_auth_user_id", { p_email: inviteEmail });
+    if (lookupError) throw lookupError;
+    if (!existingUserId) throw invitationError;
+    const { error: resetError } = await adminClient.auth.resetPasswordForEmail(inviteEmail, { redirectTo: resetPasswordUrl() });
+    if (resetError) console.warn("Could not send set-password email to linked account", resetError.message);
+    return { userId: existingUserId as string, invitationSent: false, linkedExistingAccount: true };
+  };
+
   try {
     const payload = await request.json();
     const action = payload?.action;
@@ -83,20 +106,14 @@ Deno.serve(async (request) => {
       if (!directory?.active) throw new Error("This email is not an active approved Staff account");
       if (directory.auth_user_id) return json({ ok: true, invitationSent: false, alreadyProvisioned: true });
 
-      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(directory.email, {
-        data: { full_name: directory.full_name },
-        redirectTo: resetPasswordUrl(),
-      });
-      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite Staff account");
-
-      const userId = invitation.user.id;
+      const { userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(directory.email, directory.full_name);
       const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: directory.email, full_name: directory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
       if (profileError) throw profileError;
       const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role: "staff", active: true }, { onConflict: "user_id" });
       if (roleError) throw roleError;
       const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", directory.email);
       if (linkError) throw linkError;
-      return json({ ok: true, invitationSent: true });
+      return json({ ok: true, invitationSent, linkedExistingAccount });
     }
 
     if (action !== "provision_account") throw new Error("Invalid action");
@@ -164,39 +181,28 @@ Deno.serve(async (request) => {
         return json({ ok: true, userId, invitationSent: false, alreadyProvisioned: true });
       }
 
-      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(staffDirectory.email, {
-        data: { full_name: staffDirectory.full_name },
-        redirectTo: resetPasswordUrl(),
-      });
-      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite Staff account");
-
-      const invitedUserId = invitation.user.id;
+      const { userId: invitedUserId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(staffDirectory.email, staffDirectory.full_name);
       const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: invitedUserId, email: staffDirectory.email, full_name: staffDirectory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
       if (profileError) throw profileError;
       const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: invitedUserId, role: "staff", active: true }, { onConflict: "user_id" });
       if (roleError) throw roleError;
       const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: invitedUserId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", staffDirectory.email);
       if (linkError) throw linkError;
-      return json({ ok: true, userId: invitedUserId, invitationSent: true });
+      return json({ ok: true, userId: invitedUserId, invitationSent, linkedExistingAccount });
     }
 
     if (directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
     let userId = existing?.user_id;
     let invitationSent = false;
+    let linkedExistingAccount = false;
     if (!userId) {
-      const { data: invitation, error: invitationError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { full_name: fullName },
-        redirectTo: resetPasswordUrl(),
-      });
-      if (invitationError || !invitation.user) throw invitationError || new Error("Could not invite account");
-      userId = invitation.user.id;
-      invitationSent = true;
+      ({ userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(email, fullName));
     }
     const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email, full_name: fullName, pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
     if (profileError) throw profileError;
     const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role, active: true }, { onConflict: "user_id" });
     if (roleError) throw roleError;
-    return json({ ok: true, userId, invitationSent });
+    return json({ ok: true, userId, invitationSent, linkedExistingAccount });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Could not save account" }, 400);
   }

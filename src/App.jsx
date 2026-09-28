@@ -37,19 +37,20 @@ function PasswordSetupUnavailable({ onReturnToLogin }) {
 export default function App() {
   const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [recoverable, setRecoverable] = useState(false); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
   const refreshInFlight = useRef(null);
+  const [staleRefresh, setStaleRefresh] = useState(false);
   const workspaceRef = useRef(undefined);
   useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
   function refresh() {
     if (refreshInFlight.current) return refreshInFlight.current;
     const pending = (async () => {
       setError(""); setRecoverable(false);
-      try { setWorkspace(await retryResidentClockSkew(loadResidentWorkspace)); }
+      try { setWorkspace(await retryResidentClockSkew(loadResidentWorkspace)); setStaleRefresh(false); }
       catch (nextError) {
         // A background reload (token refresh, tab wake-up) that fails on a flaky
         // network must not throw a signed-in user back to Login and lose their
         // unsaved form. Keep the current workspace; the next refresh retries.
         // A real sign-out still arrives as SIGNED_OUT and clears the workspace.
-        if (keepWorkspaceOnRefreshError(workspaceRef.current, nextError)) { console.warn("Resident workspace refresh failed; keeping current workspace", nextError); return; }
+        if (keepWorkspaceOnRefreshError(workspaceRef.current, nextError)) { console.warn("Resident workspace refresh failed; keeping current workspace", nextError); setStaleRefresh(true); return; }
         setError(nextError.message || "ไม่สามารถเชื่อมต่อระบบได้"); setRecoverable(nextError.code === "RESIDENT_SESSION_CLOCK_SKEW"); setWorkspace(null);
       }
     })();
@@ -78,5 +79,8 @@ export default function App() {
   }
   if (workspace === undefined) return <div className="resident-loading">กำลังเชื่อมต่อ Resident Surgery Assessment…</div>;
   if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} recoverable={recoverable} onRetrySession={refresh} onLogin={async (credentials) => { setAuthMessage(""); await signIn(credentials); await refresh(); }} onRequestReset={requestPasswordReset} />;
-  return <ResidentPlatform workspace={workspace} onRefresh={refresh} onLogout={async () => { await signOut(); setWorkspace(null); }} />;
+  return <>
+    {staleRefresh && <div className="resident-stale-banner" role="status">โหลดข้อมูลล่าสุดไม่สำเร็จ ข้อมูลบนจออาจยังไม่อัปเดต <button type="button" className="link-button" onClick={refresh}>ลองโหลดใหม่</button></div>}
+    <ResidentPlatform workspace={workspace} onRefresh={refresh} onLogout={async () => { await signOut(); setStaleRefresh(false); setWorkspace(null); }} />
+  </>;
 }

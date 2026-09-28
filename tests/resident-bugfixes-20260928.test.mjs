@@ -88,3 +88,23 @@ test("legacy Year 4 / Breast system is retired without touching Resident objects
   const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /year4|Year4|trainingApi/);
 });
+
+test("round 2 fixes: ended sessions editable, invite links existing accounts, exam RLS helpers", async () => {
+  const round = await readFile(new URL("../src/features/RoundAttendance.jsx", import.meta.url), "utf8");
+  const ended = round.slice(round.indexOf('className="round-ended-sessions"'));
+  assert.match(ended, /onClick=\{\(\) => startEdit\(session\)\}/);
+  assert.match(ended, /onClick=\{\(\) => stop\(session\)\}/);
+  assert.match(ended, /renderEditForm\(\)/);
+  const fn = await readFile(new URL("../supabase/functions/resident-admin/index.ts", import.meta.url), "utf8");
+  assert.match(fn, /admin_find_auth_user_id/);
+  assert.equal((fn.match(/auth\.admin\.inviteUserByEmail/g) || []).length, 1, "all invites go through inviteOrLinkUser");
+  const api = await readFile(new URL("../src/residentApi.js", import.meta.url), "utf8");
+  assert.equal((api.match(/throw await residentAdminError\(error, "ไม่สามารถบันทึกบัญชีได้"\)/g) || []).length, 2);
+  const sql = await readFile(new URL("../supabase/migrations/20260928120000_link_existing_auth_users_and_exam_rls.sql", import.meta.url), "utf8");
+  assert.match(sql, /grant execute on function public\.admin_find_auth_user_id\(text\) to service_role/);
+  assert.match(sql, /revoke all on function public\.admin_find_auth_user_id\(text\) from public, anon, authenticated/);
+  const eventsPolicy = sql.slice(sql.indexOf("create policy resident_exam_events_visible"), sql.indexOf("drop policy if exists resident_exam_participants_visible"));
+  assert.doesNotMatch(eventsPolicy, /from public\.resident_exam_participants/);
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.match(app, /setStaleRefresh\(true\)/);
+});

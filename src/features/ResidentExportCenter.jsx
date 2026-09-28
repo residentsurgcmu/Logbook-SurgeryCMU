@@ -15,10 +15,14 @@ export default function ResidentExportCenter({ workspace }) {
   const [busy, setBusy] = useState(""); const [error, setError] = useState("");
   const selected = useMemo(() => filterExportRecords(records, filters), [records, filters]);
   const selectedScope = scopes.find(([id]) => id === filters.scope)?.[1] || "EPA-PBA";
-  const residentsForPgy = useMemo(() => residents.filter((resident) => !filters.pgy || Number(resident.pgy) === Number(filters.pgy)), [residents, filters.pgy]);
+  // Records are filtered by the PGY stored with each assessment, so a Resident
+  // belongs to a PGY if they are in it now OR have assessments from that year.
+  const residentMatchesPgy = (resident, pgy) => !pgy || Number(resident.pgy) === Number(pgy)
+    || records.some((record) => record.residentId === resident.id && Number(record.pgy) === Number(pgy));
+  const residentsForPgy = useMemo(() => residents.filter((resident) => residentMatchesPgy(resident, filters.pgy)), [residents, records, filters.pgy]);
   function setPgy(pgy) {
     const selectedResident = residents.find((resident) => resident.id === filters.residentId);
-    setFilters({ ...filters, pgy, residentId: selectedResident && pgy && Number(selectedResident.pgy) !== Number(pgy) ? "" : filters.residentId });
+    setFilters({ ...filters, pgy, residentId: selectedResident && !residentMatchesPgy(selectedResident, pgy) ? "" : filters.residentId });
   }
   async function run(format) { setBusy(format); setError(""); try { const stamp = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date()); const label = `Resident-${selectedScope}-${stamp}`; if (format === "pdf") await exportResidentPdf(selected, label); else await exportResidentExcel(selected, label); } catch (nextError) { setError(nextError.message || "สร้างไฟล์ไม่สำเร็จ"); } finally { setBusy(""); } }
   return <div className="export-layout">

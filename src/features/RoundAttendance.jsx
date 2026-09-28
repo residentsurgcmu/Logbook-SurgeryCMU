@@ -182,7 +182,7 @@ export function RoundAdmin({ user }) {
     finally { setBusy(""); }
   }
   async function stop(session) {
-    if (!window.confirm(`ปิดรับสแกน QR สำหรับวันที่ ${thaiDate(session.meeting_date)} ก่อนกำหนดเวลา (${thaiHM(session.ends_at)} น.)? จะแก้ไขหรือเปิดใหม่สำหรับวันนี้ไม่ได้อีก`)) return;
+    if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขหรือเปิดใหม่สำหรับวันนั้นไม่ได้อีก`)) return;
     setBusy("close"); setError("");
     try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
     catch (nextError) { setError(nextError.message || "ปิดการเช็กชื่อไม่สำเร็จ"); }
@@ -222,6 +222,16 @@ export function RoundAdmin({ user }) {
     } catch (nextError) { setError(nextError.message || "สร้างไฟล์ PDF ไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
+  const renderEditForm = () => <>
+          <form className="round-schedule-form" onSubmit={saveEdit}>
+            <label>วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
+            <label>เวลาเริ่มสแกน<input type="time" required value={editForm.start} onChange={(event) => setEditForm({ ...editForm, start: event.target.value })} /></label>
+            <label>เวลาสิ้นสุดสแกน<input type="time" required value={editForm.end} onChange={(event) => setEditForm({ ...editForm, end: event.target.value })} /></label>
+            <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
+            <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button>
+          </form>
+          {editDateError && <p className="form-error" role="alert">{editDateError}</p>}
+  </>;
   return <div className="round-layout">
     <section className="resident-panel round-admin-panel">
       <h2>MM &amp; Grand Round · เช็กชื่อเข้าประชุม</h2>
@@ -243,14 +253,7 @@ export function RoundAdmin({ user }) {
         return <section className="round-session-card" key={session.id} aria-labelledby={`round-session-${session.id}`}>
           <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)}</h3>
           {!isEditing && <p>สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></p>}
-          {isEditing && <form className="round-schedule-form" onSubmit={saveEdit}>
-            <label>วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
-            <label>เวลาเริ่มสแกน<input type="time" required value={editForm.start} onChange={(event) => setEditForm({ ...editForm, start: event.target.value })} /></label>
-            <label>เวลาสิ้นสุดสแกน<input type="time" required value={editForm.end} onChange={(event) => setEditForm({ ...editForm, end: event.target.value })} /></label>
-            <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
-            <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button>
-          </form>}
-          {isEditing && editDateError && <p className="form-error" role="alert">{editDateError}</p>}
+          {isEditing && renderEditForm()}
           {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
           {!isLiveNow && status === "upcoming" && <p role="status" className="round-status round-status-upcoming">ยังไม่ถึงเวลา · QR จะแสดงอัตโนมัติเมื่อถึง {thaiHM(session.starts_at)} น. ของวันที่ {thaiDate(session.meeting_date)}</p>}
           {!isLiveNow && status === "live" && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน · กำลังโหลด QR…</p>}
@@ -265,9 +268,18 @@ export function RoundAdmin({ user }) {
           </section>
         </section>;
       })}
-      {endedSessions.length > 0 && <details className="round-ended-sessions">
+      {endedSessions.length > 0 && <details className="round-ended-sessions" open={endedSessions.some((session) => session.id === editingId) ? true : undefined}>
         <summary>รอบที่หมดเวลาแล้ว ({endedSessions.length})</summary>
-        <ul>{endedSessions.map((session) => <li key={session.id}><span>{thaiDate(session.meeting_date)} · {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น.</span><button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button></li>)}</ul>
+        <p>รอบที่หมดเวลาแต่ยังไม่ได้ปิด แก้ไขวันที่/เวลาได้ (เช่น ตั้งเวลาผิด) หรือปิดรอบเพื่อยืนยันว่าจบแล้ว</p>
+        <ul>{endedSessions.map((session) => <li key={session.id}>
+          <span>{thaiDate(session.meeting_date)} · {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น.</span>
+          <span className="round-ended-actions">
+            <button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button>
+            <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button>
+            <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรอบ</button>
+          </span>
+          {editingId === session.id && <div className="round-ended-edit">{renderEditForm()}</div>}
+        </li>)}</ul>
       </details>}
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>

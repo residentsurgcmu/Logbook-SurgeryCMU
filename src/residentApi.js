@@ -473,8 +473,8 @@ export async function provisionAccount({ fullName, email, role, pgy, unitName })
       unitName,
     },
   });
-  fail(error);
-  if (!data?.ok) throw new Error(data?.error || "Could not provision account");
+  if (error) throw await residentAdminError(error, "ไม่สามารถบันทึกบัญชีได้");
+  if (!data?.ok) throw new Error(data?.error || "ไม่สามารถบันทึกบัญชีได้");
   return data;
 }
 
@@ -482,8 +482,8 @@ export async function inviteStaff(email) {
   const { data, error } = await supabase.functions.invoke("resident-admin", {
     body: { action: "invite_staff", email: normalizeResidentEmail(email) },
   });
-  fail(error);
-  if (!data?.ok) throw new Error(data?.error || "Could not provision account");
+  if (error) throw await residentAdminError(error, "ไม่สามารถบันทึกบัญชีได้");
+  if (!data?.ok) throw new Error(data?.error || "ไม่สามารถบันทึกบัญชีได้");
   return data;
 }
 

@@ -71,7 +71,7 @@ async function gmailAccessToken() {
 async function sendGmail(to: string, subject: string, html: string) {
   const accessToken = await gmailAccessToken();
   const raw = [
-    `From: Surgery CMU Logbook <${FROM_EMAIL}>`,
+    `From: Resident Surgery Assessment <${FROM_EMAIL}>`,
     `To: ${to}`,
     `Subject: ${encodeSubject(subject)}`,
     "MIME-Version: 1.0",
@@ -92,37 +92,37 @@ async function sendGmail(to: string, subject: string, html: string) {
 function emailContent(action: EmailActionType, verificationUrl: string) {
   const content: Record<string, { subject: string; heading: string; body: string; button: string }> = {
     signup: {
-      subject: "ยืนยันอีเมลสำหรับ Surgery CMU Logbook",
+      subject: "ยืนยันอีเมลสำหรับ Resident Surgery Assessment",
       heading: "ยืนยันอีเมลของคุณ",
       body: "กรุณากดปุ่มด้านล่างเพื่อยืนยันอีเมลและเปิดใช้งานบัญชี",
       button: "ยืนยันอีเมล",
     },
     recovery: {
-      subject: "ตั้งรหัสผ่านใหม่สำหรับ Surgery CMU Logbook",
+      subject: "ตั้งรหัสผ่านใหม่สำหรับ Resident Surgery Assessment",
       heading: "ตั้งรหัสผ่านใหม่",
       body: "เราได้รับคำขอเปลี่ยนรหัสผ่าน กรุณากดปุ่มด้านล่างเพื่อดำเนินการต่อ",
       button: "ตั้งรหัสผ่านใหม่",
     },
     invite: {
-      subject: "คำเชิญเข้าใช้งาน Surgery CMU Logbook",
+      subject: "คำเชิญเข้าใช้งาน Resident Surgery Assessment",
       heading: "เปิดใช้งานบัญชีของคุณ",
       body: "กรุณากดปุ่มด้านล่างเพื่อยืนยันอีเมลและเข้าใช้งานระบบ",
       button: "เปิดใช้งานบัญชี",
     },
     magiclink: {
-      subject: "ลิงก์เข้าสู่ระบบ Surgery CMU Logbook",
+      subject: "ลิงก์เข้าสู่ระบบ Resident Surgery Assessment",
       heading: "เข้าสู่ระบบ",
       body: "กรุณากดปุ่มด้านล่างเพื่อเข้าสู่ระบบอย่างปลอดภัย",
       button: "เข้าสู่ระบบ",
     },
     email_change: {
-      subject: "ยืนยันการเปลี่ยนอีเมล Surgery CMU Logbook",
+      subject: "ยืนยันการเปลี่ยนอีเมล Resident Surgery Assessment",
       heading: "ยืนยันอีเมลใหม่",
       body: "กรุณากดปุ่มด้านล่างเพื่อยืนยันการเปลี่ยนแปลงอีเมล",
       button: "ยืนยันอีเมลใหม่",
     },
     reauthentication: {
-      subject: "ยืนยันตัวตน Surgery CMU Logbook",
+      subject: "ยืนยันตัวตน Resident Surgery Assessment",
       heading: "ยืนยันตัวตน",
       body: "กรุณากดปุ่มด้านล่างเพื่อยืนยันตัวตนและดำเนินการต่อ",
       button: "ยืนยันตัวตน",
