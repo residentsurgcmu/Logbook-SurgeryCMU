@@ -13,6 +13,6 @@ test("MM & Grand Round schedule is controlled by Admin on any meeting day", asyn
   assert.match(ownerMigration, /resident\.surgcmu@gmail\.com/);
   assert.match(ownerMigration, /'admin'::public\.resident_system_role/);
   assert.match(ownerMigration, /on conflict \(user_id\) do update[\s\S]*role = excluded\.role, active = true/i);
-  assert.match(ui, /Admin กำหนดวันประชุมและกดเปิดรับด้วยตนเอง/);
+  assert.match(ui, /Admin ตั้งวันที่และช่วงเวลาที่ต้องการเปิดรับสแกน QR ล่วงหน้าได้/);
   assert.doesNotMatch(ui, /เช็กชื่อวันศุกร์/);
 });
