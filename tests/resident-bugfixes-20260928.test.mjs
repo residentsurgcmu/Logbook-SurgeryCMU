@@ -75,3 +75,16 @@ test("minor Resident fixes are wired in", async () => {
   const sql = await readFile(new URL("../supabase/migrations/20260928100000_assessment_party_profile_read.sql", import.meta.url), "utf8");
   assert.match(sql, /assessment\.evaluator_id = \(select auth\.uid\(\)\) and assessment\.resident_id = user_id/);
 });
+
+test("legacy Year 4 / Breast system is retired without touching Resident objects", async () => {
+  const sql = await readFile(new URL("../supabase/migrations/20260928110000_retire_legacy_year4_breast.sql", import.meta.url), "utf8");
+  assert.match(sql, /revoke all on table public\.%I from public, anon, authenticated/);
+  assert.match(sql, /'profiles'/);
+  assert.match(sql, /'year4_logbook_entries'/);
+  assert.match(sql, /drop trigger if exists on_auth_user_created on auth\.users/);
+  assert.doesNotMatch(sql, /drop table/i);
+  const listed = sql.slice(sql.indexOf("v_legacy_tables"), sql.indexOf("begin", sql.indexOf("v_legacy_tables")));
+  assert.doesNotMatch(listed, /resident_/);
+  const app = await readFile(new URL("../src/App.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /year4|Year4|trainingApi/);
+});
