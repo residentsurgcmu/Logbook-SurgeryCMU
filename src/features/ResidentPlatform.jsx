@@ -506,6 +506,12 @@ function RequestHistory({ requests, profiles }) {
 }
 
 function Notifications({ notifications, onRead }) {
+  const [error, setError] = useState("");
+  async function read(id) {
+    setError("");
+    try { await onRead(id); }
+    catch (nextError) { setError(nextError.message || "ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ กรุณาลองใหม่"); }
+  }
   if (!notifications.length)
     return (
       <section className="resident-panel empty">
@@ -515,6 +521,7 @@ function Notifications({ notifications, onRead }) {
   return (
     <section className="resident-panel">
       <h2>Notification ในระบบ</h2>
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="notification-list">
         {notifications.map((item) => (
           <button
@@ -523,7 +530,7 @@ function Notifications({ notifications, onRead }) {
             className={
               item.read_at ? "notification-card read" : "notification-card"
             }
-            onClick={() => !item.read_at && onRead(item.id)}
+            onClick={() => !item.read_at && read(item.id)}
           >
             <span>{item.title}</span>
             <p>{item.message}</p>

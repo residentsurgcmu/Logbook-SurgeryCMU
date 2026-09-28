@@ -69,6 +69,7 @@ export function RoundAdmin({ user }) {
   const [scheduleDateError, setScheduleDateError] = useState("");
   const [editDateError, setEditDateError] = useState("");
   const mounted = useRef(true);
+  const refreshSeq = useRef(0);
   const hasInitialPdfDateRange = useRef(false);
   const openSessions = useMemo(
     () => data.sessions.filter((item) => !item.closed_at).sort((a, b) => a.meeting_date.localeCompare(b.meeting_date)),
@@ -108,9 +109,12 @@ export function RoundAdmin({ user }) {
 
   async function refresh() {
     try {
+      const seq = ++refreshSeq.current;
       const requestedAt = Date.now();
       const [nextData, nextQr] = await Promise.all([loadRoundAdminData(), currentRoundQr()]);
-      if (!mounted.current) return;
+      // Ignore a slower, older response (e.g. the 10 s poll) that finishes
+      // after a newer refresh, so it cannot hide a just-created session.
+      if (!mounted.current || seq !== refreshSeq.current) return;
       setData(nextData);
       setSelectedId((previous) => previous || nextData.sessions[0]?.id || "");
       setQr(nextQr);

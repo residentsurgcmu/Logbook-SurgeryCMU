@@ -93,7 +93,7 @@ export function buildExportRecords(workspace) {
       assessmentDate: assessment.assessment_date,
       residentId: assessment.resident_id,
       residentName: resident?.name || "—",
-      pgy: resident?.pgy || assessment.resident_pgy || "—",
+      pgy: assessment.resident_pgy || resident?.pgy || "—",
       templateId: assessment.template_id,
       templateCode:
         assessment.resident_template_definitions?.template_code || "—",

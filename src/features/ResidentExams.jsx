@@ -10,6 +10,15 @@ const thaiDate = (value) =>
     dateStyle: "medium",
     timeZone: "Asia/Bangkok",
   }).format(new Date(`${value}T12:00:00+07:00`));
+// Mirrors the server rule in save_resident_exam_results so the Admin sees
+// which Resident's cell is wrong instead of a generic English error.
+export function examScoreError(value, maxScore) {
+  const text = String(value ?? "").trim();
+  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(text)) return "ต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง";
+  if (maxScore != null && Number(text) > Number(maxScore)) return `ต้องไม่เกินคะแนนเต็ม ${maxScore}`;
+  return "";
+}
+
 const today = () =>
   new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
@@ -282,6 +291,10 @@ function ExamEditor({ event, onRefresh }) {
       }
       if (!hasScore || !hasOutcome)
         throw new Error("กรุณากรอกคะแนนและผลให้ครบในรายการที่เริ่มกรอกแล้ว");
+      if (event.type === "mcq") {
+        const scoreError = examScoreError(value.score, event.maxScore);
+        if (scoreError) throw new Error(`คะแนนของ ${resident.name || "Resident"}: ${scoreError}`);
+      }
       records.push({
         residentId: resident.id,
         partId: part?.id || null,

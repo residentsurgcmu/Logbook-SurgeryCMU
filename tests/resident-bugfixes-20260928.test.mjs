@@ -52,3 +52,26 @@ test("no migration grants admin to the mistyped owner email", async () => {
     assert.doesNotMatch(sql, /resident\.surgerycmu@gmail\.com/i, name);
   }
 });
+
+test("exam score validation names the Resident and mirrors the server rule", async () => {
+  const src = await readFile(new URL("../src/features/ResidentExams.jsx", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("export function examScoreError"), src.indexOf("const today = () =>"));
+  const examScoreError = new Function(`${body.replace("export function", "function")}; return examScoreError;`)();
+  assert.equal(examScoreError("12.5", 20), "");
+  assert.equal(examScoreError("20", 20), "");
+  assert.match(examScoreError("12.345", 20), /ทศนิยม/);
+  assert.match(examScoreError("-1", 20), /ไม่ติดลบ/);
+  assert.match(examScoreError("21", 20), /คะแนนเต็ม 20/);
+  assert.match(src, /คะแนนของ \$\{resident\.name/);
+});
+
+test("minor Resident fixes are wired in", async () => {
+  const analytics = await readFile(new URL("../src/residentAnalytics.js", import.meta.url), "utf8");
+  assert.match(analytics, /pgy: assessment\.resident_pgy \|\| resident\?\.pgy/);
+  const platform = await readFile(new URL("../src/features/ResidentPlatform.jsx", import.meta.url), "utf8");
+  assert.match(platform, /onClick=\{\(\) => !item\.read_at && read\(item\.id\)\}/);
+  const round = await readFile(new URL("../src/features/RoundAttendance.jsx", import.meta.url), "utf8");
+  assert.match(round, /seq !== refreshSeq\.current/);
+  const sql = await readFile(new URL("../supabase/migrations/20260928100000_assessment_party_profile_read.sql", import.meta.url), "utf8");
+  assert.match(sql, /assessment\.evaluator_id = \(select auth\.uid\(\)\) and assessment\.resident_id = user_id/);
+});
