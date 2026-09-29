@@ -119,6 +119,12 @@ type AdminClient = ReturnType<typeof createClient>;
 // Emails sent per cron run (every 15 minutes); anything left over is picked
 // up by the next run because only unsent deliveries are selected.
 const MAX_DELIVERIES_PER_RUN = 200;
+// Stop starting new sends after this long so the run returns before the Edge
+// Function wall-clock limit; the rest goes to the next run.
+const RUN_TIME_BUDGET_MS = 100_000;
+// A delivery that failed (send error, or Staff no longer active) waits this
+// long before it is retried, so failing rows cannot take every run's slots.
+const FAILED_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
 
 async function deliver(admin: AdminClient, requestId: string, deliveryType: "initial" | "reminder") {
   const { data: request, error: requestError } = await admin.from("resident_assessment_requests")
@@ -133,16 +139,32 @@ async function deliver(admin: AdminClient, requestId: string, deliveryType: "ini
     admin.from("resident_staff_directory").select("email,full_name,active,auth_user_id").eq("auth_user_id", request.staff_id).maybeSingle(),
   ]);
   if (templateError || residentError || directoryError) throw templateError || residentError || directoryError;
-  if (!directory?.active || directory.auth_user_id !== request.staff_id) throw new Error("Selected Staff is not an active registered account");
+  if (!directory?.active || directory.auth_user_id !== request.staff_id) {
+    // Record the failure so deliver_due backs off for FAILED_RETRY_AFTER_MS
+    // instead of retrying this request (e.g. Staff deactivated) every run.
+    const reason = "Selected Staff is not an active registered account";
+    let email = directory?.email || "";
+    if (!email) {
+      const { data: staffProfile } = await admin.from("resident_profiles").select("email").eq("user_id", request.staff_id).maybeSingle();
+      email = staffProfile?.email || "";
+    }
+    if (email) {
+      const { data: failedId } = await admin.rpc("claim_resident_assessment_email_delivery", {
+        p_request_id: request.id, p_delivery_type: deliveryType, p_recipient_email: email,
+      });
+      if (failedId) await admin.from("resident_assessment_email_deliveries").update({ status: "failed", error_message: reason }).eq("id", failedId);
+    }
+    throw new Error(reason);
+  }
 
-  const { data: existing, error: existingError } = await admin.from("resident_assessment_email_deliveries")
-    .select("id,status").eq("request_id", request.id).eq("delivery_type", deliveryType).maybeSingle();
-  if (existingError) throw existingError;
-  if (existing?.status === "sent") return { sent: false, skipped: true };
-  const attempt = { request_id: request.id, delivery_type: deliveryType, recipient_email: directory.email, status: "sending", attempted_at: new Date().toISOString(), error_message: null };
-  const { data: delivery, error: deliveryError } = await admin.from("resident_assessment_email_deliveries")
-    .upsert(attempt, { onConflict: "request_id,delivery_type" }).select("id").single();
-  if (deliveryError) throw deliveryError;
+  // Claim the row atomically: null means it was already sent or another run
+  // (browser deliver_initial vs. cron deliver_due) is sending it right now.
+  const { data: deliveryId, error: claimError } = await admin.rpc("claim_resident_assessment_email_delivery", {
+    p_request_id: request.id, p_delivery_type: deliveryType, p_recipient_email: directory.email,
+  });
+  if (claimError) throw claimError;
+  if (!deliveryId) return { sent: false, skipped: true };
+  const delivery = { id: deliveryId as string };
 
   if (deliveryType === "reminder") {
     const { error: notificationError } = await admin.from("resident_notifications").upsert({
@@ -162,12 +184,27 @@ async function deliver(admin: AdminClient, requestId: string, deliveryType: "ini
       reminder ? `Reminder: ${template.template_code} รอการประเมินครบ 24 ชั่วโมง` : `${template.template_code}: มีแบบประเมินใหม่`,
       emailHtml(directory.full_name, resident.full_name, template.template_code, request.procedure_or_activity, reminder),
     );
-    await admin.from("resident_assessment_email_deliveries").update({ status: "sent", provider_message_id: messageId, sent_at: new Date().toISOString() }).eq("id", delivery.id);
+    await markSent(admin, delivery.id, messageId);
     return { sent: true, skipped: false };
   } catch (error) {
+    if (error instanceof MarkSentError) throw error;
     const message = error instanceof Error ? error.message : "Email delivery failed";
     await admin.from("resident_assessment_email_deliveries").update({ status: "failed", error_message: message.slice(0, 1000) }).eq("id", delivery.id);
     throw error;
+  }
+}
+
+class MarkSentError extends Error {}
+
+// The email is already out. Marking it 'sent' must not be skipped silently or
+// recorded as 'failed', or the same email would be sent again. Retry once; if
+// it still fails, the row stays 'sending' and is not reclaimed for 10 minutes.
+async function markSent(admin: AdminClient, deliveryId: string, messageId: string) {
+  const update = { status: "sent", provider_message_id: messageId, sent_at: new Date().toISOString(), error_message: null };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { error } = await admin.from("resident_assessment_email_deliveries").update(update).eq("id", deliveryId);
+    if (!error) return;
+    if (attempt === 1) throw new MarkSentError(`Email sent but could not be marked as sent: ${error.message}`);
   }
 }
 
@@ -204,23 +241,29 @@ Deno.serve(async (request) => {
       const pageSize = 500;
       for (let offset = 0; ; offset += pageSize) {
         const { data: page, error } = await admin.from("resident_assessment_requests")
-          .select("id,submitted_at,resident_assessment_email_deliveries(delivery_type,status)")
+          .select("id,submitted_at,resident_assessment_email_deliveries(delivery_type,status,attempted_at)")
           .eq("status", "pending").order("submitted_at").order("id").range(offset, offset + pageSize - 1);
         if (error) throw error;
         for (const item of page || []) {
           const type = item.submitted_at <= cutoff ? "reminder" : "initial";
-          const deliveries = (item.resident_assessment_email_deliveries || []) as { delivery_type: string; status: string }[];
-          if (!deliveries.some((row) => row.delivery_type === type && row.status === "sent")) due.push({ id: item.id, type });
+          const deliveries = (item.resident_assessment_email_deliveries || []) as { delivery_type: string; status: string; attempted_at: string }[];
+          const row = deliveries.find((delivery) => delivery.delivery_type === type);
+          if (row?.status === "sent") continue;
+          if (row?.status === "failed" && Date.now() - new Date(row.attempted_at).getTime() < FAILED_RETRY_AFTER_MS) continue;
+          due.push({ id: item.id, type });
         }
         if (!page || page.length < pageSize) break;
       }
       const batch = due.slice(0, MAX_DELIVERIES_PER_RUN);
-      let sent = 0; const failures: string[] = [];
+      let sent = 0; let processed = 0; const failures: string[] = [];
+      const startedAt = Date.now();
       for (const item of batch) {
+        if (Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
+        processed += 1;
         try { const result = await deliver(admin, item.id, item.type); if (result.sent) sent += 1; }
         catch (error) { failures.push(`${item.id}: ${error instanceof Error ? error.message : "delivery failed"}`); }
       }
-      return json({ ok: failures.length === 0, processed: batch.length, remaining: due.length - batch.length, sent, failures });
+      return json({ ok: failures.length === 0, processed, remaining: due.length - processed, sent, failures });
     }
 
     if (payload.action !== "deliver_initial" || typeof payload.requestId !== "string") return json({ error: "Invalid action" }, 400);

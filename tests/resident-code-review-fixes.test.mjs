@@ -60,8 +60,8 @@ test("deliver_due selects only requests whose due email is unsent", async () => 
   const fn = await read("supabase/functions/resident-assessment-notifier/index.ts");
   const block = fn.slice(fn.indexOf('payload.action === "deliver_due"'), fn.indexOf('payload.action !== "deliver_initial"'));
   assert.doesNotMatch(block, /\.limit\(200\)/);
-  assert.match(block, /resident_assessment_email_deliveries\(delivery_type,status\)/);
-  assert.match(block, /row\.delivery_type === type && row\.status === "sent"/);
+  assert.match(block, /resident_assessment_email_deliveries\(delivery_type,status,attempted_at\)/);
+  assert.match(block, /delivery\.delivery_type === type\);\s+if \(row\?\.status === "sent"\) continue;/);
   assert.match(block, /\.range\(offset, offset \+ pageSize - 1\)/);
   assert.match(block, /due\.slice\(0, MAX_DELIVERIES_PER_RUN\)/);
 });

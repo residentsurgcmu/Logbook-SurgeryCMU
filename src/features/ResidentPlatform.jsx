@@ -204,8 +204,13 @@ function AdminAssessmentDeletion({ workspace, onRefresh }) {
   const [error, setError] = useState("");
   const names = useMemo(
     () =>
-      new Map(workspace.profiles.map((profile) => [profile.id, profile.name])),
-    [workspace.profiles],
+      new Map(
+        (workspace.allProfiles || workspace.profiles).map((profile) => [
+          profile.id,
+          profile.name,
+        ]),
+      ),
+    [workspace.allProfiles, workspace.profiles],
   );
   const assessments = useMemo(
     () =>
@@ -429,6 +434,10 @@ function Admin({ workspace, onRefresh }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busyEmail, setBusyEmail] = useState("");
+  // A double click must not send two invitations (the second one falls back
+  // to a password-reset email). The ref blocks clicks before React re-renders.
+  const [formBusy, setFormBusy] = useState("");
+  const formBusyRef = useRef("");
   const [account, setAccount] = useState({
     fullName: "",
     email: "",
@@ -461,6 +470,9 @@ function Admin({ workspace, onRefresh }) {
   }
   async function addAccount(event) {
     event.preventDefault();
+    if (formBusyRef.current) return;
+    formBusyRef.current = "account";
+    setFormBusy("account");
     setError("");
     try {
       const result = await provisionAccount({
@@ -486,10 +498,16 @@ function Admin({ workspace, onRefresh }) {
       await onRefresh();
     } catch (nextError) {
       setError(nextError.message);
+    } finally {
+      formBusyRef.current = "";
+      setFormBusy("");
     }
   }
   async function assign(event) {
     event.preventDefault();
+    if (formBusyRef.current) return;
+    formBusyRef.current = "assign";
+    setFormBusy("assign");
     setError("");
     try {
       await saveAssignment(assignment.staffId, assignment.residentId);
@@ -497,6 +515,9 @@ function Admin({ workspace, onRefresh }) {
       await onRefresh();
     } catch (nextError) {
       setError(nextError.message);
+    } finally {
+      formBusyRef.current = "";
+      setFormBusy("");
     }
   }
   async function invite(staffMember) {
@@ -602,7 +623,9 @@ function Admin({ workspace, onRefresh }) {
               />
             </label>
           )}
-          <button className="primary-button">ส่งคำเชิญ</button>
+          <button className="primary-button" disabled={Boolean(formBusy)}>
+            {formBusy === "account" ? "กำลังส่งคำเชิญ…" : "ส่งคำเชิญ"}
+          </button>
         </form>
         <form className="resident-panel" onSubmit={assign}>
           <h2>มอบหมาย Staff</h2>
@@ -640,7 +663,9 @@ function Admin({ workspace, onRefresh }) {
               ))}
             </select>
           </label>
-          <button className="primary-button">บันทึกการมอบหมาย</button>
+          <button className="primary-button" disabled={Boolean(formBusy)}>
+            {formBusy === "assign" ? "กำลังบันทึก…" : "บันทึกการมอบหมาย"}
+          </button>
         </form>
       </div>
       {(message || error) && (
@@ -835,14 +860,14 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         ) : tab === "request" ? (
           <>
             <ResidentRequestForm workspace={workspace} onSaved={onRefresh} />
-            <ResidentRequestHistory workspace={workspace} />
+            <ResidentRequestHistory workspace={workspace} onRefresh={onRefresh} />
           </>
         ) : tab === "pending" ? (
           selectedRequest ? (
             <StaffEvaluationForm
               request={selectedRequest}
               templates={workspace.templates}
-              profiles={workspace.profiles}
+              profiles={workspace.allProfiles || workspace.profiles}
               onSaved={async () => {
                 setSelectedRequest(null);
                 await onRefresh();
@@ -852,7 +877,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
           ) : (
             <RequestQueue
               requests={workspace.requests}
-              profiles={workspace.profiles}
+              profiles={workspace.allProfiles || workspace.profiles}
               onSelect={setSelectedRequest}
             />
           )

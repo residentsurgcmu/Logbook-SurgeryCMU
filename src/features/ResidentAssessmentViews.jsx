@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { completeAssessmentRequest, requestAssessment } from "../residentApi";
+import {
+  cancelAssessmentRequest,
+  completeAssessmentRequest,
+  requestAssessment,
+} from "../residentApi";
 
 const localDate = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -155,7 +159,7 @@ export function ResidentRequestForm({ workspace, onSaved }) {
     .sort((a, b) => b.attempt_number - a.attempt_number)[0];
   const previousStaff =
     previous &&
-    (workspace.profiles.find((item) => item.id === previous.staff_id)?.name ||
+    ((workspace.allProfiles || workspace.profiles).find((item) => item.id === previous.staff_id)?.name ||
       previous.previous_staff_name);
   async function submit(event) {
     event.preventDefault();
@@ -476,14 +480,33 @@ export function StaffEvaluationForm({
   );
 }
 
-export function ResidentRequestHistory({ workspace }) {
+export function ResidentRequestHistory({ workspace, onRefresh }) {
+  const [cancellingId, setCancellingId] = useState("");
+  const [error, setError] = useState("");
   const names = new Map(
-    workspace.profiles.map((person) => [person.id, person.name]),
+    (workspace.allProfiles || workspace.profiles).map((person) => [person.id, person.name]),
   );
+  // A pending request blocks a new one for the same template, so the Resident
+  // needs a way out when the chosen Staff can no longer assess (e.g. left).
+  async function cancel(request) {
+    if (cancellingId) return;
+    if (!window.confirm(`ยกเลิกคำขอ ${request.resident_template_definitions?.template_code || ""} นี้หรือไม่?`)) return;
+    setCancellingId(request.id);
+    setError("");
+    try {
+      await cancelAssessmentRequest(request.id);
+      await onRefresh?.();
+    } catch (nextError) {
+      setError(nextError.message || "ยกเลิกคำขอไม่สำเร็จ");
+    } finally {
+      setCancellingId("");
+    }
+  }
   if (!workspace.requests.length) return null;
   return (
     <section className="resident-panel">
       <h2>สถานะแบบประเมินที่ส่ง</h2>
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="resident-table-wrap">
         <table>
           <thead>
@@ -494,6 +517,7 @@ export function ResidentRequestHistory({ workspace }) {
               <th>Staff</th>
               <th>ครั้งก่อน</th>
               <th>สถานะ</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -512,6 +536,18 @@ export function ResidentRequestHistory({ workspace }) {
                     {requestStatusLabel(request.status)}
                   </span>
                 </td>
+                <td>
+                  {request.status === "pending" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={Boolean(cancellingId)}
+                      onClick={() => cancel(request)}
+                    >
+                      {cancellingId === request.id ? "กำลังยกเลิก…" : "ยกเลิกคำขอ"}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -526,7 +562,8 @@ export function AssessmentHistory({
   staffFocus = "completed",
   onStaffFocus,
 }) {
-  const { assessments, requests, profiles, templates, user } = workspace;
+  const { assessments, requests, templates, user } = workspace;
+  const profiles = workspace.allProfiles || workspace.profiles;
   const [pgy, setPgy] = useState("");
   const [residentId, setResidentId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -545,10 +582,18 @@ export function AssessmentHistory({
     ...requests.map((request) => request.resident_id),
     ...assessments.map((item) => item.resident_id),
   ]);
+  // Assessments are filtered by the PGY stored with each one, so a Resident
+  // belongs to a PGY if they are in it now OR have assessments from that year.
+  const matchesPgy = (person) =>
+    !pgy ||
+    String(person.pgy) === pgy ||
+    assessments.some(
+      (item) => item.resident_id === person.id && String(item.resident_pgy) === pgy,
+    );
   const related = [...relatedIds]
     .map((id) => profileById.get(id))
     .filter(Boolean)
-    .filter((person) => !pgy || String(person.pgy) === pgy);
+    .filter(matchesPgy);
   const visible = assessments.filter(
     (item) =>
       (!pgy || String(item.resident_pgy) === pgy) &&

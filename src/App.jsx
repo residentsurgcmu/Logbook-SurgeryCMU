@@ -37,14 +37,36 @@ function PasswordSetupUnavailable({ onReturnToLogin }) {
 export default function App() {
   const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [recoverable, setRecoverable] = useState(false); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
   const refreshInFlight = useRef(null);
+  const refreshQueued = useRef(null);
+  const loginRole = useRef(null);
+  const roleMismatch = useRef("");
   const [staleRefresh, setStaleRefresh] = useState(false);
   const workspaceRef = useRef(undefined);
   useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
   function refresh() {
-    if (refreshInFlight.current) return refreshInFlight.current;
+    if (refreshInFlight.current) {
+      // A caller that just saved needs data read after its write, but the
+      // running reload may have queried before it. Chain one follow-up reload.
+      if (!refreshQueued.current) refreshQueued.current = refreshInFlight.current.then(() => { refreshQueued.current = null; return refresh(); });
+      return refreshQueued.current;
+    }
     const pending = (async () => {
       setError(""); setRecoverable(false);
-      try { setWorkspace(await retryResidentClockSkew(loadResidentWorkspace)); setStaleRefresh(false); }
+      try {
+        const next = await retryResidentClockSkew(loadResidentWorkspace);
+        const chosenRole = loginRole.current; if (next?.user) loginRole.current = null;
+        // The role buttons on Login must mean something: refuse a sign-in whose
+        // account role differs instead of silently opening another role's UI.
+        if (chosenRole && next?.user && next.user.role !== chosenRole) {
+          roleMismatch.current = `บัญชีนี้เป็นบทบาท ${residentRoleLabels[next.user.role] || next.user.role} กรุณาเลือกบทบาทให้ตรงกับบัญชี`;
+          await signOut();
+          setError(roleMismatch.current); setWorkspace(null); return;
+        }
+        // A reload queued behind the refused sign-in finds no session; keep
+        // the mismatch message instead of clearing it.
+        if (next?.user) roleMismatch.current = ""; else if (roleMismatch.current) setError(roleMismatch.current);
+        setWorkspace(next); setStaleRefresh(false);
+      }
       catch (nextError) {
         // A background reload (token refresh, tab wake-up) that fails on a flaky
         // network must not throw a signed-in user back to Login and lose their
@@ -78,7 +100,7 @@ export default function App() {
     return <PasswordSetup onSave={async (password) => { await updatePassword(password); await signOut(); window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setPasswordSession(null); setAuthMessage("ตั้งรหัสผ่านใหม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง"); setWorkspace(null); }} />;
   }
   if (workspace === undefined) return <div className="resident-loading">กำลังเชื่อมต่อ Resident Surgery Assessment…</div>;
-  if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} recoverable={recoverable} onRetrySession={refresh} onLogin={async (credentials) => { setAuthMessage(""); await signIn(credentials); await refresh(); }} onRequestReset={requestPasswordReset} />;
+  if (!workspace || workspace.unauthorized) return <Login initialMessage={authMessage} error={workspace?.unauthorized ? "บัญชีนี้ยังไม่ได้รับสิทธิ์ในระบบ Resident Surgery Assessment" : error} recoverable={recoverable} onRetrySession={refresh} onLogin={async (credentials) => { setAuthMessage(""); loginRole.current = credentials.role; roleMismatch.current = ""; try { await signIn(credentials); } catch (signInError) { loginRole.current = null; throw signInError; } await refresh(); }} onRequestReset={requestPasswordReset} />;
   return <>
     {staleRefresh && <div className="resident-stale-banner" role="status">โหลดข้อมูลล่าสุดไม่สำเร็จ ข้อมูลบนจออาจยังไม่อัปเดต <button type="button" className="link-button" onClick={refresh}>ลองโหลดใหม่</button></div>}
     <ResidentPlatform workspace={workspace} onRefresh={refresh} onLogout={async () => { await signOut(); setStaleRefresh(false); setWorkspace(null); }} />

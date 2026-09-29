@@ -100,6 +100,12 @@ export async function loadResidentWorkspace() {
           .order("unit_name")
           .order("full_name")
       : Promise.resolve({ data: [], error: null });
+  // Residents cannot read Staff profile rows (that would expose Staff email),
+  // so their Staff names come from a function that returns names only.
+  const counterpartQuery =
+    role.role === "resident"
+      ? supabase.rpc("list_resident_counterpart_staff")
+      : Promise.resolve({ data: [], error: null });
   // Supabase/PostgREST returns at most 1,000 rows per request. Page through
   // the tables that grow over time so dashboards and exports stay complete.
   const [
@@ -112,6 +118,7 @@ export async function loadResidentWorkspace() {
     { data: requests, error: requestsError },
     { data: notifications, error: notificationsError },
     { data: examRecords, error: examRecordsError },
+    { data: counterpartStaff, error: counterpartStaffError },
   ] = await Promise.all([
     supabase
       .from("resident_template_definitions")
@@ -131,7 +138,6 @@ export async function loadResidentWorkspace() {
       supabase
         .from("resident_profiles")
         .select("user_id,full_name,email,pgy,active")
-        .eq("active", true)
         .order("full_name")
         .order("user_id"),
     ),
@@ -157,10 +163,14 @@ export async function loadResidentWorkspace() {
     supabase
       .from("resident_notifications")
       .select("*")
+      // Admins may read every notification under RLS but can mark only their
+      // own as read; show each user just their own inbox.
+      .eq("recipient_id", authData.user.id)
       .order("created_at", { ascending: false })
       .limit(100),
     // The RPC orders its rows deterministically, so offset paging is stable.
     fetchAllRows(() => supabase.rpc("list_resident_exam_records")),
+    counterpartQuery,
   ]);
   fail(templatesError);
   fail(assessmentsError);
@@ -171,6 +181,14 @@ export async function loadResidentWorkspace() {
   fail(requestsError);
   fail(notificationsError);
   fail(examRecordsError);
+  // Names only: if the function is not deployed yet (frontend released before
+  // the migration) the RLS policies still allow the read, so do not block the
+  // whole workspace on it.
+  if (counterpartStaffError) console.warn("Could not load counterpart Staff names", counterpartStaffError);
+  const profileIds = new Set((profiles || []).map((row) => row.user_id));
+  const counterpartProfiles = (counterpartStaff || [])
+    .filter((row) => !profileIds.has(row.user_id))
+    .map((row) => mapProfile({ ...row, email: null, pgy: null, active: false }));
   return {
     user: { ...mapProfile(profile), role: role.role },
     templates: (templates || []).map((template) => {
@@ -186,7 +204,10 @@ export async function loadResidentWorkspace() {
       };
     }),
     assessments: assessments || [],
-    profiles: (profiles || []).map(mapProfile),
+    // Pickers offer only active accounts, but names in history, dashboards and
+    // exports must still resolve after a Resident or Staff is deactivated.
+    profiles: (profiles || []).filter((row) => row.active).map(mapProfile),
+    allProfiles: [...(profiles || []).map(mapProfile), ...counterpartProfiles],
     assignments: assignments || [],
     staffDirectory: staffDirectory || [],
     registeredStaff: registeredStaff || [],
@@ -283,6 +304,13 @@ export async function completeAssessmentRequest(form) {
   return data;
 }
 
+export async function cancelAssessmentRequest(requestId) {
+  const { error } = await supabase.rpc("cancel_resident_assessment_request", {
+    p_request_id: requestId,
+  });
+  fail(error);
+}
+
 export async function markNotificationRead(notificationId) {
   const { error } = await supabase
     .from("resident_notifications")
@@ -354,18 +382,33 @@ export async function uploadRoundCmeQr(sessionId, adminId, file) {
     .from(CME_QR_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
   fail(uploadError);
+  let previousPath;
   try {
-    const { data: previousPath, error } = await supabase.rpc(
+    const { data, error } = await supabase.rpc(
       "set_resident_round_cme_qr",
       { p_session_id: sessionId, p_storage_path: path },
     );
     fail(error);
-    if (previousPath && previousPath !== path)
-      await supabase.storage.from(CME_QR_BUCKET).remove([previousPath]);
-    return path;
+    previousPath = data;
   } catch (error) {
     await supabase.storage.from(CME_QR_BUCKET).remove([path]);
     throw error;
+  }
+  // The new QR is saved. Removing the old image is cleanup only: report a
+  // failure without deleting the new file or failing the upload.
+  if (previousPath && previousPath !== path)
+    await removeCmeQrImage(previousPath);
+  return path;
+}
+
+async function removeCmeQrImage(storagePath) {
+  try {
+    const { error } = await supabase.storage
+      .from(CME_QR_BUCKET)
+      .remove([storagePath]);
+    if (error) throw error;
+  } catch (error) {
+    console.warn(`Could not remove old CME QR image ${storagePath}`, error);
   }
 }
 
@@ -384,12 +427,9 @@ export async function clearRoundCmeQr(sessionId) {
     { p_session_id: sessionId },
   );
   fail(error);
-  if (storagePath) {
-    const { error: removeError } = await supabase.storage
-      .from(CME_QR_BUCKET)
-      .remove([storagePath]);
-    fail(removeError);
-  }
+  // The row is already cleared; a failed image delete must not report the
+  // clear as failed (a retry would then say the QR was not found).
+  if (storagePath) await removeCmeQrImage(storagePath);
 }
 
 export async function openRound(meetingDate, startTime, endTime) {

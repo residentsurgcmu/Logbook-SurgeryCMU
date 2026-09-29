@@ -77,7 +77,7 @@ export function buildDashboard(workspace) {
 
 export function buildExportRecords(workspace) {
   const names = new Map(
-    workspace.profiles.map((profile) => [profile.id, profile]),
+    (workspace.allProfiles || workspace.profiles).map((profile) => [profile.id, profile]),
   );
   const requestsByAssessment = new Map(
     workspace.requests

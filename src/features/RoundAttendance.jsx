@@ -108,8 +108,8 @@ export function RoundAdmin({ user }) {
   }, [selected]);
 
   async function refresh() {
+    const seq = ++refreshSeq.current;
     try {
-      const seq = ++refreshSeq.current;
       const requestedAt = Date.now();
       const [nextData, nextQr] = await Promise.all([loadRoundAdminData(), currentRoundQr()]);
       // Ignore a slower, older response (e.g. the 10 s poll) that finishes
@@ -120,7 +120,7 @@ export function RoundAdmin({ user }) {
       setQr(nextQr);
       if (nextQr) setOffsetMs(new Date(nextQr.server_now).getTime() - requestedAt);
       setError("");
-    } catch (nextError) { if (mounted.current) setError(nextError.message || "โหลดข้อมูลการประชุมไม่สำเร็จ"); }
+    } catch (nextError) { if (mounted.current && seq === refreshSeq.current) setError(nextError.message || "โหลดข้อมูลการประชุมไม่สำเร็จ"); }
   }
   useEffect(() => {
     mounted.current = true;
@@ -302,6 +302,11 @@ export function RoundAdmin({ user }) {
   </div>;
 }
 
+// Check-ins already sent, shared by every mounted copy. The per-instance ref
+// alone let a quick tab switch remount the component and submit the same
+// token again; a remounted copy now waits for the first request instead.
+const roundCheckIns = new Map();
+
 export function RoundCheckIn({ token, onTokenUsed }) {
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
@@ -323,7 +328,10 @@ export function RoundCheckIn({ token, onTokenUsed }) {
         submittedToken.current = token;
         setBusy(true);
         try {
-          const next = await checkInRound(token);
+          // Forget the token once settled so a rescan after a network error
+          // retries; onTokenUsed has cleared the token by then.
+          if (!roundCheckIns.has(token)) roundCheckIns.set(token, checkInRound(token).finally(() => roundCheckIns.delete(token)));
+          const next = await roundCheckIns.get(token);
           if (mounted.current) { setResult(next); setError(""); }
         } catch (nextError) {
           if (mounted.current) setError(roundCheckInErrorMessage(nextError));

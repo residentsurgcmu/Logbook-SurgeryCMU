@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createResidentExam,
   saveResidentExamResults,
@@ -145,7 +145,12 @@ function NewExamForm({ residents, onCreated }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const residentIds = useMemo(() => residents.map((resident) => resident.id), [residents]);
+  // Pre-select everyone once. Refilling an empty selection on every workspace
+  // refresh undid "ยกเลิกทั้งหมด" and silently created the exam for all.
+  const participantsFilled = useRef(false);
   useEffect(() => {
+    if (participantsFilled.current || !residentIds.length) return;
+    participantsFilled.current = true;
     setParticipantIds((current) => (current.length ? current : residentIds));
   }, [residentIds]);
 

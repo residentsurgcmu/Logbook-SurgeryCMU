@@ -20,7 +20,7 @@ const readableDateTime = (value) =>
 export default function ResidentDashboard({ workspace, onNavigateHistory }) {
   const dashboard = useMemo(() => buildDashboard(workspace), [workspace]);
   const names = new Map(
-    workspace.profiles.map((profile) => [profile.id, profile.name]),
+    (workspace.allProfiles || workspace.profiles).map((profile) => [profile.id, profile.name]),
   );
   const role = workspace.user.role;
   const cards =
