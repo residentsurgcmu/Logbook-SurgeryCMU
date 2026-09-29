@@ -1,0 +1,56 @@
+# Resident Surgery EPA/PBA Assessment — notes for Claude
+
+React + Vite front end, Supabase (Postgres + Auth + Edge Functions), hosted on Vercel.
+Supabase project ref `dyiiivcyoatgmkmvgcnt`. GitHub: `residentsurgcmu/Logbook-SurgeryCMU`.
+See `README.md` for features, local run and secrets.
+
+## Commands
+- `npm test` — `node --test tests/*.test.mjs`. Many tests are regex checks on the source
+  and SQL files, so renaming code can fail a test that only guards the text.
+- `npm run build` — Vite build (chunk-size warning is expected).
+- `npm run generate:templates` — regenerate `src/generated/residentTemplates.js` from the
+  DOCX files in `EPA/` and `PBA/`. Never edit the generated file by hand.
+- No local Postgres or Deno: SQL and edge functions cannot be run locally.
+
+## Production rules (Supabase)
+- **Never run `supabase db push`.** The `supabase_migrations` history only records up to
+  20260824042343 while the real schema already has later migrations, so a push would
+  re-run ~39 old migrations, some destructive.
+- Apply a new migration on its own: `supabase db query --linked -f supabase/migrations/<file>.sql`.
+  Check the result with a read-only `select` before and after.
+- Production writes (migrations, function deploys) are blocked for Claude by the auto-mode
+  classifier. The user runs them with the `!` prefix; Claude verifies read-only.
+- Deploy edge functions with `--no-verify-jwt` (there is no `supabase/config.toml`):
+  `supabase functions deploy <name> --project-ref dyiiivcyoatgmkmvgcnt --no-verify-jwt`.
+- **Order matters:** migrations → `resident-assessment-notifier` → `auth-send-email-gmail`
+  → frontend. A new frontend or function that expects a migration must not go out first.
+  Vercel deploys automatically on push to `main`, so run the migration before pushing.
+
+## Design decisions
+- **Criteria are immutable once created.** Signed assessments point at a
+  `resident_template_criteria` row by id. `syncSourceTemplates` (`src/residentApi.js`) uses
+  `planCriteriaSync` (`src/criteriaSync.js`): a changed or moved criterion is retired
+  (`active = false`, text and scores kept) and re-created as a new active row under the same
+  `C{n}` code; nothing is edited in place. Codes are still positional (`C{row}`), so inserting
+  a criterion mid-document retires and re-creates every later one. Code and `sort_order` are
+  unique among **active** rows only (migration `20260929110000`).
+- The signed-assessment history view lists only criteria that have a score on that assessment.
+- Residents never see Staff emails: party RLS on `resident_profiles` is one-way
+  (Staff → Resident); Residents get Staff names through `list_resident_counterpart_staff()`.
+- Email delivery is claimed atomically (`claim_resident_assessment_email_delivery`); pending
+  requests can be cancelled with `cancel_resident_assessment_request`.
+
+## Status log
+- 2026-09-29: code-review fixes (notifications, email claim, cancel request, Staff-email
+  privacy, QR/exam/round races) merged and deployed: migrations `20260929090000` and
+  `20260929100000` applied; notifier v5, auth-send-email-gmail v3.
+- 2026-09-29: positional criterion codes fixed (retire-and-recreate sync,
+  `20260929110000_criteria_unique_active_only.sql`, history-view filter, 12 tests).
+
+## Still open (owner: Chagkrit)
+- Supabase Auth: disable sign-up, or turn on Confirm email.
+- Send one real assessment request to confirm the email reaches Staff, and that a Resident's
+  history shows Staff names.
+
+## Not in git
+Private rosters, `*.xlsx`, `Staff.docx`, `data/`, `.env*`, `.vercel/` are git-ignored on purpose.

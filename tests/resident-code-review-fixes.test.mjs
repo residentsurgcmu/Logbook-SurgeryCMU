@@ -90,7 +90,8 @@ test("assessment deletion closes the gap in attempt numbers", async () => {
 test("workspace scores only active criteria and sync retires removed ones", async () => {
   const api = await read("src/residentApi.js");
   assert.match(api, /criteria: allCriteria\.filter\(\(criterion\) => criterion\.active !== false\)/);
-  assert.match(api, /\.update\(\{ active: false \}\)[\s\S]*?\.not\("criterion_code", "in"/);
+  assert.match(api, /planCriteriaSync\(/);
+  assert.match(api, /\.update\(\{ active: false \}\)\s*\.in\("id", plan\.retire\)/);
   const views = await read("src/features/ResidentAssessmentViews.jsx");
   assert.match(views, /template\?\.allCriteria \|\| template\?\.criteria/);
 });

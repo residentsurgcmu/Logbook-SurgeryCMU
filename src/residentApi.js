@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { residentTemplates } from "./generated/residentTemplates";
 import { fetchAllRows } from "./supabasePaging";
+import { planCriteriaSync } from "./criteriaSync";
 import {
   isJwtIssuedInFutureError,
   normalizeResidentEmail,
@@ -241,27 +242,35 @@ export async function syncSourceTemplates() {
       .select()
       .single();
     fail(error);
-    const criteria = source.criteria.map((criterion) => ({
-      template_id: template.id,
-      criterion_code: criterion.code,
-      section_title: criterion.section,
-      criterion_text: criterion.label,
-      sort_order: criterion.sortOrder,
-      active: true,
-    }));
-    const { error: criteriaError } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("resident_template_criteria")
-      .upsert(criteria, { onConflict: "template_id,criterion_code" });
-    fail(criteriaError);
-    // Criteria removed from the source document stop being required, but are
-    // kept (inactive) so signed assessments still show their original scores.
-    const { error: retireError } = await supabase
-      .from("resident_template_criteria")
-      .update({ active: false })
-      .eq("template_id", template.id)
-      .eq("active", true)
-      .not("criterion_code", "in", `(${source.criteria.map((criterion) => criterion.code).join(",")})`);
-    fail(retireError);
+      .select("id,criterion_code,criterion_text,section_title,sort_order,active")
+      .eq("template_id", template.id);
+    fail(existingError);
+    // Signed assessments reference criteria by id, so text is never edited in
+    // place: a changed or removed criterion is retired (inactive, text and
+    // scores kept) and a changed one is re-created as a new active row.
+    const plan = planCriteriaSync(existing || [], source.criteria);
+    if (plan.retire.length) {
+      const { error: retireError } = await supabase
+        .from("resident_template_criteria")
+        .update({ active: false })
+        .in("id", plan.retire);
+      fail(retireError);
+    }
+    for (const change of plan.update) {
+      const { error: updateError } = await supabase
+        .from("resident_template_criteria")
+        .update({ section_title: change.section_title })
+        .eq("id", change.id);
+      fail(updateError);
+    }
+    if (plan.insert.length) {
+      const { error: insertError } = await supabase
+        .from("resident_template_criteria")
+        .insert(plan.insert.map((criterion) => ({ ...criterion, template_id: template.id })));
+      fail(insertError);
+    }
   }
 }
 

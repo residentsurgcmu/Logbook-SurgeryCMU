@@ -651,10 +651,14 @@ export function AssessmentHistory({
             </thead>
             <tbody>
               {(template?.allCriteria || template?.criteria || [])
+                // Only criteria scored on this assessment: one re-created after
+                // signing is a different row and must not show as unscored.
                 .filter(
                   (criterion) =>
-                    criterion.active !== false ||
                     selected.resident_assessment_scores?.some(
+                      (row) => row.criterion_id === criterion.id,
+                    ) ||
+                    request?.resident_self_assessment_scores?.some(
                       (row) => row.criterion_id === criterion.id,
                     ),
                 )
