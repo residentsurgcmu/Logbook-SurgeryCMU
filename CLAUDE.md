@@ -46,13 +46,13 @@ See `README.md` for features, local run and secrets.
   `20260929100000` applied; notifier v5, auth-send-email-gmail v3.
 - 2026-09-29: positional criterion codes fixed (retire-and-recreate sync,
   `20260929110000_criteria_unique_active_only.sql`, history-view filter, 12 tests).
-- 2026-10-01 (branch `fix/qr-round-multi-session-2026-10-01`, **frontend not merged; migration APPLIED + verified 2026-10-01**):
+- 2026-10-01 (branch `fix/qr-round-multi-session-2026-10-01`, **merged to main as 6b60f46 and deployed on Vercel 2026-10-01; migration applied + verified**):
   QR bug notes 29-9-69/30-9-69. Several MM/Grand Round sessions per date (no overlapping scan
   windows), soft-cancel (`cancel_resident_round_session`, only with 0 attendance), optional
   activity time shown in reports/filenames, all of today's+upcoming sessions listed with a status
   chip, Staff scanner opens the rear camera directly (headless `Html5Qrcode`). Migration
   `20261001090000_round_multi_session_cancel_activity_time.sql` is live (checked with
-  `tests/round-attendance-db.sql`); remaining: click-through in `npm run dev`, iPhone scan, then push.
+  `tests/round-attendance-db.sql`); remaining: click-through on the live site and an iPhone scan test.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.
