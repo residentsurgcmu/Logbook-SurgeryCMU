@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
+import { cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
-import { bangkokIsoDate, roundCheckInErrorMessage, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate } from "../roundSchedule";
+import { ROUND_STATUS_LABELS, bangkokIsoDate, formatRoundTimeRange, roundCheckInErrorMessage, roundScheduleErrorMessage, roundSessionFileKey, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate, validateRoundTimes } from "../roundSchedule";
 
 const thaiTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const thaiDate = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "full", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T00:00:00+07:00`));
 const bangkokDate = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date());
 const thaiHM = (value) => new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const toTimeInputValue = (value) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" }).format(new Date(value));
+const hmOf = (value) => String(value || "").slice(0, 5);
+const EMPTY_SCHEDULE = { date: "", start: "", end: "", activityStart: "", activityEnd: "" };
 const safeCell = (value) => /^[=+@\-\t\r]/.test(String(value || "")) ? `'${value}` : String(value ?? "");
 
 function download(blob, filename) {
@@ -25,6 +27,7 @@ function download(blob, filename) {
 function exportRows(attendance, session) {
   return attendance.filter((row) => row.session_id === session.id).map((row) => [
     session.meeting_date,
+    formatRoundTimeRange(session) || "—",
     row.resident_profiles?.full_name || "—",
     row.resident_profiles?.pgy ? `PGY ${row.resident_profiles.pgy}` : "—",
     row.resident_profiles?.email || "—",
@@ -34,9 +37,9 @@ function exportRows(attendance, session) {
 }
 
 async function exportAttendance(format, attendance, session) {
-  const headers = ["วันที่ประชุม", "ชื่อ", "PGY", "อีเมล", "บทบาท", "Timestamp scan QR (Asia/Bangkok)"];
+  const headers = ["วันที่ประชุม", "เวลา", "ชื่อ", "PGY", "อีเมล", "บทบาท", "Timestamp scan QR (Asia/Bangkok)"];
   const rows = exportRows(attendance, session);
-  const filename = `MM-Grand-Round-${session.meeting_date}`;
+  const filename = `MM-Grand-Round-${roundSessionFileKey(session)}`;
   if (format === "csv") {
     const escape = (value) => `"${safeCell(value).replaceAll('"', '""')}"`;
     const csv = [headers, ...rows].map((row) => row.map(escape).join(",")).join("\r\n");
@@ -49,7 +52,7 @@ async function exportAttendance(format, attendance, session) {
   sheet.addRow(headers);
   for (const row of rows) sheet.addRow(row.map(safeCell));
   sheet.getRow(1).font = { bold: true };
-  sheet.columns = [{ width: 18 }, { width: 32 }, { width: 10 }, { width: 36 }, { width: 15 }, { width: 32 }];
+  sheet.columns = [{ width: 18 }, { width: 26 }, { width: 32 }, { width: 10 }, { width: 36 }, { width: 15 }, { width: 32 }];
   const buffer = await workbook.xlsx.writeBuffer();
   download(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${filename}.xlsx`);
 }
@@ -63,26 +66,34 @@ export function RoundAdmin({ user }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [cmeUrls, setCmeUrls] = useState({});
-  const [scheduleForm, setScheduleForm] = useState({ date: "", start: "", end: "" });
+  const [scheduleForm, setScheduleForm] = useState(EMPTY_SCHEDULE);
   const [editingId, setEditingId] = useState("");
-  const [editForm, setEditForm] = useState({ date: "", start: "", end: "" });
+  const [editForm, setEditForm] = useState(EMPTY_SCHEDULE);
   const [scheduleDateError, setScheduleDateError] = useState("");
   const [editDateError, setEditDateError] = useState("");
   const mounted = useRef(true);
   const refreshSeq = useRef(0);
   const hasInitialPdfDateRange = useRef(false);
-  const openSessions = useMemo(
-    () => data.sessions.filter((item) => !item.closed_at).sort((a, b) => a.meeting_date.localeCompare(b.meeting_date)),
-    [data.sessions],
-  );
+  // Cancelled sessions are kept for history only; they never reach the lists,
+  // the attendance dropdown or the PDF range.
+  const reportSessions = useMemo(() => data.sessions.filter((item) => !item.cancelled_at), [data.sessions]);
+  const attendanceCount = useMemo(() => {
+    const counts = new Map();
+    for (const row of data.attendance) counts.set(row.session_id, (counts.get(row.session_id) || 0) + 1);
+    return counts;
+  }, [data.attendance]);
   const nowMs = Date.now() + offsetMs;
-  const activeSessions = openSessions.filter((item) => roundSessionStatus(item, nowMs) !== "ended");
-  const endedSessions = openSessions.filter((item) => roundSessionStatus(item, nowMs) === "ended").reverse();
   const todayIso = bangkokIsoDate(new Date(nowMs));
+  // Today's and upcoming sessions stay on the left whatever their status, so a
+  // session set earlier is never "lost" (a closed one shows as "ปิดแล้ว").
+  const visibleSessions = reportSessions
+    .filter((item) => item.meeting_date >= todayIso)
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
+  const endedSessions = reportSessions.filter((item) => item.meeting_date < todayIso && !item.closed_at);
   const minMeetingDate = shiftIsoDate(todayIso, -366);
   const maxMeetingDate = shiftIsoDate(todayIso, 366);
   const cmeQrFor = (sessionId) => data.cmeQr.find((item) => item.session_id === sessionId) || null;
-  const selected = data.sessions.find((item) => item.id === selectedId) || data.sessions[0];
+  const selected = reportSessions.find((item) => item.id === selectedId) || reportSessions[0];
   const [pdfDateFrom, setPdfDateFrom] = useState("");
   const [pdfDateTo, setPdfDateTo] = useState("");
   const [roundFilters, setRoundFilters] = useState({ residentId: "", pgy: "" });
@@ -95,8 +106,8 @@ export function RoundAdmin({ user }) {
   const filteredAttendance = useMemo(() => filterRoundAttendance(data.attendance, roundFilters), [data.attendance, roundFilters]);
   const rows = useMemo(() => selected ? filteredAttendance.filter((item) => item.session_id === selected.id) : [], [filteredAttendance, selected]);
   const pdfSessions = useMemo(
-    () => roundSessionsInDateRange(data.sessions, pdfDateFrom, pdfDateTo),
-    [data.sessions, pdfDateFrom, pdfDateTo],
+    () => roundSessionsInDateRange(reportSessions, pdfDateFrom, pdfDateTo),
+    [reportSessions, pdfDateFrom, pdfDateTo],
   );
 
   useEffect(() => {
@@ -116,7 +127,7 @@ export function RoundAdmin({ user }) {
       // after a newer refresh, so it cannot hide a just-created session.
       if (!mounted.current || seq !== refreshSeq.current) return;
       setData(nextData);
-      setSelectedId((previous) => previous || nextData.sessions[0]?.id || "");
+      setSelectedId((previous) => previous || nextData.sessions.find((item) => !item.cancelled_at)?.id || "");
       setQr(nextQr);
       if (nextQr) setOffsetMs(new Date(nextQr.server_now).getTime() - requestedAt);
       setError("");
@@ -153,39 +164,48 @@ export function RoundAdmin({ user }) {
   }, [qr?.token, qr?.valid_until]);
   async function createSchedule(event) {
     event.preventDefault();
-    const dateError = validateRoundMeetingDate(scheduleForm.date, new Date(Date.now() + offsetMs));
+    const dateError = validateRoundMeetingDate(scheduleForm.date, new Date(Date.now() + offsetMs))
+      || validateRoundTimes(scheduleForm);
     setScheduleDateError(dateError);
     if (dateError) return;
     setBusy("open"); setError("");
     try {
-      const id = await openRound(scheduleForm.date, scheduleForm.start, scheduleForm.end);
-      setScheduleForm({ date: "", start: "", end: "" });
+      const id = await openRound(scheduleForm.date, scheduleForm.start, scheduleForm.end, scheduleForm.activityStart, scheduleForm.activityEnd);
+      setScheduleForm(EMPTY_SCHEDULE);
       setSelectedId(id);
       await refresh();
-    } catch (nextError) { setError(nextError.message || "ตั้งตารางสแกนไม่สำเร็จ"); }
+    } catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "ตั้งตารางสแกนไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   function startEdit(session) {
     setError("");
     setEditingId(session.id);
     setEditDateError("");
-    setEditForm({ date: session.meeting_date, start: toTimeInputValue(session.starts_at), end: toTimeInputValue(session.ends_at) });
+    setEditForm({ date: session.meeting_date, start: toTimeInputValue(session.starts_at), end: toTimeInputValue(session.ends_at), activityStart: hmOf(session.activity_start_time), activityEnd: hmOf(session.activity_end_time) });
   }
   async function saveEdit(event) {
     event.preventDefault();
-    const dateError = validateRoundMeetingDate(editForm.date, new Date(Date.now() + offsetMs));
+    const dateError = validateRoundMeetingDate(editForm.date, new Date(Date.now() + offsetMs))
+      || validateRoundTimes(editForm);
     setEditDateError(dateError);
     if (dateError) return;
     setBusy("edit"); setError("");
-    try { await updateRoundSession(editingId, editForm.date, editForm.start, editForm.end); setEditingId(""); await refresh(); }
-    catch (nextError) { setError(nextError.message || "แก้ไขตารางสแกนไม่สำเร็จ"); }
+    try { await updateRoundSession(editingId, editForm.date, editForm.start, editForm.end, editForm.activityStart, editForm.activityEnd); setEditingId(""); await refresh(); }
+    catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "แก้ไขตารางสแกนไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function stop(session) {
-    if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขหรือเปิดใหม่สำหรับวันนั้นไม่ได้อีก`)) return;
+    if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขรอบนี้หรือเปิดสแกนต่อไม่ได้อีก (ถ้าตั้งผิด ให้เลือก "ยกเลิกรอบนี้" แทน)`)) return;
     setBusy("close"); setError("");
     try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
     catch (nextError) { setError(nextError.message || "ปิดการเช็กชื่อไม่สำเร็จ"); }
+    finally { setBusy(""); }
+  }
+  async function cancel(session) {
+    if (!window.confirm(`ยกเลิกรอบของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? รอบนี้จะหยุดรับสแกนทันทีและหายจากรายการ แล้วตั้งรอบใหม่ในช่วงเวลาเดิมได้`)) return;
+    setBusy("cancel"); setError("");
+    try { await cancelRoundSession(session.id); if (qr?.session_id === session.id) setQr(null); if (selectedId === session.id) setSelectedId(""); await refresh(); }
+    catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "ยกเลิกรอบไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function uploadCme(session, event) {
@@ -222,11 +242,16 @@ export function RoundAdmin({ user }) {
     } catch (nextError) { setError(nextError.message || "สร้างไฟล์ PDF ไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
+  const timeFields = (form, setForm) => <>
+    <label>เวลาเริ่มสแกน<input type="time" required value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} /></label>
+    <label>เวลาสิ้นสุดสแกน<input type="time" required value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} /></label>
+    <label>เวลาจัดกิจกรรม เริ่ม (ไม่บังคับ)<input type="time" value={form.activityStart} onChange={(event) => setForm({ ...form, activityStart: event.target.value })} /></label>
+    <label>เวลาจัดกิจกรรม สิ้นสุด (ไม่บังคับ)<input type="time" value={form.activityEnd} onChange={(event) => setForm({ ...form, activityEnd: event.target.value })} /></label>
+  </>;
   const renderEditForm = () => <>
           <form className="round-schedule-form" onSubmit={saveEdit}>
-            <label>วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
-            <label>เวลาเริ่มสแกน<input type="time" required value={editForm.start} onChange={(event) => setEditForm({ ...editForm, start: event.target.value })} /></label>
-            <label>เวลาสิ้นสุดสแกน<input type="time" required value={editForm.end} onChange={(event) => setEditForm({ ...editForm, end: event.target.value })} /></label>
+            <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
+            {timeFields(editForm, setEditForm)}
             <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
             <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button>
           </form>
@@ -237,42 +262,51 @@ export function RoundAdmin({ user }) {
       <h2>MM &amp; Grand Round · เช็กชื่อเข้าประชุม</h2>
       <p>Admin ตั้งวันที่และช่วงเวลาที่ต้องการเปิดรับสแกน QR ล่วงหน้าได้ ไม่จำกัดเฉพาะวันศุกร์หรือเวลา 11:00 น. ระบบจะเปิด-ปิดการสแกนให้อัตโนมัติตามเวลาที่ตั้งไว้</p>
       <form className="round-schedule-form" onSubmit={createSchedule}>
-        <label>วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(scheduleDateError)} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: event.target.value }); setScheduleDateError(""); }} /></label>
-        <label>เวลาเริ่มสแกน<input type="time" required value={scheduleForm.start} onChange={(event) => setScheduleForm({ ...scheduleForm, start: event.target.value })} /></label>
-        <label>เวลาสิ้นสุดสแกน<input type="time" required value={scheduleForm.end} onChange={(event) => setScheduleForm({ ...scheduleForm, end: event.target.value })} /></label>
+        <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(scheduleDateError)} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: event.target.value }); setScheduleDateError(""); }} /></label>
+        {timeFields(scheduleForm, setScheduleForm)}
         <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "open" ? "กำลังบันทึก…" : "ตั้งตารางสแกน"}</button>
       </form>
-      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569)</p>
+      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569) · เวลาจัดกิจกรรม (เช่น 09:00–12:00) จะแสดงในรายงาน ถ้าเว้นว่างจะแสดงช่วงเวลาสแกนแทน · ตั้งได้หลายรอบต่อวัน ถ้าเวลาสแกนไม่ซ้อนกัน</p>
       {scheduleDateError && <p className="form-error" role="alert">{scheduleDateError}</p>}
-      {!activeSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนที่กำลังเปิดหรือรอเปิด ตั้งตารางใหม่ด้านบนได้เลย</p>}
-      {activeSessions.map((session) => {
+      {!visibleSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนของวันนี้หรือวันถัดไป ตั้งตารางใหม่ด้านบนได้เลย</p>}
+      {visibleSessions.map((session) => {
         const isEditing = editingId === session.id;
         const cmeQr = cmeQrFor(session.id);
         const isLiveNow = qr?.session_id === session.id && remaining > 0;
         const status = roundSessionStatus(session, nowMs);
+        const acceptsScans = status === "upcoming" || status === "live";
+        const canEdit = status !== "closed" && status !== "cancelled";
+        const timeLabel = formatRoundTimeRange(session);
         return <section className="round-session-card" key={session.id} aria-labelledby={`round-session-${session.id}`}>
-          <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)}</h3>
-          {!isEditing && <p>สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></p>}
+          <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)} <span className={`round-status-chip round-status-chip-${status}`}>{ROUND_STATUS_LABELS[status]}</span></h3>
+          {!isEditing && <p>{timeLabel && !timeLabel.startsWith("ช่วงสแกน") && <><strong>{timeLabel}</strong> · </>}สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย{canEdit && <> · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></>}</p>}
           {isEditing && renderEditForm()}
           {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
           {!isLiveNow && status === "upcoming" && <p role="status" className="round-status round-status-upcoming">ยังไม่ถึงเวลา · QR จะแสดงอัตโนมัติเมื่อถึง {thaiHM(session.starts_at)} น. ของวันที่ {thaiDate(session.meeting_date)}</p>}
           {!isLiveNow && status === "live" && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน · กำลังโหลด QR…</p>}
           {isLiveNow && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน ถึง {thaiHM(session.ends_at)} น.</p>}
-          <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรับก่อนกำหนดเวลา</button>
-          <section className="round-cme-qr" aria-labelledby={`round-cme-title-${session.id}`}>
+          {status === "ended" && <p role="status" className="round-status">หมดเวลาสแกนแล้ว · ปิดรอบเพื่อยืนยันว่าจบแล้ว หรือแก้เวลาถ้าตั้งผิด</p>}
+          {status === "closed" && <p role="status" className="round-status">ปิดรอบแล้ว · {attendanceCount.get(session.id) || 0} คนเช็กชื่อ</p>}
+          <div className="round-session-actions">
+            {acceptsScans && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรับก่อนกำหนดเวลา</button>}
+            {status === "ended" && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรอบ</button>}
+            {(status === "ended" || status === "closed") && <button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button>}
+            {!attendanceCount.get(session.id) && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => cancel(session)}>{busy === "cancel" ? "กำลังยกเลิก…" : "ยกเลิกรอบนี้"}</button>}
+          </div>
+          {acceptsScans && <section className="round-cme-qr" aria-labelledby={`round-cme-title-${session.id}`}>
             <h4 id={`round-cme-title-${session.id}`}>QR CME สำหรับฉายในห้องประชุม</h4>
             <p>เป็นภาพ QR แยกจาก QR เช็กชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
             {cmeUrls[session.id] && <img src={cmeUrls[session.id]} alt={`QR CME สำหรับวันที่ ${session.meeting_date}`} />}
             <label className="secondary-button cme-upload-control">{busy === `cme-upload-${session.id}` ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={(event) => uploadCme(session, event)} /></label>
             {cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => removeCme(session)}>{busy === `cme-remove-${session.id}` ? "กำลังลบ…" : "ลบ QR CME"}</button>}
-          </section>
+          </section>}
         </section>;
       })}
       {endedSessions.length > 0 && <details className="round-ended-sessions" open={endedSessions.some((session) => session.id === editingId) ? true : undefined}>
         <summary>รอบที่หมดเวลาแล้ว ({endedSessions.length})</summary>
         <p>รอบที่หมดเวลาแต่ยังไม่ได้ปิด แก้ไขวันที่/เวลาได้ (เช่น ตั้งเวลาผิด) หรือปิดรอบเพื่อยืนยันว่าจบแล้ว</p>
         <ul>{endedSessions.map((session) => <li key={session.id}>
-          <span>{thaiDate(session.meeting_date)} · {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น.</span>
+          <span>{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
           <span className="round-ended-actions">
             <button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button>
             <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button>
@@ -285,7 +319,7 @@ export function RoundAdmin({ user }) {
     </section>
     <section className="resident-panel">
       <h2>รายชื่อผู้เข้าประชุม</h2>
-      <label>วันที่ประชุม<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{data.sessions.map((item) => <option key={item.id} value={item.id}>{thaiDate(item.meeting_date)}</option>)}</select></label>
+      <label>วันที่ประชุม<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{reportSessions.map((item) => <option key={item.id} value={item.id}>{thaiDate(item.meeting_date)}{formatRoundTimeRange(item) ? ` · ${formatRoundTimeRange(item)}` : ""}</option>)}</select></label>
       <div className="round-filter-grid"><label>ชั้นปี (PGY)<select value={roundFilters.pgy} onChange={(event) => { const pgy = event.target.value; const chosen = roundResidents.find((resident) => resident.id === roundFilters.residentId); setRoundFilters({ pgy, residentId: chosen && pgy && Number(chosen.pgy) !== Number(pgy) ? "" : roundFilters.residentId }); }}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select></label><label>Resident<select value={roundFilters.residentId} onChange={(event) => setRoundFilters({ ...roundFilters, residentId: event.target.value })}><option value="">Resident ทุกคน</option>{residentsForPgy.map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label></div>
       {selected && <div className="round-export"><span>{rows.length} คน</span><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("csv")}>ดาวน์โหลด CSV</button><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("xlsx")}>ดาวน์โหลด Excel</button></div>}
       <section className="round-pdf-export" aria-labelledby="round-pdf-title">

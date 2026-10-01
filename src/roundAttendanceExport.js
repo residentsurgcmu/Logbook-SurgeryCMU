@@ -2,6 +2,7 @@
 // separates a vowel or tone mark from its consonant.
 import { wrapText } from "./residentExport.js";
 import { createZip } from "./zipStore.js";
+import { formatRoundTimeRange, roundSessionFileKey } from "./roundSchedule.js";
 
 const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 const A4_LANDSCAPE = [841.89, 595.28];
@@ -42,7 +43,7 @@ function download(blob, filename) {
 export function roundSessionsInDateRange(sessions, dateFrom, dateTo) {
   return [...sessions]
     .filter((session) => (!dateFrom || session.meeting_date >= dateFrom) && (!dateTo || session.meeting_date <= dateTo))
-    .sort((left, right) => left.meeting_date.localeCompare(right.meeting_date));
+    .sort((left, right) => left.meeting_date.localeCompare(right.meeting_date) || String(left.starts_at || "").localeCompare(String(right.starts_at || "")));
 }
 
 export function filterRoundAttendance(attendance, filters = {}) {
@@ -114,7 +115,8 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
   };
 
   const drawSessionHeading = (session, count, continued = false) => {
-    const text = `${continued ? "ต่อเนื่อง · " : ""}${thaiDate(session.meeting_date)} · ผู้เช็กชื่อ ${count} คน`;
+    const time = formatRoundTimeRange(session);
+    const text = `${continued ? "ต่อเนื่อง · " : ""}${thaiDate(session.meeting_date)}${time ? ` · ${time}` : ""} · ผู้เช็กชื่อ ${count} คน`;
     page.drawText(text, { x: PAGE_LEFT, y, size: 11, font, color: ink });
     y -= 17;
     drawTableHeader();
@@ -187,8 +189,9 @@ export async function exportRoundAttendancePdf({ sessions, attendance, splitByDa
   if (splitByDate) {
     const files = [];
     for (const session of sessions) {
-      const bytes = await createRoundAttendancePdf([session], attendance, `วันที่ประชุม: ${thaiDate(session.meeting_date)}`);
-      files.push({ name: `${safeFilename(`MM-Grand-Round-${session.meeting_date}`)}.pdf`, data: bytes });
+      const time = formatRoundTimeRange(session);
+      const bytes = await createRoundAttendancePdf([session], attendance, `วันที่ประชุม: ${thaiDate(session.meeting_date)}${time ? ` · ${time}` : ""}`);
+      files.push({ name: `${safeFilename(`MM-Grand-Round-${roundSessionFileKey(session)}`)}.pdf`, data: bytes });
     }
     if (files.length === 1) {
       download(new Blob([files[0].data], { type: "application/pdf" }), files[0].name);

@@ -351,7 +351,8 @@ export async function loadRoundAdminData() {
   const pageSize = 500;
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase.from("resident_round_sessions")
-      .select("id,meeting_date,starts_at,ends_at,opened_at,closed_at").order("meeting_date", { ascending: false })
+      .select("id,meeting_date,starts_at,ends_at,activity_start_time,activity_end_time,opened_at,closed_at,cancelled_at")
+      .order("meeting_date", { ascending: false }).order("starts_at", { ascending: false }).order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
     fail(error);
     sessions.push(...(data || []));
@@ -441,23 +442,32 @@ export async function clearRoundCmeQr(sessionId) {
   if (storagePath) await removeCmeQrImage(storagePath);
 }
 
-export async function openRound(meetingDate, startTime, endTime) {
+export async function openRound(meetingDate, startTime, endTime, activityStart = "", activityEnd = "") {
   const { data, error } = await supabase.rpc("open_resident_round", {
     p_meeting_date: meetingDate,
     p_start_time: startTime,
     p_end_time: endTime,
+    p_activity_start: activityStart || null,
+    p_activity_end: activityEnd || null,
   });
   fail(error);
   return data;
 }
 
-export async function updateRoundSession(sessionId, meetingDate, startTime, endTime) {
+export async function updateRoundSession(sessionId, meetingDate, startTime, endTime, activityStart = "", activityEnd = "") {
   const { error } = await supabase.rpc("update_resident_round_session", {
     p_session_id: sessionId,
     p_meeting_date: meetingDate,
     p_start_time: startTime,
     p_end_time: endTime,
+    p_activity_start: activityStart || null,
+    p_activity_end: activityEnd || null,
   });
+  fail(error);
+}
+
+export async function cancelRoundSession(sessionId) {
+  const { error } = await supabase.rpc("cancel_resident_round_session", { p_session_id: sessionId });
   fail(error);
 }
 

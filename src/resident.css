@@ -20,7 +20,14 @@ button,input,textarea,select { font:inherit; }
 .resident-app nav button { flex:0 0 auto; }
 .round-layout { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr); gap:20px; align-items:start; }
 .round-admin-panel > p { color:var(--resident-muted); line-height:1.6; }
-.round-schedule-form { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) auto; gap:12px; align-items:end; margin:14px 0; }
+.round-schedule-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:end; margin:14px 0; }
+.round-schedule-form .round-form-wide,.round-schedule-form > button:last-of-type:only-of-type { grid-column:1/-1; }
+.round-schedule-form > button { justify-self:start; }
+.round-status-chip { display:inline-block; margin-left:8px; padding:2px 10px; border-radius:999px; background:#e8efe9; color:var(--resident-muted); font-size:12px; font-weight:700; vertical-align:middle; }
+.round-status-chip-live { background:#d7f0dc; color:var(--resident-green); }
+.round-status-chip-upcoming { background:#e3ecfb; color:#2c4f8f; }
+.round-status-chip-ended { background:#fdf0d5; color:#7a5412; }
+.round-session-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:6px; }
 .round-schedule-form label { display:grid; gap:4px; font-size:13px; color:var(--resident-muted); }
 .round-schedule-form input { padding:9px 10px; border:1px solid var(--resident-line); border-radius:8px; font:inherit; }
 @media (max-width:700px) { .round-schedule-form { grid-template-columns:1fr; } }
