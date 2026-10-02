@@ -85,10 +85,10 @@ Bucket `resident-case-media`: private, `file_size_limit` 5242880, mime `image/jp
 
 ## 6. การเขียนข้อมูลและกัน race
 
-- INSERT/UPDATE ตรงผ่าน RLS ได้ แต่ **trigger** ตั้ง `created_by`, `updated_by`, `updated_at`, `case_code` ฝั่ง server และห้ามเปลี่ยน `created_by`/`case_code` หลังสร้าง
+- **ทุกการเขียนผ่าน RPC แบบ SECURITY DEFINER** (สร้าง/แก้/soft delete เคส, เพิ่ม/ลบภาพ, เพิ่ม/แก้/ลบโน้ต) โดย `authenticated` มีสิทธิ์ SELECT อย่างเดียวบนตารางใหม่ (กรองด้วย RLS) ไม่มี policy หรือ grant สำหรับ INSERT/UPDATE/DELETE ตรง ฟังก์ชันตรวจ role ตามข้อ 4 และประทับ `created_by`, `updated_by`, `updated_at`, `case_code` ฝั่ง server เอง (client ส่งมาไม่ได้)
 - RPC `update_resident_admission_case(p_case_id, p_expected_updated_at, ...)` ใช้สำหรับแก้ไข/เปลี่ยนสถานะ: ถ้า `updated_at` ไม่ตรงกับที่ client เห็น คืน error ให้ UI โหลดใหม่ (กันเขียนทับกัน)
 - RPC `admin_purge_resident_admission_case(p_case_id)` ลบถาวรเคส + แถวภาพ/โน้ต และคืน storage_path ที่ต้องลบ (frontend ลบ object แล้ว) เฉพาะ Admin
-- soft delete เคส = UPDATE `deleted_at` โดยผู้มีสิทธิ์ตามข้อ 4 (ไม่มี DELETE policy ตรง)
+- soft delete เคส = RPC `soft_delete_resident_admission_case` ตามสิทธิ์ข้อ 4 (ตรวจ `updated_at` เหมือนการแก้)
 
 ## 7. ความเป็นส่วนตัว
 

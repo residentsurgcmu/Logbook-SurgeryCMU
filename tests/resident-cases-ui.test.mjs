@@ -58,3 +58,18 @@ test("conference loads one Mon-Fri week, guards stale loads, and shows notes per
   assert.match(ui, /initialCase/);
   assert.doesNotMatch(ui, /<header[\s>]/);
 });
+
+test("both new tabs are wired for every role and present-case jumps to the conference", async () => {
+  const shell = await read("src/features/ResidentPlatform.jsx");
+  assert.match(shell, /import ResidentCases from "\.\/ResidentCases"/);
+  assert.match(shell, /import ResidentConference from "\.\/ResidentConference"/);
+  assert.match(shell, /nav\.push\(\["cases", "New admissions"\], \["conference", "ประชุมวันศุกร์"\]\)/);
+  assert.match(shell, /cases: "New admissions"/);
+  assert.match(shell, /conference: "ประชุมวันศุกร์"/);
+  assert.match(shell, /tab === "cases"/);
+  assert.match(shell, /tab === "conference"/);
+  assert.match(shell, /setPresentCase\(/);
+  // Not role-gated: the push sits at function level (2-space indent) right after
+  // the gated attendance push, not as that `if`'s body (4-space indent).
+  assert.match(shell, /\]\);\n  nav\.push\(\["cases", "New admissions"\]/);
+});

@@ -19,6 +19,8 @@ import {
   StaffEvaluationForm,
 } from "./ResidentAssessmentViews";
 import ResidentExams from "./ResidentExams";
+import ResidentCases from "./ResidentCases";
+import ResidentConference from "./ResidentConference";
 import ResidentExportCenter from "./ResidentExportCenter";
 import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
 import { parseRoundToken } from "../roundSchedule";
@@ -728,6 +730,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   }, [tab]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [historyFocus, setHistoryFocus] = useState("completed");
+  const [presentCase, setPresentCase] = useState(null);
   const unreadCount = useMemo(
     () => workspace.notifications.filter((item) => !item.read_at).length,
     [workspace.notifications],
@@ -749,6 +752,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     );
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
     nav.push(["attendance", "เช็กชื่อประชุม"]);
+  nav.push(["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"]);
   nav.push([
     "notifications",
     `Notification${unreadCount ? ` (${unreadCount})` : ""}`,
@@ -773,6 +777,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     attendance: "เช็กชื่อ MM & Grand Round",
     "round-admin": "MM & Grand Round",
     exams: workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "การสอบ",
+    cases: "New admissions",
+    conference: "ประชุมวันศุกร์",
   };
   async function readNotification(id) {
     await markNotificationRead(id);
@@ -807,6 +813,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
             className={tab === id ? "active" : ""}
             aria-current={tab === id ? "page" : undefined}
             onClick={() => {
+              if (id === "conference" && tab !== "conference") setPresentCase(null);
               setTab(id);
               setSelectedRequest(null);
             }}
@@ -833,6 +840,16 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
               setTab("history");
             }}
           />
+        ) : tab === "cases" ? (
+          <ResidentCases
+            user={workspace.user}
+            onPresent={(row) => {
+              setPresentCase(row);
+              setTab("conference");
+            }}
+          />
+        ) : tab === "conference" ? (
+          <ResidentConference key={presentCase?.id || "week"} user={workspace.user} initialCase={presentCase} />
         ) : tab === "export" ? (
           <ResidentExportCenter workspace={workspace} />
         ) : tab === "round-admin" ? (
