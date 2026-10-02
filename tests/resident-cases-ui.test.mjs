@@ -129,3 +129,32 @@ test("the case detail has a visible upload button at the top of the images secti
   assert.match(css, /\.case-file-input \{[^}]*opacity:0/);
   assert.match(css, /\.case-upload-button:focus-within/);
 });
+
+test("the case form has present illness, vital signs and physical examination in clinical order", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  const dx = ui.indexOf(">Diagnosis<");
+  const pi = ui.indexOf("Present illness<");
+  const vitals = ui.indexOf("CASE_VITALS.map((vital) =>");
+  const pe = ui.indexOf("Physical examination<");
+  const management = ui.indexOf(">Management<");
+  assert.ok(dx > 0 && pi > dx && vitals > pi && pe > vitals && management > pe, "fields out of clinical order");
+  assert.match(ui, /inputMode="decimal"/);
+});
+
+test("case detail and conference show the clinical fields", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /formatVitals\(row\)/);
+  const conference = await read("src/features/ResidentConference.jsx");
+  assert.match(conference, /formatVitals\(current\)/);
+  assert.match(conference, /Present illness/);
+  assert.match(conference, /Physical examination/);
+});
+
+test("Admin sees a permanent delete button for each image; uploaders keep the soft delete", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /user\.role === "admin" \?/);
+  assert.match(ui, /purgeCaseMedia\(item\.id\)/);
+  assert.match(ui, /ลบถาวร/);
+  assert.match(ui, /deleteCaseMedia\(item\.id\)/);
+  assert.match(ui, /className="danger-button case-media-delete"/);
+});

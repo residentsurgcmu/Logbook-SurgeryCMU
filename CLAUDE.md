@@ -63,9 +63,13 @@ See `README.md` for features, local run and secrets.
   picking in the case form + visible upload button (phase-1 upload was undiscoverable, no storage request was ever made);
   PowerPoint export per case and per week (`src/casePptx.js`, pptxgenjs lazy-loaded); user name in the header.
   `package.json` "latest" deps pinned to the lockfile versions so adding pptxgenjs did not upgrade React/Vite.
-- 2026-10-02 (branch `feat/sidebar-shell`): sidebar shell (grouped nav in `src/navGroups.js`, glass sidebar + top bar,
+- 2026-10-02 (PR #3 merged as bf901db, **deployed**): sidebar shell (grouped nav in `src/navGroups.js`, glass sidebar + top bar,
   phone drawer; page content unchanged, records stay on opaque panels) and Excel export of admissions by admit-date
   range (`src/caseExcel.js` + `src/caseExcelExport.js`, exceljs lazy-loaded). No migration needed.
+- 2026-10-03 (branch `feat/case-clinical-fields`, **not yet deployed**): present illness, vital signs (separate numeric
+  columns with CHECK ranges), physical examination; Admin permanent image delete (`admin_purge_resident_case_media`).
+  Migration `20261003090000_resident_case_clinical_fields.sql` is backward compatible (new RPC params have defaults;
+  `p_set_clinical` stops an old browser tab from wiping clinical fields on edit). Shown in detail, conference, PPTX, Excel.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.

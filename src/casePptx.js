@@ -1,6 +1,6 @@
 // PowerPoint export for admission cases. Slide building is pure (tested in Node);
 // pptxgenjs is loaded only when the user actually exports.
-import { caseSexLabel, caseStatusLabel } from "./residentCases.js";
+import { caseSexLabel, caseStatusLabel, formatVitals } from "./residentCases.js";
 
 const FONT = "Tahoma"; // ships with Windows and macOS and renders Thai
 const GREEN = "155426";
@@ -30,6 +30,18 @@ export function buildCaseSlides(row, { people = [], media = [], notes = [], incl
       ["Owner", nameOf(people, row.owner_id)],
     ],
   }];
+  const vitals = formatVitals(row);
+  if (row.present_illness || vitals || row.physical_exam) {
+    slides.push({
+      kind: "clinical",
+      title: `History & Examination · ${row.case_code}`,
+      lines: [
+        ["Present illness", row.present_illness || "ยังไม่ระบุ"],
+        ["Vital signs", vitals || "ยังไม่ระบุ"],
+        ["Physical examination", row.physical_exam || "ยังไม่ระบุ"],
+      ],
+    });
+  }
   media.forEach((item, index) => {
     if (item.image) slides.push({ kind: "image", title, caption: item.caption || `ภาพที่ ${index + 1}`, image: item.image });
   });
@@ -85,7 +97,7 @@ export function renderSlides(pptx, slides) {
       continue;
     }
     addTitle(slide, spec.title);
-    if (spec.kind === "case") {
+    if (spec.kind === "case" || spec.kind === "clinical") {
       slide.addTable(
         spec.lines.map(([label, value]) => [
           { text: label, options: { bold: true, color: MUTED } },
