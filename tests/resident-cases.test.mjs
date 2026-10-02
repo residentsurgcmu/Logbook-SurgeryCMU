@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CASE_IMAGE_MAX_EDGE,
+  CASE_UNITS,
   canDeleteCase,
   canDeleteMedia,
   canDeleteNote,
@@ -169,4 +170,10 @@ test("deleted cases are read-only for everyone", () => {
 
 test("a deactivated-owner error is shown in Thai", () => {
   assert.match(caseErrorMessage(new Error("Owner must be an active Resident")), /ต้องเป็น Resident/);
+});
+
+test("units are the five department units", () => {
+  assert.deepEqual(CASE_UNITS, ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"]);
+  assert.match(validateCaseForm({ ...good, unit_name: "General surgery" }, NOW), /หน่วย/);
+  assert.equal(validateCaseForm({ ...good, unit_name: "B&E" }, NOW), "");
 });

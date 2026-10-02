@@ -1,7 +1,7 @@
 // Pure helpers for New admissions + Friday conference (kept separate for tests).
 import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 
-export const CASE_UNITS = ["Upper GI", "General surgery", "HBP"];
+export const CASE_UNITS = ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"];
 export const CASE_SEXES = [["male", "ชาย"], ["female", "หญิง"], ["unspecified", "ไม่ระบุ"]];
 export const CASE_STATUSES = [["admit", "Admit"], ["discharged", "Discharged"], ["pending_update", "รออัปเดต"]];
 export const CASE_LIMITS = { diagnosis: 180, management: 1000, operation: 180, caption: 200, note: 2000 };
