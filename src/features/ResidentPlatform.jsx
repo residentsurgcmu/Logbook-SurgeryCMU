@@ -24,6 +24,25 @@ import ResidentConference from "./ResidentConference";
 import ResidentExportCenter from "./ResidentExportCenter";
 import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
 import { parseRoundToken } from "../roundSchedule";
+import { groupNav } from "../navGroups";
+import {
+  BedIcon,
+  BellIcon,
+  BookIcon,
+  CalendarIcon,
+  CheckIcon,
+  ClipboardIcon,
+  DownloadIcon,
+  FileIcon,
+  HomeIcon,
+  KeyIcon,
+  MenuIcon,
+  MicIcon,
+  PlusIcon,
+  QrIcon,
+  ScanIcon,
+  XIcon,
+} from "../components/Icons";
 import {
   parseResidentQrToken,
   ResidentQrCard,
@@ -713,6 +732,23 @@ function Admin({ workspace, onRefresh }) {
   );
 }
 
+const navIcons = {
+  request: PlusIcon,
+  pending: ClipboardIcon,
+  scan: ScanIcon,
+  dashboard: HomeIcon,
+  qr: QrIcon,
+  history: BookIcon,
+  cases: BedIcon,
+  conference: MicIcon,
+  attendance: CheckIcon,
+  "round-admin": CalendarIcon,
+  notifications: BellIcon,
+  exams: FileIcon,
+  export: DownloadIcon,
+  admin: KeyIcon,
+};
+
 export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   const routeToken = parseResidentQrToken(window.location.pathname);
   // Read the attendance token once. RoundCheckIn clears it (and the URL) after
@@ -722,12 +758,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   const initialTab =
     workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
   const [tab, setTab] = useState(initialTab);
-  const navRef = useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
-    const nav = navRef.current;
-    const active = nav?.querySelector('[aria-current="page"]');
-    if (nav && active) nav.scrollTo({ left: active.offsetLeft - nav.offsetLeft - (nav.clientWidth - active.clientWidth) / 2, behavior: "smooth" });
-  }, [tab]);
+    if (!menuOpen) return undefined;
+    const onKey = (event) => { if (event.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [historyFocus, setHistoryFocus] = useState("completed");
   const [presentCase, setPresentCase] = useState(null);
@@ -789,40 +826,58 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     setTab("pending");
   };
   return (
-    <div className="resident-app">
-      <header>
-        <div className="resident-brand">
+    <div className="resident-app app-shell-v2">
+      <aside className={`app-sidebar${menuOpen ? " open" : ""}`} aria-label="เมนูหลัก">
+        <div className="app-sidebar-brand">
           <img src="/surgery-cmu-logo.png" alt="Surgery CMU" />
           <div>
-            <strong>Resident Surgery Assessment</strong>
-            <span>EPA · PBA · ภาควิชาศัลยศาสตร์ มหาวิทยาลัยเชียงใหม่</span>
+            <strong>Resident Surgery</strong>
+            <span>ภาควิชาศัลยศาสตร์ มช.</span>
+          </div>
+          <button type="button" className="icon-button app-menu-close" onClick={() => setMenuOpen(false)} aria-label="ปิดเมนู"><XIcon /></button>
+        </div>
+        <nav className="app-nav" aria-label="เมนู Resident Surgery Assessment">
+          {groupNav(nav).map(([group, items]) => (
+            <div className="app-nav-group" key={group}>
+              <div className="app-nav-title">{group}</div>
+              {items.map(([id, label]) => {
+                const Icon = navIcons[id] || FileIcon;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={tab === id ? "active" : ""}
+                    aria-current={tab === id ? "page" : undefined}
+                    onClick={() => {
+                      if (id === "conference" && tab !== "conference") setPresentCase(null);
+                      setTab(id);
+                      setSelectedRequest(null);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <Icon size={19} />
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="app-sidebar-foot">EPA · PBA · New admissions<br />ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</div>
+      </aside>
+      {menuOpen && <div className="app-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      <div className="app-workspace">
+        <div className="app-topbar">
+          <button type="button" className="icon-button app-menu-button" onClick={() => setMenuOpen(true)} aria-label="เปิดเมนู" aria-expanded={menuOpen}><MenuIcon /></button>
+          <div className="app-crumb">Resident Surgery <span>/ {titles[tab]}</span></div>
+          <div className="app-user">
+            <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
+            <span className="role-chip">{roleLabel[workspace.user.role]}</span>
+            <button className="text-button" type="button" onClick={onLogout}>
+              ออกจากระบบ
+            </button>
           </div>
         </div>
-        <div>
-          <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
-          <span className="role-chip">{roleLabel[workspace.user.role]}</span>
-          <button className="text-button" type="button" onClick={onLogout}>
-            ออกจากระบบ
-          </button>
-        </div>
-      </header>
-      <nav ref={navRef} aria-label="เมนู Resident Surgery Assessment">
-        {nav.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={tab === id ? "active" : ""}
-            aria-current={tab === id ? "page" : undefined}
-            onClick={() => {
-              if (id === "conference" && tab !== "conference") setPresentCase(null);
-              setTab(id);
-              setSelectedRequest(null);
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
       <main>
         <div className="page-heading">
           <div>
@@ -916,6 +971,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         ข้อมูลการประเมินใช้เพื่อการศึกษาและการพัฒนาวิชาชีพ
         ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย
       </footer>
+      </div>
     </div>
   );
 }
