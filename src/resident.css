@@ -593,3 +593,4 @@ body { background: #f3f7f4; }
   .app-sidebar, .app-topbar, .app-scrim { display:none !important; }
   .app-shell-v2 { display:block; padding:0; background:#fff; }
 }
+.case-presets { margin-bottom:12px; }

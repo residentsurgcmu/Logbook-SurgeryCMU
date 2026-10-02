@@ -177,6 +177,26 @@ export async function loadCaseNotes(caseId) {
   return data || [];
 }
 
+// Notes for many cases (Excel export). Chunked so the PostgREST URL stays short.
+export async function loadCaseNotesForCases(caseIds) {
+  const notes = [];
+  for (let start = 0; start < caseIds.length; start += 100) {
+    const chunk = caseIds.slice(start, start + 100);
+    const { data, error } = await fetchAllRows(() =>
+      supabase
+        .from("resident_case_notes")
+        .select("id,case_id,author_id,body,created_at,edited_at")
+        .in("case_id", chunk)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true })
+        .order("id"),
+    );
+    fail(error);
+    notes.push(...(data || []));
+  }
+  return notes;
+}
+
 export async function addCaseNote(caseId, body) {
   const { data, error } = await supabase.rpc("add_resident_case_note", { p_case_id: caseId, p_body: body });
   fail(error);
