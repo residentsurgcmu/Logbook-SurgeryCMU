@@ -58,11 +58,14 @@ See `README.md` for features, local run and secrets.
   `resident_case_notes`, private bucket `resident-case-media`; SELECT-only RLS, every write is a SECURITY DEFINER RPC
   with an `updated_at` optimistic check (`CASE_CONFLICT`). Verified with
   `tests/resident-cases-db.sql` and `tests/resident-cases-rls-rollback.sql`. Spec/plan in `docs/superpowers/`.
-- 2026-10-02 (branch `feat/cases-round2`, **not yet deployed**): units → Upper GI, Colorectal, HPB, B&E, Vascular
+- 2026-10-02 (PR #2 merged as 7354a56, **deployed**; migration applied first): units → Upper GI, Colorectal, HPB, B&E, Vascular
   (migration `20261002120000_resident_case_units.sql`, deletes test case ADM-00002 — run BEFORE the frontend); image
   picking in the case form + visible upload button (phase-1 upload was undiscoverable, no storage request was ever made);
   PowerPoint export per case and per week (`src/casePptx.js`, pptxgenjs lazy-loaded); user name in the header.
   `package.json` "latest" deps pinned to the lockfile versions so adding pptxgenjs did not upgrade React/Vite.
+- 2026-10-02 (branch `feat/sidebar-shell`): sidebar shell (grouped nav in `src/navGroups.js`, glass sidebar + top bar,
+  phone drawer; page content unchanged, records stay on opaque panels) and Excel export of admissions by admit-date
+  range (`src/caseExcel.js` + `src/caseExcelExport.js`, exceljs lazy-loaded). No migration needed.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.

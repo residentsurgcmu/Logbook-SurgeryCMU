@@ -37,3 +37,8 @@ export const TeachingIcon = (props) => <Icon {...props}><path d="M3 5h18v12H3Z" 
 export const AlertIcon = (props) => <Icon {...props}><path d="M12 3 2 21h20Z" /><path d="M12 9v5M12 18h.01" /></Icon>;
 export const ChartIcon = (props) => <Icon {...props}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Icon>;
 export const CertificateIcon = (props) => <Icon {...props}><circle cx="12" cy="9" r="6" /><path d="m8 14-1 7 5-3 5 3-1-7M9.5 9l1.5 1.5L14.5 7" /></Icon>;
+export const HomeIcon = (props) => <Icon {...props}><path d="M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></Icon>;
+export const BedIcon = (props) => <Icon {...props}><path d="M3 18V8M3 14h18v4M21 18v-5a3 3 0 0 0-3-3h-7v4" /><circle cx="7" cy="11" r="1.5" /></Icon>;
+export const BellIcon = (props) => <Icon {...props}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21h4" /></Icon>;
+export const MicIcon = (props) => <Icon {...props}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></Icon>;
+export const MenuIcon = (props) => <Icon {...props}><path d="M3 6h18M3 12h18M3 18h18" /></Icon>;

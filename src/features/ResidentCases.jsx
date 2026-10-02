@@ -28,6 +28,8 @@ import {
   uploadCaseImages,
 } from "../residentCasesApi";
 import { exportCaseDeck } from "../casePptxExport";
+import { caseExportRange, filterCasesForExport, validateExportRange } from "../caseExcel";
+import { exportCasesExcel } from "../caseExcelExport";
 import { CaseModal, CaseStatusChip, PrivacyNotice, personName, thaiDate, thaiDateTime } from "./CaseParts";
 
 const emptyForm = (user) => ({
@@ -276,6 +278,65 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
   );
 }
 
+const EXPORT_PRESETS = [["week", "สัปดาห์นี้"], ["month", "เดือนนี้"], ["last-month", "เดือนที่แล้ว"], ["custom", "กำหนดเอง"]];
+
+function ExcelExportDialog({ cases, people, onClose }) {
+  const [preset, setPreset] = useState("month");
+  const [range, setRange] = useState(() => caseExportRange("month"));
+  const [unit, setUnit] = useState("all");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const problem = validateExportRange(range.from, range.to);
+  const rows = problem ? [] : filterCasesForExport(cases || [], { ...range, unit });
+  const choose = (key) => {
+    setPreset(key);
+    if (key !== "custom") setRange(caseExportRange(key));
+  };
+  const setDate = (key) => (event) => {
+    setPreset("custom");
+    setRange((current) => ({ ...current, [key]: event.target.value }));
+  };
+  async function download() {
+    if (busy || problem || !rows.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      await exportCasesExcel(rows, people, { ...range, unit });
+      onClose();
+    } catch (nextError) {
+      setError(caseErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="case-form">
+      <p className="case-muted">เลือกช่วงวันที่รับ (admit date) · ไฟล์มี 2 ชีต: รายการเคส และข้ออภิปราย · ไม่รวมเคสที่ถูกลบ</p>
+      <div className="button-row case-presets">
+        {EXPORT_PRESETS.map(([key, label]) => (
+          <button key={key} type="button" className={preset === key ? "primary-button" : "secondary-button"} aria-pressed={preset === key} onClick={() => choose(key)}>{label}</button>
+        ))}
+      </div>
+      <div className="case-grid">
+        <label>ตั้งแต่วันที่<input type="date" value={range.from} onChange={setDate("from")} /></label>
+        <label>ถึงวันที่<input type="date" value={range.to} onChange={setDate("to")} /></label>
+        <label className="case-full">หน่วย
+          <select value={unit} onChange={(event) => setUnit(event.target.value)}>
+            <option value="all">ทุกหน่วย</option>
+            {CASE_UNITS.map((name) => <option key={name}>{name}</option>)}
+          </select>
+        </label>
+      </div>
+      {(problem || error) && <p className="form-error" role="alert">{problem || error}</p>}
+      {!problem && <p className="case-muted">พบ {rows.length} เคสในช่วงนี้</p>}
+      <div className="button-row case-actions">
+        <button type="button" className="secondary-button" onClick={onClose}>ยกเลิก</button>
+        <button type="button" className="primary-button" disabled={busy || Boolean(problem) || !rows.length} onClick={download}>{busy ? "กำลังสร้างไฟล์…" : "ดาวน์โหลด .xlsx"}</button>
+      </div>
+    </div>
+  );
+}
+
 export default function ResidentCases({ user, onPresent }) {
   const [cases, setCases] = useState(null);
   const [people, setPeople] = useState([]);
@@ -316,7 +377,10 @@ export default function ResidentCases({ user, onPresent }) {
     <section className="resident-panel">
       <div className="panel-title-row">
         <div><h2>เคสรับใหม่ของภาควิชา</h2><p>ทุกคนที่ active เห็นเคสร่วมกัน · ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</p></div>
-        <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
+        <div className="button-row">
+          <button type="button" className="secondary-button" disabled={!cases?.length} onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
+          <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
+        </div>
       </div>
       {error && <p className="form-error" role="alert">{error} <button type="button" className="link-button" onClick={load}>ลองใหม่</button></p>}
       <div className="case-stats">
@@ -354,6 +418,11 @@ export default function ResidentCases({ user, onPresent }) {
       {dialog?.type === "form" && (!dialog.id || current) && (
         <CaseModal title={dialog.id ? `แก้ไข ${current.case_code}` : "เพิ่มเคสใหม่"} onClose={() => setDialog(null)}>
           <CaseForm user={user} people={people} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
+        </CaseModal>
+      )}
+      {dialog?.type === "excel" && (
+        <CaseModal title="Export Excel · New admissions" onClose={() => setDialog(null)}>
+          <ExcelExportDialog cases={cases} people={people} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
       {dialog?.type === "detail" && current && (
