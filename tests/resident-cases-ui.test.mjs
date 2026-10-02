@@ -46,3 +46,15 @@ test("notes use the append-only RPC helpers and reload after each action", async
   assert.match(parts, /canDeleteNote\(user, /);
   assert.match(parts, /seq\.current/);
 });
+
+test("conference loads one Mon-Fri week, guards stale loads, and shows notes per case", async () => {
+  const ui = await read("src/features/ResidentConference.jsx");
+  assert.match(ui, /conferenceWeek\(/);
+  assert.match(ui, /loadAdmissionCases\(\{ from: week\.start, to: week\.end \}\)/);
+  assert.match(ui, /shiftIsoDate\(weekStart, -7\)/);
+  assert.match(ui, /shiftIsoDate\(weekStart, 7\)/);
+  assert.match(ui, /seq\.current/);
+  assert.match(ui, /<CaseNotes key=\{current\.id\}/);
+  assert.match(ui, /initialCase/);
+  assert.doesNotMatch(ui, /<header[\s>]/);
+});
