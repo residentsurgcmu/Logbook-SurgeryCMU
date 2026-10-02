@@ -95,3 +95,11 @@ test("conference includes weekend admissions and never silently shows the wrong 
   assert.match(ui, /conferenceWeekForCase\(initialCase/);
   assert.match(ui, /ไม่พบเคสที่เลือก/);
 });
+
+test("header shows the signed-in user's full name next to the role", async () => {
+  const shell = await read("src/features/ResidentPlatform.jsx");
+  assert.match(shell, /<span className="header-user-name"[^>]*>\{workspace\.user\.name\}<\/span>/);
+  assert.match(shell, /title=\{workspace\.user\.name\}/);
+  const css = await read("src/resident.css");
+  assert.match(css, /\.header-user-name \{[^}]*text-overflow:ellipsis/);
+});

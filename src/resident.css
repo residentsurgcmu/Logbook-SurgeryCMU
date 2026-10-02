@@ -537,3 +537,5 @@ body { background: #f3f7f4; }
 .case-check input { width:auto !important; }
 .case-row-deleted { opacity:.6; }
 .case-status-deleted { background:#fde8e8; color:#9c2626; }
+.header-user-name { display:inline-block; max-width:28ch; margin-right:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; font-weight:700; }
+@media (max-width:560px) { .header-user-name { max-width:14ch; } }
