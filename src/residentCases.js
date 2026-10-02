@@ -43,12 +43,12 @@ export function validateCaseForm(form, at = new Date()) {
 
 // UI gating only; the RPCs enforce the same rules on the server.
 export function canEditCase(user, row) {
-  if (!user || !row) return false;
+  if (!user || !row || row.deleted_at) return false;
   if (user.role === "staff" || user.role === "admin") return true;
   return user.role === "resident" && (row.created_by === user.id || row.owner_id === user.id);
 }
 export function canDeleteCase(user, row) {
-  if (!user || !row) return false;
+  if (!user || !row || row.deleted_at) return false;
   return user.role === "admin" || (user.role === "resident" && row.created_by === user.id);
 }
 export const canDeleteMedia = (user, media) => Boolean(user && media) && (user.role === "admin" || media.created_by === user.id);
@@ -63,6 +63,21 @@ export function conferenceWeek(iso) {
   const day = new Date(ms).getUTCDay(); // 0 = Sunday
   const start = shiftIsoDate(iso, day === 0 ? -6 : 1 - day);
   return { start, end: shiftIsoDate(start, 4) };
+}
+
+// Friday conference window: everything admitted since the previous Friday
+// conference (Saturday..Friday), so weekend admissions are never skipped.
+export function conferenceWindow(weekStart) {
+  return { from: shiftIsoDate(weekStart, -2), to: shiftIsoDate(weekStart, 4) };
+}
+
+// The conference week whose window contains this admission date: Saturday and
+// Sunday admissions are presented at the following Friday conference.
+export function conferenceWeekForCase(iso) {
+  const ms = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(ms)) return null;
+  const day = new Date(ms).getUTCDay();
+  return conferenceWeek(shiftIsoDate(iso, day === 6 ? 2 : day === 0 ? 1 : 0));
 }
 
 export function caseImagePath(caseId, fileId = crypto.randomUUID()) {
@@ -91,6 +106,7 @@ export function caseErrorMessage(error) {
   const text = String(error?.message || error || "");
   if (isCaseConflict(error)) return "มีผู้อื่นแก้เคสนี้ไปแล้ว กรุณาโหลดข้อมูลล่าสุดแล้วลองใหม่";
   if (/cannot (edit|delete|change)/i.test(text)) return "บัญชีนี้ไม่มีสิทธิ์ทำรายการนี้";
+  if (/Owner must be an active Resident/i.test(text)) return "Owner ต้องเป็น Resident ที่ยังใช้งานอยู่";
   if (/not found/i.test(text)) return "ไม่พบเคสหรือรายการนี้ อาจถูกลบไปแล้ว";
   return text || "ทำรายการไม่สำเร็จ";
 }

@@ -50,7 +50,6 @@ test("notes use the append-only RPC helpers and reload after each action", async
 test("conference loads one Mon-Fri week, guards stale loads, and shows notes per case", async () => {
   const ui = await read("src/features/ResidentConference.jsx");
   assert.match(ui, /conferenceWeek\(/);
-  assert.match(ui, /loadAdmissionCases\(\{ from: week\.start, to: week\.end \}\)/);
   assert.match(ui, /shiftIsoDate\(weekStart, -7\)/);
   assert.match(ui, /shiftIsoDate\(weekStart, 7\)/);
   assert.match(ui, /seq\.current/);
@@ -72,4 +71,27 @@ test("both new tabs are wired for every role and present-case jumps to the confe
   // Not role-gated: the push sits at function level (2-space indent) right after
   // the gated attendance push, not as that `if`'s body (4-space indent).
   assert.match(shell, /\]\);\n  nav\.push\(\["cases", "New admissions"\]/);
+});
+
+test("case form lets validateCaseForm show Thai messages instead of native browser validation", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /<form className="case-form" noValidate onSubmit=\{submit\}>/);
+});
+
+test("admin can list soft-deleted cases (to purge them) and deleted rows are read-only", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /includeDeleted: user\.role === "admin" && showDeleted/);
+  assert.match(ui, /แสดงเคสที่ถูกลบ/);
+  assert.match(ui, /!row\.deleted_at/);
+  const api = await read("src/residentCasesApi.js");
+  assert.match(api, /if \(!includeDeleted\) query = query\.is\("deleted_at", null\)/);
+  assert.match(api, /CASE_COLUMNS = "[^"]*deleted_at/);
+});
+
+test("conference includes weekend admissions and never silently shows the wrong case", async () => {
+  const ui = await read("src/features/ResidentConference.jsx");
+  assert.match(ui, /conferenceWindow\(week\.start\)/);
+  assert.match(ui, /loadAdmissionCases\(\{ from: range\.from, to: range\.to \}\)/);
+  assert.match(ui, /conferenceWeekForCase\(initialCase/);
+  assert.match(ui, /ไม่พบเคสที่เลือก/);
 });

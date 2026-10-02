@@ -84,7 +84,7 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
   }
 
   return (
-    <form className="case-form" onSubmit={submit}>
+    <form className="case-form" noValidate onSubmit={submit}>
       <PrivacyNotice />
       {error && <p className="form-error" role="alert">{error}</p>}
       {conflict && (
@@ -154,6 +154,7 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
   return (
     <>
       <p className="case-muted">{caseSexLabel(row.sex)} {row.age_years} ปี · {row.unit_name} · รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</p>
+      {row.deleted_at && <p className="form-error" role="status">เคสนี้ถูกลบ (ซ่อนจากผู้ใช้อื่น) · Admin ลบถาวรได้จากปุ่มด้านล่าง</p>}
       <p><CaseStatusChip status={row.status} /> <small className="case-muted">แก้ล่าสุด {thaiDateTime(row.updated_at)} โดย {personName(people, row.updated_by)}</small></p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="case-split">
@@ -161,7 +162,7 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
           {fields.map(([label, value]) => <div className="case-field" key={label}><small>{label}</small>{value || "ยังไม่ระบุ"}</div>)}
           <div className="button-row">
             <button type="button" className="secondary-button" disabled={!canEditCase(user, row)} onClick={onEdit}>แก้ไขข้อมูล</button>
-            <button type="button" className="primary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>นำเสนอเคสนี้</button>
+            {!row.deleted_at && <button type="button" className="primary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>นำเสนอเคสนี้</button>}
             {canDeleteCase(user, row) && (
               <button type="button" className="danger-button" disabled={busy} onClick={() => { if (window.confirm("ลบเคสนี้? (ซ่อนจากทุกคนยกเว้น Admin)")) run(async () => { await softDeleteAdmissionCase(row.id, row.updated_at); await onChanged(); onClose(); }); }}>ลบเคส</button>
             )}
@@ -198,18 +199,22 @@ export default function ResidentCases({ user, onPresent }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [unit, setUnit] = useState("all");
+  const [showDeleted, setShowDeleted] = useState(false);
   const [dialog, setDialog] = useState(null); // { type: "form" | "detail", id? }
 
   const load = useCallback(async () => {
     try {
-      const [rows, ppl] = await Promise.all([loadAdmissionCases(), loadCasePeople()]);
+      const [rows, ppl] = await Promise.all([
+        loadAdmissionCases({ includeDeleted: user.role === "admin" && showDeleted }),
+        loadCasePeople(),
+      ]);
       setCases(rows);
       setPeople(ppl);
       setError("");
     } catch (nextError) {
       setError(caseErrorMessage(nextError));
     }
-  }, []);
+  }, [user.role, showDeleted]);
   useEffect(() => { load(); }, [load]);
 
   const visible = useMemo(() => {
@@ -220,7 +225,8 @@ export default function ResidentCases({ user, onPresent }) {
       (!needle || `${row.diagnosis} ${row.case_code}`.toLowerCase().includes(needle)));
   }, [cases, search, status, unit]);
   const current = dialog?.id ? (cases || []).find((row) => row.id === dialog.id) : null;
-  const count = (key) => (cases || []).filter((row) => row.status === key).length;
+  const live = (cases || []).filter((row) => !row.deleted_at);
+  const count = (key) => live.filter((row) => row.status === key).length;
 
   return (
     <section className="resident-panel">
@@ -230,7 +236,7 @@ export default function ResidentCases({ user, onPresent }) {
       </div>
       {error && <p className="form-error" role="alert">{error} <button type="button" className="link-button" onClick={load}>ลองใหม่</button></p>}
       <div className="case-stats">
-        <div><small>เคสทั้งหมด</small><strong>{cases?.length ?? "…"}</strong></div>
+        <div><small>เคสทั้งหมด</small><strong>{cases ? live.length : "…"}</strong></div>
         <div><small>Admit อยู่</small><strong>{cases ? count("admit") : "…"}</strong></div>
         <div><small>รออัปเดตสถานะ</small><strong>{cases ? count("pending_update") : "…"}</strong></div>
       </div>
@@ -238,19 +244,22 @@ export default function ResidentCases({ user, onPresent }) {
         <label>ค้นหา<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Diagnosis หรือรหัสเคส" /></label>
         <label>สถานะ<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">ทุกสถานะ</option>{CASE_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name}>{name}</option>)}</select></label>
+        {user.role === "admin" && (
+          <label className="case-check"><input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} /> แสดงเคสที่ถูกลบ</label>
+        )}
       </div>
       <div className="resident-table-wrap">
         <table>
           <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>หน่วย / Owner</th><th>สถานะ</th><th>ภาพ</th><th /></tr></thead>
           <tbody>
             {visible.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={row.deleted_at ? "case-row-deleted" : undefined}>
                 <td><strong>{row.case_code}</strong><br /><small>{thaiDate(row.admit_date)}</small></td>
                 <td><button type="button" className="link-button" onClick={() => setDialog({ type: "detail", id: row.id })}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></td>
                 <td>{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></td>
-                <td><CaseStatusChip status={row.status} /></td>
+                <td><CaseStatusChip status={row.status} />{!row.deleted_at ? null : <> <span className="case-status case-status-deleted">ถูกลบ</span></>}</td>
                 <td>{row.media_count}</td>
-                <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => setDialog({ type: "form", id: row.id })}>แก้ไข</button></td>
+                <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => setDialog({ type: "form", id: row.id })}>แก้ไข</button></td>
               </tr>
             ))}
           </tbody>

@@ -99,13 +99,33 @@ begin
 end;
 $$;
 
+-- SECURITY DEFINER on purpose: storage policies must see media rows regardless
+-- of the caller's own RLS and of soft deletion.
+create or replace function private.resident_case_media_path_live(p_name text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.resident_case_media m
+    join public.resident_admission_cases c on c.id = m.case_id
+    where m.storage_path = p_name and m.deleted_at is null and c.deleted_at is null
+  );
+$$;
+
+create or replace function private.resident_case_media_path_used(p_name text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.resident_case_media m where m.storage_path = p_name);
+$$;
+
 revoke all on function private.resident_case_member() from public, anon;
 revoke all on function private.resident_can_edit_case(uuid) from public, anon;
 revoke all on function private.resident_case_path_case_id(text) from public, anon;
+revoke all on function private.resident_case_media_path_live(text) from public, anon;
+revoke all on function private.resident_case_media_path_used(text) from public, anon;
 revoke all on function private.resident_case_assert_owner(uuid) from public, anon, authenticated;
 grant execute on function private.resident_case_member() to authenticated;
 grant execute on function private.resident_can_edit_case(uuid) to authenticated;
 grant execute on function private.resident_case_path_case_id(text) to authenticated;
+grant execute on function private.resident_case_media_path_live(text) to authenticated;
+grant execute on function private.resident_case_media_path_used(text) to authenticated;
 
 -- RLS: SELECT only -----------------------------------------------------------
 alter table public.resident_admission_cases enable row level security;
@@ -158,7 +178,15 @@ on conflict (id) do update set
 drop policy if exists resident_case_media_objects_select on storage.objects;
 create policy resident_case_media_objects_select on storage.objects
   for select to authenticated
-  using (bucket_id = 'resident-case-media' and (select private.resident_case_member()));
+  using (
+    bucket_id = 'resident-case-media'
+    and (select private.resident_case_member())
+    and (
+      (select private.resident_role_is('admin'))
+      or (select private.resident_case_media_path_live(name))
+      or (owner_id = (select auth.uid())::text and not (select private.resident_case_media_path_used(name)))
+    )
+  );
 
 drop policy if exists resident_case_media_objects_insert on storage.objects;
 create policy resident_case_media_objects_insert on storage.objects
@@ -169,17 +197,19 @@ create policy resident_case_media_objects_insert on storage.objects
   );
 
 -- Admin may delete any object (purge). The uploader may delete only an object
--- that no media row references yet (cleanup after a failed attach).
+-- that no media row references yet, soft-deleted rows included (cleanup after
+-- a failed attach).
 drop policy if exists resident_case_media_objects_delete on storage.objects;
 create policy resident_case_media_objects_delete on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'resident-case-media'
+    and (select private.resident_case_member())
     and (
       (select private.resident_role_is('admin'))
       or (
         owner_id = (select auth.uid())::text
-        and not exists (select 1 from public.resident_case_media m where m.storage_path = name)
+        and not (select private.resident_case_media_path_used(name))
       )
     )
   );
@@ -227,7 +257,11 @@ begin
   if v_case.updated_at is distinct from p_expected_updated_at then
     raise exception 'CASE_CONFLICT: this case was changed by someone else';
   end if;
-  perform private.resident_case_assert_owner(p_owner_id);
+  -- Only validate the owner when it changes, so a deactivated owner does not
+  -- stop Staff/Admin from updating the case (e.g. marking it discharged).
+  if p_owner_id is distinct from v_case.owner_id then
+    perform private.resident_case_assert_owner(p_owner_id);
+  end if;
   update public.resident_admission_cases set
     admit_date = p_admit_date, age_years = p_age_years, sex = p_sex,
     diagnosis = btrim(p_diagnosis), management = coalesce(p_management, ''),

@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { caseErrorMessage, caseSexLabel, conferenceWeek } from "../residentCases";
+import { caseErrorMessage, caseSexLabel, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople } from "../residentCasesApi";
 import { CaseNotes, CaseStatusChip, personName, thaiDate } from "./CaseParts";
 
 export default function ResidentConference({ user, initialCase = null }) {
-  const [weekStart, setWeekStart] = useState(() => conferenceWeek(initialCase?.admit_date || bangkokIsoDate()).start);
+  const [weekStart, setWeekStart] = useState(
+    // A weekend admission is presented at the following Friday conference; with
+    // no case selected, open the week that contains (or just ended before) today.
+    () => (initialCase ? conferenceWeekForCase(initialCase.admit_date) : conferenceWeek(bangkokIsoDate())).start,
+  );
   const [cases, setCases] = useState(null);
   const [people, setPeople] = useState([]);
   const [index, setIndex] = useState(0);
@@ -16,6 +20,7 @@ export default function ResidentConference({ user, initialCase = null }) {
   const seq = useRef(0);
   const mediaSeq = useRef(0);
   const week = useMemo(() => conferenceWeek(weekStart), [weekStart]);
+  const range = useMemo(() => conferenceWindow(week.start), [week.start]);
 
   useEffect(() => { loadCasePeople().then(setPeople).catch((nextError) => setError(caseErrorMessage(nextError))); }, []);
 
@@ -23,19 +28,21 @@ export default function ResidentConference({ user, initialCase = null }) {
     const mine = ++seq.current;
     setCases(null);
     setError("");
-    loadAdmissionCases({ from: week.start, to: week.end })
+    loadAdmissionCases({ from: range.from, to: range.to })
       .then((rows) => {
         if (mine !== seq.current) return;
         // Present oldest first: Monday's admissions before Friday's.
         const ordered = [...rows].sort((a, b) => a.admit_date.localeCompare(b.admit_date) || a.case_code.localeCompare(b.case_code));
         const wanted = pendingId.current ? ordered.findIndex((row) => row.id === pendingId.current) : -1;
+        const missing = Boolean(pendingId.current) && wanted < 0;
         pendingId.current = null;
         setCases(ordered);
         setIndex(wanted >= 0 ? wanted : 0);
         setPhoto(0);
+        if (missing) setError("ไม่พบเคสที่เลือกในสัปดาห์นี้ (อาจถูกลบหรือถูกย้ายไปแล้ว)");
       })
       .catch((nextError) => { if (mine === seq.current) setError(caseErrorMessage(nextError)); });
-  }, [week.start, week.end]);
+  }, [range.from, range.to]);
 
   const current = cases?.[Math.min(index, (cases?.length || 1) - 1)] || null;
   useEffect(() => {
@@ -57,6 +64,7 @@ export default function ResidentConference({ user, initialCase = null }) {
         <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, 7))}>สัปดาห์ถัดไป</button>
         <button type="button" className="link-button" onClick={() => setWeekStart(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
       </div>
+      <small className="case-muted">รวมเคสที่รับตั้งแต่ {thaiDate(range.from)} (เสาร์–อาทิตย์ก่อนหน้า) ถึง {thaiDate(range.to)}</small>
       {error && <p className="form-error" role="alert">{error}</p>}
       {!cases && !error && <p className="case-muted">กำลังโหลดเคส…</p>}
       {cases?.length === 0 && <p className="case-muted">ไม่มีเคสรับใหม่ในสัปดาห์นี้</p>}

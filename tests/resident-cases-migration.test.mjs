@@ -108,3 +108,26 @@ test("migration runs in one transaction", async () => {
   const sql = await read();
   assert.match(sql, /^[\s\S]*\nbegin;\n[\s\S]*\ncommit;\s*$/);
 });
+
+test("storage reads respect soft delete and the delete policy cannot bypass it", async () => {
+  const sql = await read();
+  assert.match(sql, /function private\.resident_case_media_path_live\(p_name text\)/);
+  assert.match(sql, /function private\.resident_case_media_path_used\(p_name text\)/);
+  const select = sql.slice(sql.indexOf("create policy resident_case_media_objects_select"), sql.indexOf("drop policy if exists resident_case_media_objects_insert"));
+  assert.match(select, /private\.resident_role_is\('admin'\)/);
+  assert.match(select, /private\.resident_case_media_path_live\(name\)/);
+  assert.match(select, /not \(select private\.resident_case_media_path_used\(name\)\)/);
+  const del = sql.slice(sql.indexOf("create policy resident_case_media_objects_delete"), sql.indexOf("-- RPCs"));
+  assert.match(del, /private\.resident_case_media_path_used\(name\)/);
+  assert.match(del, /private\.resident_case_member\(\)/);
+  assert.doesNotMatch(del, /from public\.resident_case_media/);
+  assert.match(sql, /grant execute on function private\.resident_case_media_path_live\(text\) to authenticated/);
+  assert.match(sql, /grant execute on function private\.resident_case_media_path_used\(text\) to authenticated/);
+});
+
+test("a deactivated owner does not lock the case", async () => {
+  const sql = await read();
+  const update = sql.slice(sql.indexOf("function public.update_resident_admission_case"), sql.indexOf("function public.soft_delete_resident_admission_case"));
+  assert.match(update, /if p_owner_id is distinct from v_case\.owner_id then\s+perform private\.resident_case_assert_owner\(p_owner_id\);\s+end if;/);
+  assert.doesNotMatch(update.replace(/if p_owner_id is distinct[\s\S]*?end if;/, ""), /resident_case_assert_owner/);
+});

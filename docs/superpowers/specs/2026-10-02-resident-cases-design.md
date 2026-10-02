@@ -102,7 +102,7 @@ Bucket `resident-case-media`: private, `file_size_limit` 5242880, mime `image/jp
 ไฟล์ใหม่ ไม่เพิ่ม dependency:
 - `src/residentCasesApi.js` data layer ของฟีเจอร์นี้ (ไม่เพิ่มใน `residentApi.js`)
 - `src/features/ResidentCases.jsx` ตารางเคส, ค้นหา (diagnosis/case_code), กรองสถานะ/หน่วย, ฟอร์มเพิ่ม/แก้, dialog รายละเอียด + ภาพ
-- `src/features/ResidentConference.jsx` เลือกสัปดาห์ (จันทร์–ศุกร์ ค่าเริ่มต้นสัปดาห์ปัจจุบันตามเวลาไทย), ตัวเลือกเคส + ก่อนหน้า/ถัดไป, ภาพ, รายการโน้ตหลายคนพร้อมช่องเพิ่มโน้ต
+- `src/features/ResidentConference.jsx` เลือกสัปดาห์ (จันทร์–ศุกร์ ค่าเริ่มต้นสัปดาห์ปัจจุบันตามเวลาไทย; รายการเคสของสัปดาห์รวมเคสที่รับวันเสาร์–อาทิตย์ก่อนหน้า คือตั้งแต่เสาร์หลังการประชุมวันศุกร์ครั้งก่อนถึงศุกร์นี้ เพื่อไม่ให้เคสสุดสัปดาห์หลุดจากการประชุม), ตัวเลือกเคส + ก่อนหน้า/ถัดไป, ภาพ, รายการโน้ตหลายคนพร้อมช่องเพิ่มโน้ต
 
 แก้ `src/features/ResidentPlatform.jsx` เฉพาะ: เพิ่มเมนู `cases` ("New admissions") และ `conference` ("ประชุมวันศุกร์") ใน array `nav` ของทั้ง 3 role และ map ไป component ใหม่ ใช้ `Icons.jsx` และ `resident.css` เดิม
 

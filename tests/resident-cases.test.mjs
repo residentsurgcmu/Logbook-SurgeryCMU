@@ -12,6 +12,8 @@ import {
   caseSexLabel,
   caseStatusLabel,
   conferenceWeek,
+  conferenceWeekForCase,
+  conferenceWindow,
   isCaseConflict,
   scaledSize,
   validateCaseForm,
@@ -136,4 +138,35 @@ test("conflict and permission errors become Thai messages", () => {
   assert.match(caseErrorMessage(new Error("Case not found")), /ไม่พบเคส/);
   assert.equal(caseErrorMessage(new Error("boom")), "boom");
   assert.equal(caseErrorMessage(null), "ทำรายการไม่สำเร็จ");
+});
+
+test("conference window starts on the Saturday after the previous Friday conference", () => {
+  assert.deepEqual(conferenceWindow("2026-09-28"), { from: "2026-09-26", to: "2026-10-02" });
+});
+
+test("a weekend admission belongs to the following week's conference", () => {
+  assert.deepEqual(conferenceWeekForCase("2026-10-03"), { start: "2026-10-05", end: "2026-10-09" }); // Sat
+  assert.deepEqual(conferenceWeekForCase("2026-10-04"), { start: "2026-10-05", end: "2026-10-09" }); // Sun
+  assert.deepEqual(conferenceWeekForCase("2026-10-02"), { start: "2026-09-28", end: "2026-10-02" }); // Fri
+  assert.deepEqual(conferenceWeekForCase("2026-09-28"), { start: "2026-09-28", end: "2026-10-02" }); // Mon
+  assert.equal(conferenceWeekForCase("bad"), null);
+  // Every admission date falls inside the window of the week it is assigned to.
+  for (let d = 0; d < 14; d += 1) {
+    const iso = new Date(Date.UTC(2026, 8, 28 + d)).toISOString().slice(0, 10);
+    const { start } = conferenceWeekForCase(iso);
+    const { from, to } = conferenceWindow(start);
+    assert.ok(iso >= from && iso <= to, `${iso} outside ${from}..${to}`);
+  }
+});
+
+test("deleted cases are read-only for everyone", () => {
+  const deleted = { created_by: "a", owner_id: "a", deleted_at: "2026-10-02T00:00:00Z" };
+  assert.equal(canEditCase({ id: "m", role: "admin" }, deleted), false);
+  assert.equal(canEditCase({ id: "s", role: "staff" }, deleted), false);
+  assert.equal(canDeleteCase({ id: "m", role: "admin" }, deleted), false);
+  assert.equal(canDeleteCase({ id: "a", role: "resident" }, deleted), false);
+});
+
+test("a deactivated-owner error is shown in Thai", () => {
+  assert.match(caseErrorMessage(new Error("Owner must be an active Resident")), /ต้องเป็น Resident/);
 });

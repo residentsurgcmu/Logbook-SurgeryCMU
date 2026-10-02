@@ -4,7 +4,7 @@ import { CASE_IMAGE_MAX_BYTES, CASE_IMAGE_MAX_EDGE, CASE_IMAGE_QUALITY, caseImag
 
 const MEDIA_BUCKET = "resident-case-media";
 const SIGNED_URL_SECONDS = 10 * 60;
-const CASE_COLUMNS = "id,case_code,admit_date,age_years,sex,diagnosis,management,operation,unit_name,status,owner_id,created_by,updated_by,created_at,updated_at";
+const CASE_COLUMNS = "id,case_code,admit_date,age_years,sex,diagnosis,management,operation,unit_name,status,owner_id,created_by,updated_by,created_at,updated_at,deleted_at";
 const fail = (error) => {
   if (error) throw error;
 };
@@ -28,12 +28,13 @@ export async function loadCasePeople() {
   return data || [];
 }
 
-export async function loadAdmissionCases({ from, to } = {}) {
+export async function loadAdmissionCases({ from, to, includeDeleted = false } = {}) {
   const { data, error } = await fetchAllRows(() => {
     let query = supabase
       .from("resident_admission_cases")
-      .select(`${CASE_COLUMNS},resident_case_media(id,deleted_at)`)
-      .is("deleted_at", null);
+      .select(`${CASE_COLUMNS},resident_case_media(id,deleted_at)`);
+    // RLS only returns soft-deleted rows to Admin; they ask for them explicitly.
+    if (!includeDeleted) query = query.is("deleted_at", null);
     if (from) query = query.gte("admit_date", from);
     if (to) query = query.lte("admit_date", to);
     return query.order("admit_date", { ascending: false }).order("case_code", { ascending: false });
