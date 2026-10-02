@@ -4,11 +4,12 @@ import { CASE_IMAGE_MAX_BYTES, CASE_IMAGE_MAX_EDGE, CASE_IMAGE_QUALITY, caseImag
 
 const MEDIA_BUCKET = "resident-case-media";
 const SIGNED_URL_SECONDS = 10 * 60;
-const CASE_COLUMNS = "id,case_code,admit_date,age_years,sex,diagnosis,management,operation,unit_name,status,owner_id,created_by,updated_by,created_at,updated_at,deleted_at";
+const CASE_COLUMNS = "id,case_code,admit_date,age_years,sex,diagnosis,management,operation,unit_name,status,owner_id,created_by,updated_by,created_at,updated_at,deleted_at,present_illness,physical_exam,bp_systolic,bp_diastolic,heart_rate,resp_rate,body_temp,spo2";
 const fail = (error) => {
   if (error) throw error;
 };
 
+const numberOrNull = (value) => (String(value ?? "").trim() === "" ? null : Number(value));
 const caseArgs = (form) => ({
   p_admit_date: form.admit_date,
   p_age_years: Number(form.age_years),
@@ -19,6 +20,14 @@ const caseArgs = (form) => ({
   p_unit_name: form.unit_name,
   p_status: form.status,
   p_owner_id: form.owner_id,
+  p_present_illness: form.present_illness || "",
+  p_physical_exam: form.physical_exam || "",
+  p_bp_systolic: numberOrNull(form.bp_systolic),
+  p_bp_diastolic: numberOrNull(form.bp_diastolic),
+  p_heart_rate: numberOrNull(form.heart_rate),
+  p_resp_rate: numberOrNull(form.resp_rate),
+  p_body_temp: numberOrNull(form.body_temp),
+  p_spo2: numberOrNull(form.spo2),
 });
 
 // Names only (no email), including deactivated accounts so old authors resolve.
@@ -57,6 +66,9 @@ export async function updateAdmissionCase(caseId, expectedUpdatedAt, form) {
     p_case_id: caseId,
     p_expected_updated_at: expectedUpdatedAt,
     ...caseArgs(form),
+    // Tells the server this client sends clinical fields; an old tab omits it
+    // and so can never wipe them.
+    p_set_clinical: true,
   });
   fail(error);
   return data;
@@ -163,6 +175,17 @@ export async function uploadCaseImages(caseId, files) {
 export async function deleteCaseMedia(mediaId) {
   const { error } = await supabase.rpc("delete_resident_case_media", { p_media_id: mediaId });
   fail(error);
+}
+
+// Admin only: deletes the image row for good, then its file. If the file
+// removal fails the row is already gone, so it is reported, not thrown.
+export async function purgeCaseMedia(mediaId) {
+  const { data: path, error } = await supabase.rpc("admin_purge_resident_case_media", { p_media_id: mediaId });
+  fail(error);
+  if (path) {
+    const { error: removeError } = await supabase.storage.from(MEDIA_BUCKET).remove([path]);
+    if (removeError) console.warn("Could not remove purged case image", removeError);
+  }
 }
 
 export async function loadCaseNotes(caseId) {

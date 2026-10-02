@@ -4,7 +4,36 @@ import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 export const CASE_UNITS = ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"];
 export const CASE_SEXES = [["male", "ชาย"], ["female", "หญิง"], ["unspecified", "ไม่ระบุ"]];
 export const CASE_STATUSES = [["admit", "Admit"], ["discharged", "Discharged"], ["pending_update", "รออัปเดต"]];
-export const CASE_LIMITS = { diagnosis: 180, management: 1000, operation: 180, caption: 200, note: 2000 };
+export const CASE_LIMITS = { diagnosis: 180, management: 1000, operation: 180, caption: 200, note: 2000, presentIllness: 2000, physicalExam: 2000 };
+// Same ranges as the CHECK constraints in 20261003090000_resident_case_clinical_fields.sql.
+export const CASE_VITALS = [
+  { key: "bp_systolic", label: "BP systolic", unit: "mmHg", min: 40, max: 300 },
+  { key: "bp_diastolic", label: "BP diastolic", unit: "mmHg", min: 20, max: 200 },
+  { key: "heart_rate", label: "HR", unit: "/min", min: 20, max: 250 },
+  { key: "resp_rate", label: "RR", unit: "/min", min: 4, max: 80 },
+  { key: "body_temp", label: "BT", unit: "°C", min: 30, max: 45, decimals: 1 },
+  { key: "spo2", label: "SpO2", unit: "%", min: 50, max: 100 },
+];
+const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== "";
+
+function vitalError({ label, unit, min, max, decimals = 0 }, value) {
+  const text = String(value).trim();
+  if (!/^\d+(\.\d+)?$/.test(text) || Number(text) < min || Number(text) > max) return `${label} ต้องอยู่ระหว่าง ${min}–${max} ${unit}`;
+  const places = (text.split(".")[1] || "").length;
+  if (!decimals && places) return `${label} ต้องเป็นจำนวนเต็ม`;
+  if (places > decimals) return `${label} ใส่ได้ไม่เกินทศนิยม ${decimals} ตำแหน่ง`;
+  return "";
+}
+
+export function formatVitals(row = {}) {
+  const parts = [];
+  if (hasValue(row.bp_systolic) && hasValue(row.bp_diastolic)) parts.push(`BP ${row.bp_systolic}/${row.bp_diastolic} mmHg`);
+  if (hasValue(row.heart_rate)) parts.push(`HR ${row.heart_rate}/min`);
+  if (hasValue(row.resp_rate)) parts.push(`RR ${row.resp_rate}/min`);
+  if (hasValue(row.body_temp)) parts.push(`BT ${Number(row.body_temp).toFixed(1)} °C`);
+  if (hasValue(row.spo2)) parts.push(`SpO2 ${row.spo2}%`);
+  return parts.join(" · ");
+}
 export const CASE_IMAGE_INPUT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Phone photos are often larger than 5 MB; they are re-encoded before upload,
 // and the stored result must still be <= CASE_IMAGE_MAX_BYTES.
@@ -36,6 +65,16 @@ export function validateCaseForm(form, at = new Date()) {
   if (diagnosis.length > CASE_LIMITS.diagnosis) return `Diagnosis ต้องไม่เกิน ${CASE_LIMITS.diagnosis} ตัวอักษร`;
   if (String(form.management || "").length > CASE_LIMITS.management) return `Management ต้องไม่เกิน ${CASE_LIMITS.management} ตัวอักษร`;
   if (String(form.operation || "").length > CASE_LIMITS.operation) return `Operation ต้องไม่เกิน ${CASE_LIMITS.operation} ตัวอักษร`;
+  if (String(form.present_illness || "").length > CASE_LIMITS.presentIllness) return `Present illness ต้องไม่เกิน ${CASE_LIMITS.presentIllness} ตัวอักษร`;
+  if (String(form.physical_exam || "").length > CASE_LIMITS.physicalExam) return `Physical examination ต้องไม่เกิน ${CASE_LIMITS.physicalExam} ตัวอักษร`;
+  for (const vital of CASE_VITALS) {
+    if (hasValue(form[vital.key])) {
+      const problem = vitalError(vital, form[vital.key]);
+      if (problem) return problem;
+    }
+  }
+  if (hasValue(form.bp_systolic) !== hasValue(form.bp_diastolic)) return "กรุณากรอก BP ให้ครบทั้งสองค่า (systolic/diastolic)";
+  if (hasValue(form.bp_systolic) && Number(form.bp_diastolic) >= Number(form.bp_systolic)) return "BP diastolic ต้องน้อยกว่า systolic";
   if (!CASE_UNITS.includes(form.unit_name)) return "กรุณาเลือกหน่วย";
   if (!CASE_STATUSES.some(([key]) => key === form.status)) return "กรุณาเลือกสถานะ";
   if (!form.owner_id) return "กรุณาเลือก Owner (Resident)";

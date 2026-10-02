@@ -594,3 +594,9 @@ body { background: #f3f7f4; }
   .app-shell-v2 { display:block; padding:0; background:#fff; }
 }
 .case-presets { margin-bottom:12px; }
+.case-field { white-space:pre-wrap; }
+.case-vitals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; padding:10px 12px 12px; border:1px solid var(--resident-line); border-radius:12px; }
+.case-vitals legend { padding:0 6px; font-size:14px; font-weight:700; }
+.case-vitals small { color:var(--resident-muted); font-weight:400; }
+.case-media-delete { min-height:30px; margin-top:4px; padding:3px 10px; font-size:12.5px; }
+@media (max-width:700px) { .case-vitals { grid-template-columns:repeat(2,minmax(0,1fr)); } }

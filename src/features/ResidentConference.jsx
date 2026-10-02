@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { caseErrorMessage, caseSexLabel, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
+import { caseErrorMessage, caseSexLabel, conferenceWeek, conferenceWeekForCase, conferenceWindow, formatVitals } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
@@ -99,6 +99,9 @@ export default function ResidentConference({ user, initialCase = null }) {
               <p><span className="case-count">{current.case_code}</span> <span className="case-count">{current.unit_name}</span> <CaseStatusChip status={current.status} /></p>
               <h2>{current.diagnosis}</h2>
               <p className="case-muted">{caseSexLabel(current.sex)} {current.age_years} ปี · รับไว้ {thaiDate(current.admit_date)} · Owner: {personName(people, current.owner_id)}</p>
+              {current.present_illness && <div className="case-field"><small>Present illness</small>{current.present_illness}</div>}
+              {formatVitals(current) && <div className="case-field"><small>Vital signs</small>{formatVitals(current)}</div>}
+              {current.physical_exam && <div className="case-field"><small>Physical examination</small>{current.physical_exam}</div>}
               <div className="case-field"><small>Management</small>{current.management || "ยังไม่ระบุ"}</div>
               <div className="case-field"><small>Operation</small>{current.operation || "ยังไม่ระบุ"}</div>
             </div>

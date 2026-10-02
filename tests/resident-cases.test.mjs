@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   CASE_IMAGE_MAX_EDGE,
   CASE_UNITS,
+  CASE_VITALS,
+  formatVitals,
   splitCaseImageFiles,
   canDeleteCase,
   canDeleteMedia,
@@ -197,4 +199,31 @@ test("no more than 10 images can wait to be uploaded at once", () => {
   assert.equal(rejected.length, 2);
   assert.match(rejected[0].message, /ไม่เกิน 10 ภาพ/);
   assert.deepEqual(splitCaseImageFiles(null), { accepted: [], rejected: [] });
+});
+
+test("vital signs are optional but must be in range when given", () => {
+  const vitals = { bp_systolic: "120", bp_diastolic: "80", heart_rate: "88", resp_rate: "20", body_temp: "37.2", spo2: "98" };
+  assert.equal(validateCaseForm({ ...good, ...vitals }, NOW), "");
+  assert.equal(validateCaseForm({ ...good, bp_systolic: "", heart_rate: " " }, NOW), "");
+  assert.match(validateCaseForm({ ...good, heart_rate: "300" }, NOW), /HR.*20–250/);
+  assert.match(validateCaseForm({ ...good, spo2: "101" }, NOW), /SpO2/);
+  assert.match(validateCaseForm({ ...good, resp_rate: "18.5" }, NOW), /RR.*จำนวนเต็ม/);
+  assert.match(validateCaseForm({ ...good, body_temp: "37.25" }, NOW), /BT.*ทศนิยม 1 ตำแหน่ง/);
+  assert.match(validateCaseForm({ ...good, body_temp: "29.9" }, NOW), /BT.*30–45/);
+  assert.match(validateCaseForm({ ...good, bp_systolic: "120", bp_diastolic: "" }, NOW), /BP.*ทั้งสองค่า/);
+  assert.match(validateCaseForm({ ...good, bp_systolic: "80", bp_diastolic: "90" }, NOW), /diastolic.*น้อยกว่า systolic/);
+  assert.match(validateCaseForm({ ...good, heart_rate: "abc" }, NOW), /HR/);
+});
+
+test("present illness and physical examination are limited to 2000 characters", () => {
+  assert.equal(validateCaseForm({ ...good, present_illness: "a".repeat(2000), physical_exam: "b".repeat(2000) }, NOW), "");
+  assert.match(validateCaseForm({ ...good, present_illness: "a".repeat(2001) }, NOW), /Present illness.*2000/);
+  assert.match(validateCaseForm({ ...good, physical_exam: "a".repeat(2001) }, NOW), /Physical examination.*2000/);
+});
+
+test("vital signs read as one line and skip missing values", () => {
+  assert.equal(formatVitals({ bp_systolic: 120, bp_diastolic: 80, heart_rate: 88, resp_rate: 20, body_temp: "37.2", spo2: 98 }), "BP 120/80 mmHg · HR 88/min · RR 20/min · BT 37.2 °C · SpO2 98%");
+  assert.equal(formatVitals({ heart_rate: 110, spo2: 92 }), "HR 110/min · SpO2 92%");
+  assert.equal(formatVitals({}), "");
+  assert.deepEqual(CASE_VITALS.map((item) => item.key), ["bp_systolic", "bp_diastolic", "heart_rate", "resp_rate", "body_temp", "spo2"]);
 });
