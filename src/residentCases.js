@@ -1,7 +1,7 @@
 // Pure helpers for New admissions + Friday conference (kept separate for tests).
 import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 
-export const CASE_UNITS = ["Upper GI", "General surgery", "HBP"];
+export const CASE_UNITS = ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"];
 export const CASE_SEXES = [["male", "ชาย"], ["female", "หญิง"], ["unspecified", "ไม่ระบุ"]];
 export const CASE_STATUSES = [["admit", "Admit"], ["discharged", "Discharged"], ["pending_update", "รออัปเดต"]];
 export const CASE_LIMITS = { diagnosis: 180, management: 1000, operation: 180, caption: 200, note: 2000 };
@@ -13,6 +13,7 @@ export const CASE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const CASE_IMAGE_MAX_EDGE = 2000;
 export const CASE_IMAGE_QUALITY = 0.85;
 export const CASE_MIN_ADMIT_DATE = "2020-01-01";
+export const CASE_IMAGE_MAX_PER_SAVE = 10;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const labelOf = (pairs, value) => pairs.find(([key]) => key === value)?.[1] || value || "—";
@@ -91,6 +92,21 @@ export function validateCaseImageFile(file) {
   if (!file.size) return "ไฟล์ภาพว่างเปล่า";
   if (file.size > CASE_IMAGE_INPUT_MAX_BYTES) return "ภาพต้องมีขนาดไม่เกิน 20 MB (ระบบจะย่อให้ไม่เกิน 5 MB ก่อนอัปโหลด)";
   return "";
+}
+
+// Splits a FileList into files to upload and Thai messages for the rest,
+// numbered by position (file names are never echoed back).
+export function splitCaseImageFiles(files, alreadyCount = 0) {
+  const accepted = [];
+  const rejected = [];
+  [...(files || [])].forEach((file, index) => {
+    const position = index + 1;
+    const problem = validateCaseImageFile(file)
+      || (alreadyCount + accepted.length >= CASE_IMAGE_MAX_PER_SAVE ? `เลือกได้ไม่เกิน ${CASE_IMAGE_MAX_PER_SAVE} ภาพต่อครั้ง` : "");
+    if (problem) rejected.push({ position, message: `ภาพที่ ${position}: ${problem}` });
+    else accepted.push(file);
+  });
+  return { accepted, rejected };
 }
 
 export function scaledSize(width, height, maxEdge = CASE_IMAGE_MAX_EDGE) {

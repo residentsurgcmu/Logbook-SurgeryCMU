@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { caseErrorMessage, caseSexLabel, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople } from "../residentCasesApi";
+import { exportWeekDeck } from "../casePptxExport";
 import { CaseNotes, CaseStatusChip, personName, thaiDate } from "./CaseParts";
 
 export default function ResidentConference({ user, initialCase = null }) {
@@ -16,6 +17,20 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [media, setMedia] = useState([]);
   const [photo, setPhoto] = useState(0);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  async function exportWeek() {
+    if (exporting || !cases?.length) return;
+    setExporting(true);
+    setError("");
+    try {
+      const missing = await exportWeekDeck(week, cases, people);
+      if (missing) setError(`ดาวน์โหลด PowerPoint แล้ว แต่ใส่ภาพไม่ได้ ${missing} ภาพ`);
+    } catch (nextError) {
+      setError(caseErrorMessage(nextError));
+    } finally {
+      setExporting(false);
+    }
+  }
   const pendingId = useRef(initialCase?.id || null);
   const seq = useRef(0);
   const mediaSeq = useRef(0);
@@ -63,6 +78,7 @@ export default function ResidentConference({ user, initialCase = null }) {
         <strong>{label}</strong>
         <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, 7))}>สัปดาห์ถัดไป</button>
         <button type="button" className="link-button" onClick={() => setWeekStart(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
+        <button type="button" className="primary-button" disabled={exporting || !cases?.length} onClick={exportWeek}>{exporting ? "กำลังสร้างไฟล์…" : "Export PowerPoint ทั้งสัปดาห์"}</button>
       </div>
       <small className="case-muted">รวมเคสที่รับตั้งแต่ {thaiDate(range.from)} (เสาร์–อาทิตย์ก่อนหน้า) ถึง {thaiDate(range.to)}</small>
       {error && <p className="form-error" role="alert">{error}</p>}

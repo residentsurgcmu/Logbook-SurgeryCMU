@@ -38,3 +38,13 @@ test("list queries exclude soft-deleted rows and have a deterministic order", as
   assert.match(src, /order\("admit_date", \{ ascending: false \}\)\s*\.order\("case_code", \{ ascending: false \}\)/);
   assert.match(src, /\.order\("created_at", \{ ascending: true \}\)\s*\.order\("id"\)/);
 });
+
+test("several images upload one by one and one failure does not stop the rest", async () => {
+  const src = await api();
+  const fn = src.slice(src.indexOf("export async function uploadCaseImages"));
+  assert.match(fn, /for \(const \[index, file\] of files\.entries\(\)\)/);
+  assert.match(fn, /await uploadCaseImage\(caseId, file\)/);
+  assert.match(fn, /catch \(error\)/);
+  assert.match(fn, /failed\.push\(/);
+  assert.match(fn, /return \{ uploaded, failed \}/);
+});

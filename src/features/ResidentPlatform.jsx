@@ -799,6 +799,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
           </div>
         </div>
         <div>
+          <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
           <span className="role-chip">{roleLabel[workspace.user.role]}</span>
           <button className="text-button" type="button" onClick={onLogout}>
             ออกจากระบบ

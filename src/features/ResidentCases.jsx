@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "../components/Icons";
 import {
   CASE_LIMITS,
@@ -12,8 +12,8 @@ import {
   caseErrorMessage,
   caseSexLabel,
   isCaseConflict,
+  splitCaseImageFiles,
   validateCaseForm,
-  validateCaseImageFile,
 } from "../residentCases";
 import { bangkokIsoDate } from "../roundSchedule";
 import {
@@ -25,8 +25,9 @@ import {
   purgeAdmissionCase,
   softDeleteAdmissionCase,
   updateAdmissionCase,
-  uploadCaseImage,
+  uploadCaseImages,
 } from "../residentCasesApi";
+import { exportCaseDeck } from "../casePptxExport";
 import { CaseModal, CaseStatusChip, PrivacyNotice, personName, thaiDate, thaiDateTime } from "./CaseParts";
 
 const emptyForm = (user) => ({
@@ -57,6 +58,23 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [stage, setStage] = useState("");
+  const [pending, setPending] = useState([]); // [{ file, url }] previews, uploaded after save
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => () => pendingRef.current.forEach((item) => URL.revokeObjectURL(item.url)), []);
+  function pick(event) {
+    const { accepted, rejected } = splitCaseImageFiles(event.target.files, pending.length);
+    event.target.value = "";
+    setPending((current) => [...current, ...accepted.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    setError(rejected.map((item) => item.message).join(" · "));
+  }
+  function removePending(index) {
+    setPending((current) => {
+      URL.revokeObjectURL(current[index].url);
+      return current.filter((_, position) => position !== index);
+    });
+  }
   const owners = useMemo(
     () => people.filter((person) => person.role === "resident" && (person.active || person.user_id === form.owner_id)),
     [people, form.owner_id],
@@ -71,15 +89,38 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
     setBusy(true);
     setError("");
     setConflict(false);
+    setStage("save");
+    let caseId;
     try {
-      if (initial) await updateAdmissionCase(initial.id, initial.updated_at, form);
-      else await createAdmissionCase(form);
-      await onSaved();
+      if (initial) {
+        await updateAdmissionCase(initial.id, initial.updated_at, form);
+        caseId = initial.id;
+      } else {
+        caseId = await createAdmissionCase(form);
+      }
     } catch (nextError) {
       setConflict(isCaseConflict(nextError));
       setError(caseErrorMessage(nextError));
+      setBusy(false);
+      setStage("");
+      return;
+    }
+    // The case is saved from here on: never save it again (a retry would create
+    // a duplicate), so image problems are reported on the case detail instead.
+    let failureNotice = "";
+    if (pending.length) {
+      setStage("upload");
+      const { failed } = await uploadCaseImages(caseId, pending.map((item) => item.file));
+      if (failed.length) {
+        const reasons = failed.map((item) => `ภาพที่ ${item.position}: ${caseErrorMessage(item.error)}`).join(" · ");
+        failureNotice = `บันทึกเคสแล้ว แต่อัปโหลดภาพไม่สำเร็จ ${failed.length} จาก ${pending.length} ภาพ (${reasons}) กรุณาลองใหม่ด้วยปุ่ม "อัปโหลดภาพ"`;
+      }
+    }
+    try {
+      await onSaved(caseId, failureNotice);
     } finally {
       setBusy(false);
+      setStage("");
     }
   }
 
@@ -108,15 +149,36 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
           </select>
         </label>
       </div>
+      <div className="case-form-images">
+        <div className="case-images-head">
+          <strong>ภาพแนบ {pending.length ? `(${pending.length})` : ""}</strong>
+          <label className="secondary-button case-upload-button">
+            เลือกภาพ
+            <input className="case-file-input" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={pick} />
+          </label>
+        </div>
+        {pending.length ? (
+          <div className="case-media">
+            {pending.map((item, index) => (
+              <figure key={item.url}>
+                <img src={item.url} alt={`ภาพที่ ${index + 1}`} />
+                <figcaption>ภาพที่ {index + 1} <button type="button" className="link-button" disabled={busy} onClick={() => removePending(index)}>เอาออก</button></figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="case-muted">ยังไม่ได้เลือกภาพ · ภาพจะอัปโหลดหลังกดบันทึก (ระบบย่อภาพและลบ EXIF/GPS ให้)</p>
+        )}
+      </div>
       <div className="button-row case-actions">
         <button type="button" className="secondary-button" onClick={onClose}>ยกเลิก</button>
-        <button type="submit" className="primary-button" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึก"}</button>
+        <button type="submit" className="primary-button" disabled={busy}>{stage === "upload" ? "กำลังอัปโหลดภาพ…" : busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </form>
   );
 }
 
-function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }) {
+function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, onClose }) {
   const [media, setMedia] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -141,13 +203,20 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
       setBusy(false);
     }
   }
-  async function onFile(event) {
-    const file = event.target.files?.[0];
+  async function onFiles(event) {
+    const { accepted, rejected } = splitCaseImageFiles(event.target.files);
     event.target.value = "";
-    if (!file) return;
-    const problem = validateCaseImageFile(file);
-    if (problem) return setError(problem);
-    await run(async () => { await uploadCaseImage(row.id, file); await reloadMedia(); await onChanged(); });
+    if (!accepted.length) return setError(rejected.map((item) => item.message).join(" · "));
+    await run(async () => {
+      const { failed } = await uploadCaseImages(row.id, accepted);
+      await reloadMedia();
+      await onChanged();
+      const problems = [
+        ...rejected.map((item) => item.message),
+        ...failed.map((item) => `ภาพที่อัปโหลดลำดับ ${item.position}: ${caseErrorMessage(item.error)}`),
+      ];
+      if (problems.length) throw new Error(problems.join(" · "));
+    });
   }
 
   const fields = [["Management", row.management], ["Operation", row.operation]];
@@ -156,6 +225,7 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
       <p className="case-muted">{caseSexLabel(row.sex)} {row.age_years} ปี · {row.unit_name} · รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</p>
       {row.deleted_at && <p className="form-error" role="status">เคสนี้ถูกลบ (ซ่อนจากผู้ใช้อื่น) · Admin ลบถาวรได้จากปุ่มด้านล่าง</p>}
       <p><CaseStatusChip status={row.status} /> <small className="case-muted">แก้ล่าสุด {thaiDateTime(row.updated_at)} โดย {personName(people, row.updated_by)}</small></p>
+      {notice && <p className="form-error" role="status">{notice}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="case-split">
         <div>
@@ -163,6 +233,13 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
           <div className="button-row">
             <button type="button" className="secondary-button" disabled={!canEditCase(user, row)} onClick={onEdit}>แก้ไขข้อมูล</button>
             {!row.deleted_at && <button type="button" className="primary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>นำเสนอเคสนี้</button>}
+            {!row.deleted_at && (
+              <button type="button" className="secondary-button" disabled={busy} onClick={async () => {
+                let missing = 0;
+                await run(async () => { missing = await exportCaseDeck(row, people); });
+                if (missing) setError(`ดาวน์โหลด PowerPoint แล้ว แต่ใส่ภาพไม่ได้ ${missing} ภาพ`);
+              }}>Export PowerPoint</button>
+            )}
             {canDeleteCase(user, row) && (
               <button type="button" className="danger-button" disabled={busy} onClick={() => { if (window.confirm("ลบเคสนี้? (ซ่อนจากทุกคนยกเว้น Admin)")) run(async () => { await softDeleteAdmissionCase(row.id, row.updated_at); await onChanged(); onClose(); }); }}>ลบเคส</button>
             )}
@@ -172,7 +249,16 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
           </div>
         </div>
         <div>
-          <strong>ภาพแนบ ({media?.length ?? "…"})</strong>
+          <div className="case-images-head">
+            <strong>ภาพแนบ ({media?.length ?? "…"})</strong>
+            {canEditCase(user, row) && (
+              <label className="primary-button case-upload-button">
+                {busy ? "กำลังอัปโหลด…" : "อัปโหลดภาพ"}
+                <input className="case-file-input" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={onFiles} />
+              </label>
+            )}
+          </div>
+          <p className="case-muted">ระบบย่อภาพและลบ EXIF/GPS ก่อนอัปโหลด · อย่าถ่ายติดใบหน้า/ป้ายชื่อ</p>
           <div className="case-media">
             {(media || []).map((item, index) => (
               <figure key={item.id}>
@@ -184,8 +270,6 @@ function CaseDetail({ user, people, row, onEdit, onPresent, onChanged, onClose }
             ))}
             {media?.length === 0 && <div className="case-media-empty">ยังไม่มีภาพแนบ</div>}
           </div>
-          <label className="case-upload">เพิ่มภาพ<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy || !canEditCase(user, row)} onChange={onFile} /></label>
-          <p className="case-muted">ระบบย่อภาพและลบ EXIF/GPS ก่อนอัปโหลด · อย่าถ่ายติดใบหน้า/ป้ายชื่อ</p>
         </div>
       </div>
     </>
@@ -269,12 +353,12 @@ export default function ResidentCases({ user, onPresent }) {
       </div>
       {dialog?.type === "form" && (!dialog.id || current) && (
         <CaseModal title={dialog.id ? `แก้ไข ${current.case_code}` : "เพิ่มเคสใหม่"} onClose={() => setDialog(null)}>
-          <CaseForm user={user} people={people} initial={dialog.id ? current : null} onSaved={async () => { await load(); setDialog(null); }} onReload={load} onClose={() => setDialog(null)} />
+          <CaseForm user={user} people={people} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
       {dialog?.type === "detail" && current && (
         <CaseModal title={`${current.case_code} · ${current.diagnosis}`} onClose={() => setDialog(null)}>
-          <CaseDetail user={user} people={people} row={current} onEdit={() => setDialog({ type: "form", id: current.id })} onPresent={onPresent} onChanged={load} onClose={() => setDialog(null)} />
+          <CaseDetail user={user} people={people} row={current} notice={dialog.notice} onEdit={() => setDialog({ type: "form", id: current.id })} onPresent={onPresent} onChanged={load} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
     </section>
