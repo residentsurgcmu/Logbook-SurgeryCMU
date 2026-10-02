@@ -53,11 +53,16 @@ See `README.md` for features, local run and secrets.
   chip, Staff scanner opens the rear camera directly (headless `Html5Qrcode`). Migration
   `20261001090000_round_multi_session_cancel_activity_time.sql` is live (checked with
   `tests/round-attendance-db.sql`); remaining: click-through on the live site and an iPhone scan test.
-- 2026-10-02 (branch `feat/resident-admission-cases`, **not yet deployed**): New admissions + ประชุมวันศุกร์ (phase 1).
+- 2026-10-02: New admissions + ประชุมวันศุกร์ (phase 1) **deployed** (PR #1 merged as 34ceaab, Vercel success; migration applied first).
   Migration `20261002090000_resident_admission_cases.sql` adds `resident_admission_cases`, `resident_case_media`,
   `resident_case_notes`, private bucket `resident-case-media`; SELECT-only RLS, every write is a SECURITY DEFINER RPC
-  with an `updated_at` optimistic check (`CASE_CONFLICT`). Not applied until the owner runs it, then
+  with an `updated_at` optimistic check (`CASE_CONFLICT`). Verified with
   `tests/resident-cases-db.sql` and `tests/resident-cases-rls-rollback.sql`. Spec/plan in `docs/superpowers/`.
+- 2026-10-02 (branch `feat/cases-round2`, **not yet deployed**): units → Upper GI, Colorectal, HPB, B&E, Vascular
+  (migration `20261002120000_resident_case_units.sql`, deletes test case ADM-00002 — run BEFORE the frontend); image
+  picking in the case form + visible upload button (phase-1 upload was undiscoverable, no storage request was ever made);
+  PowerPoint export per case and per week (`src/casePptx.js`, pptxgenjs lazy-loaded); user name in the header.
+  `package.json` "latest" deps pinned to the lockfile versions so adding pptxgenjs did not upgrade React/Vite.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.

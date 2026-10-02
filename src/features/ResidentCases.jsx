@@ -27,6 +27,7 @@ import {
   updateAdmissionCase,
   uploadCaseImages,
 } from "../residentCasesApi";
+import { exportCaseDeck } from "../casePptxExport";
 import { CaseModal, CaseStatusChip, PrivacyNotice, personName, thaiDate, thaiDateTime } from "./CaseParts";
 
 const emptyForm = (user) => ({
@@ -232,6 +233,13 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
           <div className="button-row">
             <button type="button" className="secondary-button" disabled={!canEditCase(user, row)} onClick={onEdit}>แก้ไขข้อมูล</button>
             {!row.deleted_at && <button type="button" className="primary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>นำเสนอเคสนี้</button>}
+            {!row.deleted_at && (
+              <button type="button" className="secondary-button" disabled={busy} onClick={async () => {
+                let missing = 0;
+                await run(async () => { missing = await exportCaseDeck(row, people); });
+                if (missing) setError(`ดาวน์โหลด PowerPoint แล้ว แต่ใส่ภาพไม่ได้ ${missing} ภาพ`);
+              }}>Export PowerPoint</button>
+            )}
             {canDeleteCase(user, row) && (
               <button type="button" className="danger-button" disabled={busy} onClick={() => { if (window.confirm("ลบเคสนี้? (ซ่อนจากทุกคนยกเว้น Admin)")) run(async () => { await softDeleteAdmissionCase(row.id, row.updated_at); await onChanged(); onClose(); }); }}>ลบเคส</button>
             )}
