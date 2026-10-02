@@ -53,6 +53,11 @@ See `README.md` for features, local run and secrets.
   chip, Staff scanner opens the rear camera directly (headless `Html5Qrcode`). Migration
   `20261001090000_round_multi_session_cancel_activity_time.sql` is live (checked with
   `tests/round-attendance-db.sql`); remaining: click-through on the live site and an iPhone scan test.
+- 2026-10-02 (branch `feat/resident-admission-cases`, **not yet deployed**): New admissions + ประชุมวันศุกร์ (phase 1).
+  Migration `20261002090000_resident_admission_cases.sql` adds `resident_admission_cases`, `resident_case_media`,
+  `resident_case_notes`, private bucket `resident-case-media`; SELECT-only RLS, every write is a SECURITY DEFINER RPC
+  with an `updated_at` optimistic check (`CASE_CONFLICT`). Not applied until the owner runs it, then
+  `tests/resident-cases-db.sql` and `tests/resident-cases-rls-rollback.sql`. Spec/plan in `docs/superpowers/`.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.
