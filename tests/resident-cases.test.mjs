@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   CASE_IMAGE_MAX_EDGE,
   CASE_UNITS,
+  splitCaseImageFiles,
   canDeleteCase,
   canDeleteMedia,
   canDeleteNote,
@@ -176,4 +177,24 @@ test("units are the five department units", () => {
   assert.deepEqual(CASE_UNITS, ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"]);
   assert.match(validateCaseForm({ ...good, unit_name: "General surgery" }, NOW), /หน่วย/);
   assert.equal(validateCaseForm({ ...good, unit_name: "B&E" }, NOW), "");
+});
+
+test("picked images are split into accepted and rejected with Thai reasons by position", () => {
+  const ok = { type: "image/jpeg", size: 1000 };
+  const pdf = { type: "application/pdf", size: 10 };
+  const empty = { type: "image/png", size: 0 };
+  const { accepted, rejected } = splitCaseImageFiles([ok, pdf, ok, empty]);
+  assert.equal(accepted.length, 2);
+  assert.deepEqual(rejected.map((item) => item.position), [2, 4]);
+  assert.match(rejected[0].message, /ภาพที่ 2: รองรับเฉพาะภาพ/);
+  assert.match(rejected[1].message, /ภาพที่ 4: ไฟล์ภาพว่าง/);
+});
+
+test("no more than 10 images can wait to be uploaded at once", () => {
+  const ok = { type: "image/png", size: 10 };
+  const { accepted, rejected } = splitCaseImageFiles(Array(4).fill(ok), 8);
+  assert.equal(accepted.length, 2);
+  assert.equal(rejected.length, 2);
+  assert.match(rejected[0].message, /ไม่เกิน 10 ภาพ/);
+  assert.deepEqual(splitCaseImageFiles(null), { accepted: [], rejected: [] });
 });

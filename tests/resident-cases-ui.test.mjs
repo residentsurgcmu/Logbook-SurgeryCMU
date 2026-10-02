@@ -103,3 +103,29 @@ test("header shows the signed-in user's full name next to the role", async () =>
   const css = await read("src/resident.css");
   assert.match(css, /\.header-user-name \{[^}]*text-overflow:ellipsis/);
 });
+
+test("the case form lets users pick images before saving and previews them", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /เลือกภาพ/);
+  assert.match(ui, /type="file"[^>]*multiple/);
+  assert.match(ui, /URL\.createObjectURL\(/);
+  assert.match(ui, /URL\.revokeObjectURL\(/);
+  assert.match(ui, /splitCaseImageFiles\(/);
+  assert.match(ui, /uploadCaseImages\(caseId, pending\.map/);
+});
+
+test("after saving, the form closes and opens the case so a retry never creates a duplicate case", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /await onSaved\(caseId, failureNotice\)/);
+  assert.match(ui, /setDialog\(\{ type: "detail", id: caseId, notice \}\)/);
+  assert.match(ui, /dialog\.notice/);
+});
+
+test("the case detail has a visible upload button at the top of the images section", async () => {
+  const ui = await read("src/features/ResidentCases.jsx");
+  assert.match(ui, /className="primary-button case-upload-button"/);
+  assert.match(ui, /อัปโหลดภาพ/);
+  const css = await read("src/resident.css");
+  assert.match(css, /\.case-file-input \{[^}]*opacity:0/);
+  assert.match(css, /\.case-upload-button:focus-within/);
+});
