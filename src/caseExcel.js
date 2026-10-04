@@ -1,6 +1,8 @@
 // Excel export of admission cases. Pure helpers + workbook building (tested in
 // Node with exceljs); the browser download lives in caseExcelExport.js.
 import { caseSexLabel, caseStatusLabel } from "./residentCases.js";
+
+const numberCell = (value) => (value === null || value === undefined || value === "" ? null : Number(value));
 import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 
 const nameOf = (people, id) => people.find((person) => person.user_id === id)?.full_name || "ไม่ทราบชื่อ";
@@ -59,12 +61,16 @@ export function buildCaseWorkbook(ExcelJS, { rows, notes = [], people = [] }) {
   const list = workbook.addWorksheet("รายการเคส", { views: [{ state: "frozen", ySplit: 1 }] });
   list.columns = [
     ["รหัสเคส", "code", 13], ["วันที่รับ", "admit", 12], ["อายุ (ปี)", "age", 9], ["เพศ", "sex", 9], ["หน่วย", "unit", 14],
-    ["Diagnosis", "dx", 34], ["Management", "management", 38], ["Operation", "operation", 28], ["สถานะ", "status", 12],
+    ["Diagnosis", "dx", 34], ["Present illness", "pi", 44], ["BP (mmHg)", "bp", 11], ["HR (/min)", "hr", 10], ["RR (/min)", "rr", 10],
+    ["BT (°C)", "bt", 9], ["SpO2 (%)", "spo2", 10], ["Physical examination", "pe", 44], ["Management", "management", 38], ["Operation", "operation", 28], ["สถานะ", "status", 12],
     ["Owner", "owner", 24], ["จำนวนภาพ", "media", 10], ["ผู้บันทึก", "creator", 24], ["แก้ไขล่าสุด", "updated", 18],
   ].map(([header, key, width]) => ({ header, key, width }));
   rows.forEach((row) => list.addRow({
     code: row.case_code, admit: row.admit_date, age: row.age_years, sex: caseSexLabel(row.sex), unit: row.unit_name,
-    dx: row.diagnosis, management: row.management || "", operation: row.operation || "", status: caseStatusLabel(row.status),
+    dx: row.diagnosis, pi: row.present_illness || "",
+    bp: row.bp_systolic != null && row.bp_diastolic != null ? `${row.bp_systolic}/${row.bp_diastolic}` : "",
+    hr: numberCell(row.heart_rate), rr: numberCell(row.resp_rate), bt: numberCell(row.body_temp), spo2: numberCell(row.spo2),
+    pe: row.physical_exam || "", management: row.management || "", operation: row.operation || "", status: caseStatusLabel(row.status),
     owner: nameOf(people, row.owner_id), media: row.media_count || 0, creator: nameOf(people, row.created_by), updated: bangkokDateTime(row.updated_at),
   }));
   const discussion = workbook.addWorksheet("ข้ออภิปราย", { views: [{ state: "frozen", ySplit: 1 }] });

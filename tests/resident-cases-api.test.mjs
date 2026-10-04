@@ -48,3 +48,20 @@ test("several images upload one by one and one failure does not stop the rest", 
   assert.match(fn, /failed\.push\(/);
   assert.match(fn, /return \{ uploaded, failed \}/);
 });
+
+test("clinical fields are sent on create and update, and update says so explicitly", async () => {
+  const src = await api();
+  assert.match(src, /p_present_illness: form\.present_illness \|\| ""/);
+  assert.match(src, /p_physical_exam: form\.physical_exam \|\| ""/);
+  assert.match(src, /p_body_temp: numberOrNull\(form\.body_temp\)/);
+  assert.match(src, /p_spo2: numberOrNull\(form\.spo2\)/);
+  assert.match(src, /p_set_clinical: true/);
+  assert.match(src, /CASE_COLUMNS = "[^"]*present_illness,physical_exam,bp_systolic,bp_diastolic,heart_rate,resp_rate,body_temp,spo2/);
+});
+
+test("Admin permanent image delete removes the row, then the storage file", async () => {
+  const src = await api();
+  const fn = src.slice(src.indexOf("export async function purgeCaseMedia"));
+  assert.match(fn, /"admin_purge_resident_case_media"/);
+  assert.match(fn, /\.remove\(\[path\]\)/);
+});

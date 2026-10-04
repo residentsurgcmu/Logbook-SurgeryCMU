@@ -93,3 +93,15 @@ test("export buttons exist on case detail and on the conference", async () => {
   assert.match(conference, /Export PowerPoint ทั้งสัปดาห์/);
   assert.match(conference, /exportWeekDeck\(/);
 });
+
+test("a History & Examination slide follows the case slide only when clinical data exists", () => {
+  const clinical = { ...row, present_illness: "ปวดท้อง 2 ชั่วโมง", bp_systolic: 100, bp_diastolic: 60, heart_rate: 120, physical_exam: "Board-like rigidity" };
+  const slides = buildCaseSlides(clinical, { people, media: [] });
+  assert.deepEqual(slides.map((slide) => slide.kind), ["case", "clinical"]);
+  const lines = Object.fromEntries(slides[1].lines);
+  assert.equal(lines["Present illness"], "ปวดท้อง 2 ชั่วโมง");
+  assert.equal(lines["Vital signs"], "BP 100/60 mmHg · HR 120/min");
+  assert.equal(lines["Physical examination"], "Board-like rigidity");
+  assert.match(slides[1].title, /History & Examination/);
+  assert.deepEqual(buildCaseSlides(row, { people, media: [] }).map((slide) => slide.kind), ["case"]);
+});

@@ -6,11 +6,13 @@ import {
   CASE_SEXES,
   CASE_STATUSES,
   CASE_UNITS,
+  CASE_VITALS,
   canDeleteCase,
   canDeleteMedia,
   canEditCase,
   caseErrorMessage,
   caseSexLabel,
+  formatVitals,
   isCaseConflict,
   splitCaseImageFiles,
   validateCaseForm,
@@ -23,6 +25,7 @@ import {
   loadCaseMedia,
   loadCasePeople,
   purgeAdmissionCase,
+  purgeCaseMedia,
   softDeleteAdmissionCase,
   updateAdmissionCase,
   uploadCaseImages,
@@ -42,6 +45,9 @@ const emptyForm = (user) => ({
   unit_name: CASE_UNITS[0],
   status: "admit",
   owner_id: user.role === "resident" ? user.id : "",
+  present_illness: "",
+  physical_exam: "",
+  ...Object.fromEntries(CASE_VITALS.map(({ key }) => [key, ""])),
 });
 const caseToForm = (row) => ({
   admit_date: row.admit_date,
@@ -53,6 +59,9 @@ const caseToForm = (row) => ({
   unit_name: row.unit_name,
   status: row.status,
   owner_id: row.owner_id,
+  present_illness: row.present_illness || "",
+  physical_exam: row.physical_exam || "",
+  ...Object.fromEntries(CASE_VITALS.map(({ key }) => [key, row[key] == null ? "" : String(row[key])])),
 });
 
 function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
@@ -141,6 +150,17 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
         <label>เพศ<select value={form.sex} onChange={set("sex")}>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
         <label className="case-full">Diagnosis<input maxLength={CASE_LIMITS.diagnosis} value={form.diagnosis} onChange={set("diagnosis")} required /></label>
+        <label className="case-full">Present illness<textarea rows={3} maxLength={CASE_LIMITS.presentIllness} value={form.present_illness} onChange={set("present_illness")} placeholder="อาการสำคัญและประวัติปัจจุบัน (ไม่ต้องใส่ชื่อ/HN)" /></label>
+        <fieldset className="case-full case-vitals">
+          <legend>Vital signs</legend>
+          {CASE_VITALS.map((vital) => (
+            <label key={vital.key}>
+              {vital.label} <small>({vital.unit})</small>
+              <input type="text" inputMode="decimal" value={form[vital.key]} onChange={set(vital.key)} placeholder={`${vital.min}–${vital.max}`} />
+            </label>
+          ))}
+        </fieldset>
+        <label className="case-full">Physical examination<textarea rows={3} maxLength={CASE_LIMITS.physicalExam} value={form.physical_exam} onChange={set("physical_exam")} /></label>
         <label className="case-full">Management<textarea rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>
         <label className="case-full">Operation<input maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>
         <label>สถานะ<select value={form.status} onChange={set("status")}>{CASE_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -221,7 +241,13 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
     });
   }
 
-  const fields = [["Management", row.management], ["Operation", row.operation]];
+  const fields = [
+    ["Present illness", row.present_illness],
+    ["Vital signs", formatVitals(row)],
+    ["Physical examination", row.physical_exam],
+    ["Management", row.management],
+    ["Operation", row.operation],
+  ];
   return (
     <>
       <p className="case-muted">{caseSexLabel(row.sex)} {row.age_years} ปี · {row.unit_name} · รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</p>
@@ -265,9 +291,12 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
             {(media || []).map((item, index) => (
               <figure key={item.id}>
                 {item.url ? <img src={item.url} alt={item.caption || `ภาพ ${index + 1}`} /> : <div className="case-media-empty">โหลดภาพไม่สำเร็จ</div>}
-                <figcaption>{item.caption || `ภาพ ${index + 1}`}
-                  {canDeleteMedia(user, item) && <button type="button" className="link-button" disabled={busy} onClick={() => { if (window.confirm("ลบภาพนี้?")) run(async () => { await deleteCaseMedia(item.id); await reloadMedia(); await onChanged(); }); }}> ลบ</button>}
-                </figcaption>
+                <figcaption>{item.caption || `ภาพ ${index + 1}`}</figcaption>
+                {user.role === "admin" ? (
+                  <button type="button" className="danger-button case-media-delete" disabled={busy} onClick={() => { if (window.confirm("ลบภาพนี้ถาวร? ไฟล์จะถูกลบออกจากระบบและกู้คืนไม่ได้")) run(async () => { await purgeCaseMedia(item.id); await reloadMedia(); await onChanged(); }); }}>ลบถาวร</button>
+                ) : canDeleteMedia(user, item) ? (
+                  <button type="button" className="danger-button case-media-delete" disabled={busy} onClick={() => { if (window.confirm("ลบภาพนี้? (Admin ยังลบถาวรได้ภายหลัง)")) run(async () => { await deleteCaseMedia(item.id); await reloadMedia(); await onChanged(); }); }}>ลบ</button>
+                ) : null}
               </figure>
             ))}
             {media?.length === 0 && <div className="case-media-empty">ยังไม่มีภาพแนบ</div>}
