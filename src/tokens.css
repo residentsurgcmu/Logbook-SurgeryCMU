@@ -1,0 +1,48 @@
+/* Design tokens: the single source for colour, radius, shadow and type.
+   styles.css and resident.css alias their older names (--wine, --resident-*) to these. */
+@font-face {
+  font-family: "Noto Sans Thai";
+  src: url("/fonts/NotoSansThai.ttf") format("truetype");
+  font-weight: 100 900;
+  font-stretch: 62.5% 100%;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif;
+
+  /* Brand: sampled from the Surgery CMU logo (see design-qa.md). */
+  --brand: #155426;
+  --brand-dark: #0a3c17;
+  --brand-soft: #e8f3ec;
+  --accent: #a376b4;
+  --accent-soft: #f5eff8;
+
+  /* Neutrals. --text-muted is >= 5.6:1 on every surface below. */
+  --canvas: #f4f7f5;
+  --surface: #ffffff;
+  --line: #dbe5dd;
+  --line-strong: #c3d1c7;
+  --text: #15231a;
+  --text-muted: #566359;
+
+  /* Status. Always pair with an icon or label, never colour alone. */
+  --success: #176b36;
+  --success-soft: #e5f5e9;
+  --warning: #8a5a00;
+  --warning-soft: #fff4d6;
+  --danger: #9c1c1c;
+  --danger-soft: #fff0f0;
+
+  /* One focus colour everywhere (9:1 on white, 8:1 on the canvas). */
+  --focus: #155426;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(17, 51, 33, .06), 0 1px 1px rgba(17, 51, 33, .04);
+  --shadow-md: 0 6px 18px rgba(17, 51, 33, .08);
+
+  --bottom-nav-height: 64px;
+}

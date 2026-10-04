@@ -1,12 +1,17 @@
 import React, { useMemo } from "react";
 import {
+  AlertIcon,
   BookIcon,
   ChartIcon,
   CheckIcon,
+  ChevronIcon,
+  ClipboardIcon,
   ClockIcon,
+  PlusIcon,
+  ScanIcon,
   UserIcon,
 } from "../components/Icons";
-import { buildDashboard } from "../residentAnalytics";
+import { STALE_PENDING_DAYS, TARGET_ASSESSMENTS_PER_FORM, buildDashboard } from "../residentAnalytics";
 
 const readableDateTime = (value) =>
   value
@@ -17,7 +22,55 @@ const readableDateTime = (value) =>
       }).format(new Date(value))
     : "—";
 
-export default function ResidentDashboard({ workspace, onNavigateHistory }) {
+const ageLabel = (days) => (days < 1 ? "วันนี้" : `${days} วัน`);
+
+function AgeChip({ days }) {
+  const stale = days >= STALE_PENDING_DAYS;
+  return (
+    <span className={`age-chip${stale ? " stale" : ""}`}>
+      {stale && <AlertIcon size={13} />}
+      {ageLabel(days)}
+      {stale && <span className="visually-hidden"> ค้างนาน</span>}
+    </span>
+  );
+}
+
+function HomeHero({ role, name, pendingCount, onNavigate }) {
+  if (role === "admin") return null;
+  const staff = role === "staff";
+  return (
+    <section className="home-hero" aria-label="งานหลัก">
+      <div>
+        <h2>{staff ? (pendingCount ? `มี ${pendingCount} รายการรอคุณประเมิน` : "ไม่มีรายการรอประเมิน") : `สวัสดี ${name}`}</h2>
+        <p>
+          {staff
+            ? "เลือกรายการจากคิวด้านล่าง หรือสแกน QR ของ Resident เพื่อเริ่มประเมินทันที"
+            : pendingCount
+              ? `มี ${pendingCount} รายการที่กำลังรอ Staff ประเมิน`
+              : "ส่งแบบประเมินให้ Staff เมื่อทำหัตถการหรือกิจกรรมเสร็จ"}
+        </p>
+      </div>
+      <div className="home-hero-actions">
+        {staff ? (
+          <>
+            <button type="button" className="secondary-button with-icon" onClick={() => onNavigate("scan")}>
+              <ScanIcon size={18} /> สแกน QR
+            </button>
+            <button type="button" className="primary-button with-icon" onClick={() => onNavigate("pending")}>
+              <ClipboardIcon size={18} /> คิวรอประเมิน
+            </button>
+          </>
+        ) : (
+          <button type="button" className="primary-button with-icon" onClick={() => onNavigate("request")}>
+            <PlusIcon size={18} /> ส่งแบบประเมิน
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest, onNavigateHistory }) {
   const dashboard = useMemo(() => buildDashboard(workspace), [workspace]);
   const names = new Map(
     (workspace.allProfiles || workspace.profiles).map((profile) => [profile.id, profile.name]),
@@ -40,16 +93,26 @@ export default function ResidentDashboard({ workspace, onNavigateHistory }) {
               new Set(workspace.requests.map((item) => item.resident_id)).size,
               UserIcon,
             ],
-            ["EPA/PBA ในระบบ", workspace.templates.length, BookIcon],
+            [`รอเกิน ${STALE_PENDING_DAYS} วัน`, dashboard.stalePending.length, AlertIcon],
           ]
         : [
             ["ส่งแล้วทั้งหมด", workspace.requests.length, BookIcon],
             ["รอ Staff ประเมิน", dashboard.pending.length, ClockIcon],
             ["ประเมินแล้ว", dashboard.completed, CheckIcon],
-            ["EPA/PBA ในระบบ", workspace.templates.length, ChartIcon],
+            [
+              `แบบที่ครบ ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง`,
+              `${dashboard.typeTotals.reduce((sum, item) => sum + item.targetMet, 0)}/${workspace.templates.length}`,
+              ChartIcon,
+            ],
           ];
   return (
     <div className="dashboard-stack">
+      <HomeHero
+        role={role}
+        name={workspace.user.name}
+        pendingCount={role === "staff" ? dashboard.pending.length : workspace.requests.filter((item) => item.status === "pending").length}
+        onNavigate={onNavigate}
+      />
       <section className="dashboard-summary" aria-label="สรุปภาพรวม">
         {cards.map(([label, value, Icon]) => {
           const focus =
@@ -76,42 +139,79 @@ export default function ResidentDashboard({ workspace, onNavigateHistory }) {
               </span>
               <div>
                 <small>{label}</small>
-                <strong>{value.toLocaleString("th-TH")}</strong>
+                <strong>{typeof value === "number" ? value.toLocaleString("th-TH") : value}</strong>
               </div>
             </Element>
           );
         })}
       </section>
       <div className="dashboard-columns">
-        <section className="resident-panel progress-panel">
+        <section className="resident-panel queue-panel" aria-labelledby="queue-title">
           <div className="panel-title-row">
             <div>
-              <h2>ความคืบหน้า EPA / PBA</h2>
-              <p>จำนวนผลประเมินและรายการรอดำเนินการจากข้อมูลปัจจุบัน</p>
+              <h2 id="queue-title">{role === "staff" ? "รอฉันประเมิน" : role === "admin" ? `ค้างเกิน ${STALE_PENDING_DAYS} วัน` : "รอ Staff ประเมิน"}</h2>
+              <p>
+                {role === "staff"
+                  ? "เรียงจากรายการที่รอนานที่สุด"
+                  : role === "admin"
+                    ? "คำขอที่ Staff ยังไม่ได้ประเมินเกินกำหนด"
+                    : "แบบประเมินที่ส่งแล้วและยังไม่ได้รับการประเมิน"}
+              </p>
             </div>
-            <ChartIcon size={22} />
+            <ClockIcon size={22} />
           </div>
-          {dashboard.typeTotals.map((item) => {
-            const total = item.completed + item.pending;
-            const percent = total
-              ? Math.round((item.completed / total) * 100)
-              : 0;
+          {(() => {
+            const rows = (role === "admin" ? dashboard.stalePending : dashboard.pendingQueue).slice(0, 5);
+            const total = (role === "admin" ? dashboard.stalePending : dashboard.pendingQueue).length;
+            if (!rows.length)
+              return (
+                <div className="empty-state">
+                  <span className="empty-state-icon"><CheckIcon size={22} /></span>
+                  <strong>{role === "admin" ? "ไม่มีรายการค้างนาน" : role === "staff" ? "ไม่มีรายการรอประเมิน" : "ยังไม่มีรายการที่รอ"}</strong>
+                  <p>
+                    {role === "resident"
+                      ? "เมื่อส่งแบบประเมินให้ Staff รายการจะแสดงที่นี่"
+                      : "เมื่อมีคำขอใหม่ รายการจะแสดงที่นี่"}
+                  </p>
+                  {role === "resident" && (
+                    <button type="button" className="primary-button with-icon" onClick={() => onNavigate("request")}>
+                      <PlusIcon size={18} /> ส่งแบบประเมิน
+                    </button>
+                  )}
+                </div>
+              );
             return (
-              <div className="progress-row" key={item.type}>
-                <div>
-                  <strong>{item.type}</strong>
-                  <span>
-                    {item.templates} แบบ · ประเมินแล้ว {item.completed} · รอ{" "}
-                    {item.pending}
-                  </span>
-                </div>
-                <div className="progress-track">
-                  <i style={{ width: `${percent}%` }} />
-                </div>
-                <b>{percent}%</b>
-              </div>
+              <>
+                <ul className="queue-list">
+                  {rows.map(({ request, ageDays }) => (
+                    <li key={request.id} className="queue-item">
+                      <div className="queue-item-main">
+                        <strong>
+                          {request.resident_template_definitions?.template_code || "—"}
+                          {role !== "resident" && ` · ${names.get(request.resident_id) || "—"}`}
+                        </strong>
+                        <span>
+                          {request.procedure_or_activity || request.resident_template_definitions?.title || "—"}
+                          {role !== "staff" && ` · Staff: ${names.get(request.staff_id) || "—"}`}
+                        </span>
+                      </div>
+                      <AgeChip days={ageDays} />
+                      {role === "staff" && (
+                        <button type="button" className="primary-button queue-action" onClick={() => onOpenRequest(request)}>
+                          ประเมิน
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {role === "staff" && total > rows.length && (
+                  <button type="button" className="text-button queue-more" onClick={() => onNavigate("pending")}>
+                    ดูทั้งหมด ({total}) <ChevronIcon size={16} />
+                  </button>
+                )}
+              </>
             );
-          })}
+          })()}
         </section>
         <section className="resident-panel activity-panel">
           <div className="panel-title-row">
@@ -142,10 +242,53 @@ export default function ResidentDashboard({ workspace, onNavigateHistory }) {
               ))}
             </div>
           ) : (
-            <p className="muted-empty">ยังไม่มีกิจกรรม</p>
+            <div className="empty-state">
+              <span className="empty-state-icon"><BookIcon size={22} /></span>
+              <strong>ยังไม่มีกิจกรรม</strong>
+              <p>การส่งและการประเมินจะแสดงที่นี่</p>
+            </div>
           )}
         </section>
       </div>
+      <section className="resident-panel progress-panel" aria-labelledby="progress-title">
+        <div className="panel-title-row">
+          <div>
+            <h2 id="progress-title">{role === "resident" ? "ความก้าวหน้าเทียบเป้า" : "สัดส่วนคำขอที่ประเมินเสร็จ"}</h2>
+            <p>
+              {role === "resident"
+                ? `เป้าหมาย: แต่ละแบบ EPA/PBA ได้รับการประเมิน ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง (นับแบบละไม่เกิน ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง)`
+                : "ประเมินเสร็จ ÷ (ประเมินเสร็จ + ยังรอ) แยกตามประเภทแบบประเมิน"}
+            </p>
+          </div>
+          <ChartIcon size={22} />
+        </div>
+        {dashboard.typeTotals.map((item) => {
+          const percent = role === "resident" ? item.targetPercent : item.completionPercent;
+          return (
+            <div className="progress-row" key={item.type}>
+              <div>
+                <strong>{item.type}</strong>
+                <span>
+                  {role === "resident"
+                    ? `ครบเป้า ${item.targetMet} จาก ${item.templates} แบบ · ประเมินแล้ว ${item.targetDone} จาก ${item.targetTotal} ครั้ง`
+                    : `${item.templates} แบบ · ประเมินแล้ว ${item.completed} · รอ ${item.pending}`}
+                </span>
+              </div>
+              <div
+                className="progress-track"
+                role="progressbar"
+                aria-label={`${item.type} ${role === "resident" ? "ความก้าวหน้าเทียบเป้า" : "สัดส่วนที่ประเมินเสร็จ"}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent}
+              >
+                <i style={{ width: `${percent}%` }} />
+              </div>
+              <b>{role === "resident" ? `${item.targetDone}/${item.targetTotal}` : `${percent}%`}</b>
+            </div>
+          );
+        })}
+      </section>
       {role === "admin" && (
         <section className="resident-panel">
           <div className="panel-title-row">

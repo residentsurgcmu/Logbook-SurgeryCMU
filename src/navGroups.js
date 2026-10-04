@@ -12,3 +12,17 @@ export function groupNav(nav) {
   groups[groups.length - 1][1].push(...nav.filter(([id]) => !known.has(id)));
   return groups.filter(([, items]) => items.length);
 }
+
+// Phone bottom bar: the few things each role does on the ward, with short labels.
+// The fifth slot is always "เพิ่มเติม", which opens the full menu drawer.
+export const BOTTOM_NAV = {
+  resident: [["request", "ส่งประเมิน"], ["history", "ผลประเมิน"], ["qr", "QR ของฉัน"], ["cases", "เคส"]],
+  staff: [["pending", "รอประเมิน"], ["scan", "สแกน"], ["dashboard", "ภาพรวม"], ["history", "ประวัติ"]],
+  admin: [["dashboard", "ภาพรวม"], ["history", "ผลประเมิน"], ["cases", "เคส"], ["admin", "จัดการ"]],
+};
+
+// Only tabs the signed-in role can actually open are returned.
+export function bottomNav(role, nav) {
+  const allowed = new Set(nav.map(([id]) => id));
+  return (BOTTOM_NAV[role] || []).filter(([id]) => allowed.has(id));
+}

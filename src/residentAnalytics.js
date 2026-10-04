@@ -4,7 +4,17 @@ export function getResidentProfiles(workspace) {
   return workspace.profiles.filter((profile) => Number.isInteger(profile.pgy));
 }
 
-export function buildDashboard(workspace) {
+export const STALE_PENDING_DAYS = 7;
+// Department rule: every EPA/PBA form should be assessed this many times.
+export const TARGET_ASSESSMENTS_PER_FORM = 2;
+
+// Whole days since a request was submitted (never negative; 0 when the date is missing).
+export function pendingAgeDays(submittedAt, now = Date.now()) {
+  const submitted = asTime(submittedAt);
+  return submitted ? Math.max(0, Math.floor((now - submitted) / 86400000)) : 0;
+}
+
+export function buildDashboard(workspace, now = Date.now()) {
   const residents = getResidentProfiles(workspace);
   const pending = workspace.requests.filter(
     (request) => request.status === "pending",
@@ -13,20 +23,46 @@ export function buildDashboard(workspace) {
   const activeStaff = workspace.staffDirectory.filter(
     (staff) => staff.active && staff.auth_user_id,
   ).length;
-  const typeTotals = ["EPA", "PBA"].map((type) => ({
-    type,
-    templates: workspace.templates.filter(
-      (template) => template.template_type === type,
-    ).length,
-    completed: workspace.assessments.filter(
+  const typeTotals = ["EPA", "PBA"].map((type) => {
+    const ofType = workspace.assessments.filter(
       (assessment) =>
         assessment.resident_template_definitions?.template_type === type,
-    ).length,
-    pending: pending.filter(
+    );
+    const templates = workspace.templates.filter(
+      (template) => template.template_type === type,
+    ).length;
+    const completed = ofType.length;
+    const pendingOfType = pending.filter(
       (request) =>
         request.resident_template_definitions?.template_type === type,
-    ).length,
-  }));
+    ).length;
+    // Assessments per form. Coverage = forms assessed at least once; the target counts each
+    // form up to TARGET_ASSESSMENTS_PER_FORM so extra assessments of one form never hide a gap.
+    const perForm = new Map();
+    ofType.forEach((assessment) => {
+      const key = assessment.template_id ?? assessment.resident_template_definitions?.template_code;
+      perForm.set(key, (perForm.get(key) || 0) + 1);
+    });
+    const covered = perForm.size;
+    const counts = [...perForm.values()];
+    const targetMet = counts.filter((count) => count >= TARGET_ASSESSMENTS_PER_FORM).length;
+    const targetDone = counts.reduce((sum, count) => sum + Math.min(count, TARGET_ASSESSMENTS_PER_FORM), 0);
+    const targetTotal = templates * TARGET_ASSESSMENTS_PER_FORM;
+    const requested = completed + pendingOfType;
+    return {
+      type,
+      templates,
+      completed,
+      pending: pendingOfType,
+      covered,
+      targetMet,
+      targetDone,
+      targetTotal,
+      targetPercent: targetTotal ? Math.round((Math.min(targetDone, targetTotal) / targetTotal) * 100) : 0,
+      coveragePercent: templates ? Math.round((Math.min(covered, templates) / templates) * 100) : 0,
+      completionPercent: requested ? Math.round((completed / requested) * 100) : 0,
+    };
+  });
   const assessmentCount = new Map();
   const pendingCount = new Map();
   workspace.assessments.forEach((assessment) =>
@@ -64,9 +100,16 @@ export function buildDashboard(workspace) {
   ]
     .sort((a, b) => asTime(b.at) - asTime(a.at))
     .slice(0, 6);
+  // Oldest first: the request that has waited longest is first in the queue.
+  const pendingQueue = [...pending]
+    .sort((a, b) => asTime(a.submitted_at) - asTime(b.submitted_at))
+    .map((request) => ({ request, ageDays: pendingAgeDays(request.submitted_at, now) }));
+  const stalePending = pendingQueue.filter((item) => item.ageDays >= STALE_PENDING_DAYS);
   return {
     residents,
     pending,
+    pendingQueue,
+    stalePending,
     completed,
     activeStaff,
     typeTotals,

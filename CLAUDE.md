@@ -66,6 +66,14 @@ See `README.md` for features, local run and secrets.
 - 2026-10-02 (branch `feat/sidebar-shell`): sidebar shell (grouped nav in `src/navGroups.js`, glass sidebar + top bar,
   phone drawer; page content unchanged, records stay on opaque panels) and Excel export of admissions by admit-date
   range (`src/caseExcel.js` + `src/caseExcelExport.js`, exceljs lazy-loaded). No migration needed.
+- 2026-10-04 (branch `feat/ui-refresh-phase1-2`, **not yet deployed, no migration**): UI refresh phases 1-2. Phase 1: `src/tokens.css`
+  is the single token source (legacy `--wine`/`--resident-*` alias it); Noto Sans Thai now actually loads (`@font-face` + preload);
+  one green 3px focus ring (purple ring removed); glass removed from controls/sidebar (only the sticky top bar keeps a blur); legacy
+  `.resident-app nav` top-tab rules deleted. Phase 2: role-specific home (queue + one primary action), `pendingQueue`/`stalePending`/
+  `coverage` in `buildDashboard`, menu badges instead of "(n)" in labels, phone bottom bar (`BOTTOM_NAV` in `navGroups.js`).
+  The old "%" was completed/(completed+pending); it is now labelled as completion rate for Staff/Admin. Residents see progress against the
+  department target of 2 assessments per EPA/PBA form (`TARGET_ASSESSMENTS_PER_FORM`; counted per form up to 2). Assumed the same target
+  for every PGY and every form — change the constant if that differs.
 
 ## Still open (owner: Chagkrit)
 - Supabase Auth: disable sign-up, or turn on Confirm email.
