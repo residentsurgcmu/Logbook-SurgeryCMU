@@ -42,9 +42,9 @@ test("the shell is a sidebar with the original logo and a top bar with the user"
   assert.doesNotMatch(shell, /<header[\s>]/);
 });
 
-test("glass is used for the shell while records stay on opaque panels", async () => {
+test("the shell is flat: a solid sidebar, and only the sticky top bar is translucent", async () => {
   const css = await read("src/resident.css");
-  assert.match(css, /\.app-sidebar \{[^}]*backdrop-filter:/);
+  assert.doesNotMatch(css.match(/\.app-sidebar \{[^}]*\}/)[0], /backdrop-filter/);
   assert.match(css, /\.app-topbar \{[^}]*backdrop-filter:/);
   assert.match(css, /@media \(max-width:900px\) \{[^@]*\.app-sidebar \{[^}]*transform:translateX\(-120%\)/);
   assert.match(css, /Opaque information surfaces: never turn tables, forms, or clinical records into glass\./);

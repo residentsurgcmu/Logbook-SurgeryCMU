@@ -24,7 +24,7 @@ import ResidentConference from "./ResidentConference";
 import ResidentExportCenter from "./ResidentExportCenter";
 import { RoundAdmin, RoundCheckIn } from "./RoundAttendance";
 import { parseRoundToken } from "../roundSchedule";
-import { groupNav } from "../navGroups";
+import { bottomNav, groupNav } from "../navGroups";
 import {
   BedIcon,
   BellIcon,
@@ -732,6 +732,16 @@ function Admin({ workspace, onRefresh }) {
   );
 }
 
+function NavBadge({ count }) {
+  if (!count) return null;
+  return (
+    <span className="nav-badge">
+      {count > 99 ? "99+" : count}
+      <span className="visually-hidden"> รายการ</span>
+    </span>
+  );
+}
+
 const navIcons = {
   request: PlusIcon,
   pending: ClipboardIcon,
@@ -780,20 +790,20 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     nav.unshift(["request", "ส่งแบบประเมิน"]);
   if (workspace.user.role === "resident") nav.splice(2, 0, ["qr", "QR ของฉัน"]);
   if (workspace.user.role === "staff")
-    nav.unshift(
-      [
-        "pending",
-        `รอประเมิน (${workspace.requests.filter((item) => item.status === "pending").length})`,
-      ],
-      ["scan", "สแกน QR"],
-    );
+    nav.unshift(["pending", "รอประเมิน"], ["scan", "สแกน QR"]);
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
     nav.push(["attendance", "เช็กชื่อประชุม"]);
   nav.push(["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"]);
-  nav.push([
-    "notifications",
-    `Notification${unreadCount ? ` (${unreadCount})` : ""}`,
-  ]);
+  nav.push(["notifications", "Notification"]);
+  // Counts that need action are badges, not part of the label.
+  const badges = {
+    notifications: unreadCount,
+    pending:
+      workspace.user.role === "staff"
+        ? workspace.requests.filter((item) => item.status === "pending").length
+        : 0,
+  };
+  const quickNav = bottomNav(workspace.user.role, nav);
   if (workspace.user.role === "admin")
     nav.push(["round-admin", "MM & Grand Round"], ["exams", "การสอบ"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
   else
@@ -820,6 +830,12 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
   async function readNotification(id) {
     await markNotificationRead(id);
     await onRefresh();
+  }
+  function goTo(id) {
+    if (id === "conference" && tab !== "conference") setPresentCase(null);
+    setTab(id);
+    setSelectedRequest(null);
+    setMenuOpen(false);
   }
   const openScannedRequest = (request) => {
     setSelectedRequest(request);
@@ -848,15 +864,11 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
                     type="button"
                     className={tab === id ? "active" : ""}
                     aria-current={tab === id ? "page" : undefined}
-                    onClick={() => {
-                      if (id === "conference" && tab !== "conference") setPresentCase(null);
-                      setTab(id);
-                      setSelectedRequest(null);
-                      setMenuOpen(false);
-                    }}
+                    onClick={() => goTo(id)}
                   >
                     <Icon size={19} />
                     <span>{label}</span>
+                    <NavBadge count={badges[id]} />
                   </button>
                 );
               })}
@@ -891,6 +903,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         {tab === "dashboard" ? (
           <ResidentDashboard
             workspace={workspace}
+            onNavigate={goTo}
+            onOpenRequest={openScannedRequest}
             onNavigateHistory={(focus) => {
               setHistoryFocus(focus);
               setTab("history");
@@ -972,6 +986,32 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
         ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย
       </footer>
       </div>
+      <nav className="bottom-nav" aria-label="เมนูด่วน">
+        {quickNav.map(([id, label]) => {
+          const Icon = navIcons[id] || FileIcon;
+          return (
+            <button
+              key={id}
+              type="button"
+              className={id === "scan" ? "bottom-nav-primary" : ""}
+              aria-current={tab === id ? "page" : undefined}
+              onClick={() => goTo(id)}
+            >
+              <span className="bottom-nav-icon"><Icon size={22} /><NavBadge count={badges[id]} /></span>
+              <span>{label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-current={quickNav.some(([id]) => id === tab) ? undefined : "page"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(true)}
+        >
+          <span className="bottom-nav-icon"><MenuIcon size={22} /></span>
+          <span>เพิ่มเติม</span>
+        </button>
+      </nav>
     </div>
   );
 }
