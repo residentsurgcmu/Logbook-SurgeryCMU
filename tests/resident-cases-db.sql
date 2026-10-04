@@ -23,16 +23,31 @@ begin
     or has_table_privilege('anon', 'public.resident_admission_cases', 'select')
   then raise exception 'Resident case table grant regression'; end if;
 
-  if has_function_privilege('anon', 'public.create_resident_admission_case(date, smallint, text, text, text, text, text, text, uuid)', 'execute')
-    or has_function_privilege('anon', 'public.update_resident_admission_case(uuid, timestamptz, date, smallint, text, text, text, text, text, text, uuid)', 'execute')
-    or has_function_privilege('anon', 'public.soft_delete_resident_admission_case(uuid, timestamptz)', 'execute')
-    or has_function_privilege('anon', 'public.admin_purge_resident_admission_case(uuid)', 'execute')
-    or has_function_privilege('anon', 'public.add_resident_case_media(uuid, text, text)', 'execute')
-    or has_function_privilege('anon', 'public.add_resident_case_note(uuid, text)', 'execute')
-    or has_function_privilege('anon', 'public.list_resident_case_people()', 'execute')
-  then raise exception 'Resident case function grant regression'; end if;
+  -- Nobody who is not logged in may call any case function (every installed version of each).
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('create_resident_admission_case', 'create_resident_admission_case_with_type',
+                        'update_resident_admission_case', 'update_resident_admission_case_with_type',
+                        'set_resident_case_treatment_type', 'soft_delete_resident_admission_case',
+                        'admin_purge_resident_admission_case', 'add_resident_case_media', 'delete_resident_case_media',
+                        'admin_purge_resident_case_media', 'add_resident_case_note', 'edit_resident_case_note',
+                        'delete_resident_case_note', 'list_resident_case_people',
+                        'save_resident_conference_agenda', 'reset_resident_conference_agenda', 'add_resident_conference_note')
+      and has_function_privilege('anon', p.oid, 'EXECUTE')
+  ) then raise exception 'Resident case function grant regression'; end if;
 
-  if not has_function_privilege('authenticated', 'public.create_resident_admission_case(date, smallint, text, text, text, text, text, text, uuid)', 'execute')
+  -- New cases must carry a Type: logged-in users create through the *_with_type function; the ORIGINAL create
+  -- function is closed to them (migration 20261004160000, run last). If this fails on an environment where that
+  -- last migration has not been run yet, run it after the new web app is live.
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_resident_admission_case'
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+  ) then raise exception 'The original create function must not be executable by logged-in users (require-type migration)'; end if;
+
+  if not has_function_privilege('authenticated', 'public.create_resident_admission_case_with_type(date, smallint, text, text, text, text, text, text, uuid, text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.update_resident_admission_case_with_type(uuid, timestamptz, date, smallint, text, text, text, text, text, text, uuid, text)', 'execute')
     or not has_function_privilege('authenticated', 'private.resident_case_member()', 'execute')
   then raise exception 'Authenticated must execute case RPCs and RLS helpers'; end if;
 

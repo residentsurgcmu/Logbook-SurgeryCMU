@@ -11,7 +11,7 @@ const people = [
 const row = {
   id: "c1", case_code: "ADM-00003", admit_date: "2026-09-30", age_years: 58, sex: "male",
   diagnosis: "Perforated peptic ulcer", management: "Emergency operation", operation: "Laparoscopic repair",
-  unit_name: "Upper GI", status: "pending_update", owner_id: "r1",
+  unit_name: "Upper GI", status: "pending_update", treatment_type: "operative", owner_id: "r1",
 };
 // 1x1 transparent PNG.
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -28,7 +28,8 @@ test("a case deck is one info slide then one slide per image, without notes by d
   assert.equal(slides[0].title, "ADM-00003 · Perforated peptic ulcer");
   assert.equal(info["อายุ / เพศ"], "58 ปี · ชาย");
   assert.equal(info["หน่วย"], "Upper GI");
-  assert.equal(info["สถานะ"], "รออัปเดต");
+  assert.equal(info["Type"], "Operative");
+  assert.equal(info["สถานะ"], undefined);
   assert.equal(info["Owner"], "Resident A");
   assert.equal(info["Operation"], "Laparoscopic repair");
   assert.equal(slides[1].caption, "ภาพที่ 1");
@@ -90,18 +91,14 @@ test("export buttons exist on case detail and on the conference", async () => {
   assert.match(detail, /Export PowerPoint/);
   assert.match(detail, /exportCaseDeck\(/);
   const conference = await readFile(new URL("../src/features/ResidentConference.jsx", import.meta.url), "utf8");
-  assert.match(conference, /Export PowerPoint ทั้งสัปดาห์/);
-  assert.match(conference, /exportWeekDeck\(/);
+  assert.match(conference, /Export PowerPoint ตามรายการ/);
+  // the deck follows the saved agenda (included cases, in the chosen order), not "every case of the week"
+  assert.match(conference, /exportWeekDeck\(\{ start: range\.from, end: range\.to \}, included, people\)/);
 });
 
-test("a History & Examination slide follows the case slide only when clinical data exists", () => {
-  const clinical = { ...row, present_illness: "ปวดท้อง 2 ชั่วโมง", bp_systolic: 100, bp_diastolic: 60, heart_rate: 120, physical_exam: "Board-like rigidity" };
-  const slides = buildCaseSlides(clinical, { people, media: [] });
-  assert.deepEqual(slides.map((slide) => slide.kind), ["case", "clinical"]);
-  const lines = Object.fromEntries(slides[1].lines);
-  assert.equal(lines["Present illness"], "ปวดท้อง 2 ชั่วโมง");
-  assert.equal(lines["Vital signs"], "BP 100/60 mmHg · HR 120/min");
-  assert.equal(lines["Physical examination"], "Board-like rigidity");
-  assert.match(slides[1].title, /History & Examination/);
-  assert.deepEqual(buildCaseSlides(row, { people, media: [] }).map((slide) => slide.kind), ["case"]);
+test("a case never produces a History & Examination slide, even if old rows still carry clinical columns", () => {
+  const legacy = { ...row, present_illness: "ปวดท้อง 2 ชั่วโมง", bp_systolic: 100, bp_diastolic: 60, heart_rate: 120, physical_exam: "Board-like rigidity" };
+  const slides = buildCaseSlides(legacy, { people, media: [] });
+  assert.deepEqual(slides.map((slide) => slide.kind), ["case"]);
+  assert.ok(!JSON.stringify(slides).match(/ปวดท้อง 2 ชั่วโมง|Board-like|Vital signs|History & Examination/));
 });

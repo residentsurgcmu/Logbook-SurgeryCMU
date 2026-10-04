@@ -578,6 +578,9 @@ export function AssessmentHistory({
     () => new Map(profiles.map((person) => [person.id, person])),
     [profiles],
   );
+  // The Staff who signed this assessment. Names resolve for the Resident being assessed too
+  // (counterpart names), and stay readable after an account is deactivated.
+  const evaluatorName = (item) => profileById.get(item.evaluator_id)?.name || "ไม่พบชื่อ Staff";
   const relatedIds = new Set([
     ...requests.map((request) => request.resident_id),
     ...assessments.map((item) => item.resident_id),
@@ -630,6 +633,7 @@ export function AssessmentHistory({
           {selected.resident_pgy} · {timeLabel(selected.signed_at)} ·{" "}
           {request && attemptLabel(request, template)}
         </p>
+        <p className="assessment-evaluator">ผู้ประเมิน (Staff): <strong>{evaluatorName(selected)}</strong></p>
         {request?.previous_staff_name && (
           <p>ครั้งก่อนประเมินโดย {request.previous_staff_name}</p>
         )}
@@ -829,6 +833,7 @@ export function AssessmentHistory({
                   <th>PGY</th>
                   <th>แบบประเมิน</th>
                   <th>ครั้งที่</th>
+                  <th>ผู้ประเมิน (Staff)</th>
                   <th>ผล Staff</th>
                   <th></th>
                 </tr>
@@ -846,6 +851,7 @@ export function AssessmentHistory({
                         {item.resident_template_definitions?.title}
                       </td>
                       <td>{request?.attempt_number || "—"}</td>
+                      <td>{evaluatorName(item)}</td>
                       <td>{item.overall_outcome || "—"}</td>
                       <td>
                         <button

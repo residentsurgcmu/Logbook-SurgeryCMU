@@ -9,6 +9,8 @@ import {
   syncSourceTemplates,
 } from "../residentApi";
 import ResidentDashboard from "./ResidentDashboard";
+import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
+import ResidentSchedule from "./ResidentSchedule";
 import {
   AssessmentHistory,
   OutcomeSelect,
@@ -743,6 +745,10 @@ function NavBadge({ count }) {
 }
 
 const navIcons = {
+  home: HomeIcon,
+  videos: BookIcon,
+  schedule: CalendarIcon,
+  accounts: KeyIcon,
   request: PlusIcon,
   pending: ClipboardIcon,
   scan: ScanIcon,
@@ -759,14 +765,14 @@ const navIcons = {
   admin: KeyIcon,
 };
 
-export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
+export default function ResidentPlatform({ workspace, onRefresh, onLogout, renderModulePreview }) {
   const routeToken = parseResidentQrToken(window.location.pathname);
   // Read the attendance token once. RoundCheckIn clears it (and the URL) after
   // the first check-in so switching tabs or reloading never re-submits an
   // expired, rotating QR token.
   const [roundToken, setRoundToken] = useState(() => parseRoundToken(window.location.pathname));
   const initialTab =
-    workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "dashboard";
+    workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "home";
   const [tab, setTab] = useState(initialTab);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -783,7 +789,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     [workspace.notifications],
   );
   const nav = [
-    ["dashboard", "Dashboard"],
+    ["home", "หน้าแรก"],
+    ["dashboard", "ภาพรวม EPA / PBA"],
     ["history", "ผลการประเมิน"],
   ];
   if (workspace.user.role === "resident")
@@ -808,7 +815,12 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     nav.push(["round-admin", "MM & Grand Round"], ["exams", "การสอบ"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
   else
     nav.push(["exams", workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "ผลการสอบ"]);
+  nav.push(["videos", "คลังวิดีโอ"], ["schedule", "ตารางเวร / OR"], ["accounts", "บัญชีที่เชื่อมต่อ"]);
   const titles = {
+    home: "Resident Corner",
+    videos: "คลังวิดีโอ",
+    schedule: "ตารางเวร / ตาราง OR",
+    accounts: "บัญชีที่เชื่อมต่อ",
     dashboard: "Dashboard การประเมิน",
     request: "ส่งแบบประเมิน EPA/PBA",
     pending: "รายการรอ Staff ประเมิน",
@@ -841,19 +853,26 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
     setSelectedRequest(request);
     setTab("pending");
   };
+  const navigate = (id) => {
+    if (!nav.some(([allowed]) => allowed === id)) return;
+    if (id === "conference" && tab !== "conference") setPresentCase(null);
+    setTab(id);
+    setSelectedRequest(null);
+    setMenuOpen(false);
+  };
   return (
-    <div className="resident-app app-shell-v2">
+    <div className="resident-app app-shell-v2 corner-shell">
       <aside className={`app-sidebar${menuOpen ? " open" : ""}`} aria-label="เมนูหลัก">
         <div className="app-sidebar-brand">
           <img src="/surgery-cmu-logo.png" alt="Surgery CMU" />
           <div>
-            <strong>Resident Surgery</strong>
+            <strong>Resident Corner</strong>
             <span>ภาควิชาศัลยศาสตร์ มช.</span>
           </div>
           <button type="button" className="icon-button app-menu-close" onClick={() => setMenuOpen(false)} aria-label="ปิดเมนู"><XIcon /></button>
         </div>
-        <nav className="app-nav" aria-label="เมนู Resident Surgery Assessment">
-          {groupNav(nav).map(([group, items]) => (
+        <nav className="app-nav" aria-label="เมนู Resident Corner">
+          {groupNav(nav, workspace.user.role).map(([group, items]) => (
             <div className="app-nav-group" key={group}>
               <div className="app-nav-title">{group}</div>
               {items.map(([id, label]) => {
@@ -864,7 +883,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
                     type="button"
                     className={tab === id ? "active" : ""}
                     aria-current={tab === id ? "page" : undefined}
-                    onClick={() => goTo(id)}
+                    onClick={() => navigate(id)}
                   >
                     <Icon size={19} />
                     <span>{label}</span>
@@ -875,13 +894,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
             </div>
           ))}
         </nav>
-        <div className="app-sidebar-foot">EPA · PBA · New admissions<br />ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</div>
+        <div className="app-sidebar-foot">SERVICE · LEARNING · TRAINING<br />ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</div>
       </aside>
       {menuOpen && <div className="app-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
       <div className="app-workspace">
         <div className="app-topbar">
           <button type="button" className="icon-button app-menu-button" onClick={() => setMenuOpen(true)} aria-label="เปิดเมนู" aria-expanded={menuOpen}><MenuIcon /></button>
-          <div className="app-crumb">Resident Surgery <span>/ {titles[tab]}</span></div>
+          <div className="app-crumb">Resident Corner {tab !== "home" && <span>/ {titles[tab]}</span>}</div>
           <div className="app-user">
             <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
             <span className="role-chip">{roleLabel[workspace.user.role]}</span>
@@ -900,7 +919,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout }) {
             </p>
           </div>
         </div>
-        {tab === "dashboard" ? (
+        {tab === "home" ? (
+          <ResidentCornerHome workspace={workspace} onNavigate={navigate} onOpenRequest={openScannedRequest} />
+        ) : tab === "schedule" ? (
+          <ResidentSchedule user={workspace.user} onNavigate={navigate} />
+        ) : ["videos", "accounts"].includes(tab) ? (
+          <CornerService service={tab} onNavigate={navigate} />
+        ) : renderModulePreview ? renderModulePreview(tab, () => navigate("home")) : tab === "dashboard" ? (
           <ResidentDashboard
             workspace={workspace}
             onNavigate={goTo}

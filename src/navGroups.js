@@ -1,15 +1,17 @@
-// Sidebar sections. Tabs keep the role order built in ResidentPlatform; a tab
-// missing from this list still shows (under the last section) instead of vanishing.
+// Preserve every role-authorized tab, including future modules.
 export const NAV_GROUPS = [
-  ["การประเมิน", ["request", "pending", "scan", "dashboard", "qr", "history"]],
-  ["เคสและประชุม", ["cases", "conference", "attendance", "round-admin"]],
-  ["อื่นๆ", ["notifications", "exams", "export", "admin"]],
+  ["พื้นที่ทำงาน", ["home", "cases", "conference", "schedule"]],
+  ["การเรียนรู้และกิจกรรม", ["videos", "attendance", "round-admin"]],
+  ["การประเมิน", ["request", "pending", "scan", "dashboard", "qr", "history", "exams"]],
+  ["อื่นๆ", ["accounts", "notifications", "export", "admin"]],
 ];
 
-export function groupNav(nav) {
+export function groupNav(nav, role = "resident") {
   const known = new Set(NAV_GROUPS.flatMap(([, ids]) => ids));
   const groups = NAV_GROUPS.map(([title, ids]) => [title, nav.filter(([id]) => ids.includes(id))]);
   groups[groups.length - 1][1].push(...nav.filter(([id]) => !known.has(id)));
+  // Staff reach their assessment queue before service and teaching links.
+  if (role === "staff") groups.splice(1, 0, ...groups.splice(2, 1));
   return groups.filter(([, items]) => items.length);
 }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ShieldIcon, XIcon } from "../components/Icons";
-import { CASE_LIMITS, canDeleteNote, canEditNote, caseErrorMessage, caseStatusLabel } from "../residentCases";
-import { addCaseNote, deleteCaseNote, editCaseNote, loadCaseNotes } from "../residentCasesApi";
+import { CASE_LIMITS, canDeleteNote, canEditNote, caseErrorMessage, caseTypeLabel } from "../residentCases";
+import { addCaseNote, addConferenceNote, deleteCaseNote, editCaseNote, loadCaseNotes } from "../residentCasesApi";
 
 export const thaiDate = (value) =>
   value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T12:00:00+07:00`)) : "—";
@@ -30,8 +30,8 @@ export function CaseModal({ title, onClose, children }) {
   );
 }
 
-export function CaseStatusChip({ status }) {
-  return <span className={`case-status case-status-${status}`}>{caseStatusLabel(status)}</span>;
+export function CaseTypeChip({ type }) {
+  return <span className={`case-status case-type-${type || "unset"}`}>{caseTypeLabel(type)}</span>;
 }
 
 export function PrivacyNotice() {
@@ -44,7 +44,7 @@ export function PrivacyNotice() {
 
 // Append-only discussion notes: every author adds their own row, so two people
 // typing at the same time never overwrite each other.
-export function CaseNotes({ caseId, user, people }) {
+export function CaseNotes({ caseId, user, people, meetingDate = null }) {
   const [notes, setNotes] = useState(null);
   const [error, setError] = useState("");
   const [body, setBody] = useState("");
@@ -85,14 +85,19 @@ export function CaseNotes({ caseId, user, people }) {
 
   return (
     <div className="case-notes">
-      <h3>ข้ออภิปราย / Learning points <span className="case-count">{notes?.length ?? "…"}</span></h3>
+      <h3>
+        {meetingDate ? `ข้ออภิปราย / Learning points · ประชุมวันที่ ${thaiDate(meetingDate)}` : "ข้ออภิปราย / Learning points"}{" "}
+        <span className="case-count">{meetingDate ? (notes || []).filter((note) => note.meeting_date === meetingDate).length : notes?.length ?? "…"}</span>
+      </h3>
       {error && <p className="form-error" role="alert">{error}</p>}
-      {notes?.length === 0 && <p className="case-muted">ยังไม่มีโน้ต</p>}
-      {(notes || []).map((note) => (
+      {meetingDate && notes && !notes.some((note) => note.meeting_date === meetingDate) && <p className="case-muted">ยังไม่มีโน้ตของเคสนี้ในประชุมครั้งนี้</p>}
+      {!meetingDate && notes?.length === 0 && <p className="case-muted">ยังไม่มีโน้ต</p>}
+      {(meetingDate ? [...(notes || [])].sort((a, b) => Number(b.meeting_date === meetingDate) - Number(a.meeting_date === meetingDate)) : notes || []).map((note) => (
         <div className="case-note" key={note.id}>
           <small>
             {personName(people, note.author_id)} · {thaiDateTime(note.created_at)}
             {note.edited_at ? " · แก้ไขแล้ว" : ""}
+            {meetingDate && note.meeting_date !== meetingDate ? ` · ${note.meeting_date ? `ประชุม ${thaiDate(note.meeting_date)}` : "โน้ตทั่วไป"}` : ""}
           </small>
           {editing?.id === note.id ? (
             <>
@@ -120,7 +125,7 @@ export function CaseNotes({ caseId, user, people }) {
         <textarea rows={2} maxLength={CASE_LIMITS.note} value={body} onChange={(event) => setBody(event.target.value)} placeholder="พิมพ์ประเด็นอภิปราย…" />
       </label>
       <div className="button-row">
-        <button type="button" className="primary-button" disabled={busy || !body.trim()} onClick={() => run(async () => { await addCaseNote(caseId, body); setBody(""); })}>เพิ่มโน้ต</button>
+        <button type="button" className="primary-button" disabled={busy || !body.trim()} onClick={() => run(async () => { await (meetingDate ? addConferenceNote(caseId, meetingDate, body) : addCaseNote(caseId, body)); setBody(""); })}>เพิ่มโน้ต</button>
       </div>
     </div>
   );
