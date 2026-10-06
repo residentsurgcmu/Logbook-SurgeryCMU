@@ -18,6 +18,7 @@ import {
   ResidentRequestHistory,
   ScoreGrid,
   ScoreLegend,
+  StaffAvailabilityCard,
   StaffEvaluationForm,
 } from "./ResidentAssessmentViews";
 import ResidentExams from "./ResidentExams";
@@ -482,7 +483,9 @@ function Admin({ workspace, onRefresh }) {
     setSyncing(true);
     setError("");
     try {
-      await syncSourceTemplates();
+      await syncSourceTemplates({
+        includePerYear: workspace.templates.some((item) => "max_attempts_per_year" in item),
+      });
       await onRefresh();
       setMessage("ซิงก์ EPA/PBA source สำเร็จ");
     } catch (nextError) {
@@ -987,11 +990,16 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
               onCancel={() => setSelectedRequest(null)}
             />
           ) : (
-            <RequestQueue
+            <>
+              {workspace.user.role === "staff" && (
+                <StaffAvailabilityCard workspace={workspace} onSaved={onRefresh} />
+              )}
+              <RequestQueue
               requests={workspace.requests}
               profiles={workspace.allProfiles || workspace.profiles}
               onSelect={setSelectedRequest}
             />
+            </>
           )
         ) : tab === "notifications" ? (
           <Notifications

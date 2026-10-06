@@ -98,6 +98,7 @@ function template(
   outcomes,
   maxAttempts,
   recommendedPgy = [],
+  maxAttemptsPerYear = null,
 ) {
   const present = labels.map((label) => label?.trim()).filter(Boolean);
   if (!present.length || present.length !== labels.length)
@@ -112,6 +113,7 @@ function template(
     scoreLegend: legend,
     outcomeOptions: outcomes,
     maxAttempts,
+    maxAttemptsPerYear,
     requiresSelfAssessment: type === "PBA",
     recommendedPgy,
     criteria: present.map((label, index) => ({
@@ -149,7 +151,9 @@ for (let number = 1; number <= 6; number++) {
       ["L1", "L2", "L3", "L4", "L5"],
       epaLegend,
       epaOutcomes,
-      2,
+      3,
+      [],
+      1,
     ),
   );
 }
@@ -167,6 +171,8 @@ catalog.push(
     fmeLegend,
     epaOutcomes,
     1,
+    [],
+    1,
   ),
 );
 catalog.push(
@@ -179,6 +185,8 @@ catalog.push(
     ["F", "M", "E"],
     fmeLegend,
     epaOutcomes,
+    1,
+    [],
     1,
   ),
 );

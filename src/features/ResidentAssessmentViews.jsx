@@ -3,7 +3,16 @@ import {
   cancelAssessmentRequest,
   completeAssessmentRequest,
   requestAssessment,
+  setMyStaffAvailability,
 } from "../residentApi";
+import {
+  bangkokDate,
+  criteriaBelowLevel,
+  evaluateRequestRules,
+  friendlyAssessmentError,
+  levelThreshold,
+  thaiDate,
+} from "../residentAssessmentRules";
 
 const localDate = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -133,6 +142,126 @@ export function OutcomeSelect({ template, value, onChange, label }) {
   );
 }
 
+function RuleMessages({ rules }) {
+  if (!rules.reasons.length && !rules.warnings.length) return null;
+  return (
+    <div className="rule-messages" aria-live="polite">
+      {rules.reasons.map((item) => (
+        <p className="rule-blocked" key={item.code}>
+          ✗ {item.text}
+        </p>
+      ))}
+      {rules.warnings.map((item) => (
+        <p className="rule-warning" key={item.code}>
+          △ {item.text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+// Progress toward the level for the chosen EPA form: the criteria still below L4 in the latest assessment.
+function LevelProgressNotice({ progress, template }) {
+  const threshold = levelThreshold(template);
+  if (!threshold || !progress) return null;
+  if (progress.met)
+    return (
+      <p className="level-notice level-met">
+        ✓ แบบนี้ถึงเกณฑ์แล้ว (ทุกข้อในใบประเมินใบเดียวได้ {threshold.label} ขึ้นไป)
+      </p>
+    );
+  const below = progress.latest_below || [];
+  if (!progress.latest_assessment_date || !below.length) return null;
+  return (
+    <div className="level-notice">
+      <p>
+        <strong>ข้อที่ยังต่ำกว่า {threshold.label}</strong> ในการประเมินครั้งล่าสุด ({below.length} ข้อ):
+      </p>
+      <ul>
+        {below.map((item, index) => (
+          <li key={index}>
+            {item.criterion} <span>({item.score})</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Shown on one assessment result for the Resident who was assessed.
+function BelowLevelCallout({ template, assessment, criteria }) {
+  const result = criteriaBelowLevel(template, assessment?.resident_assessment_scores || [], criteria);
+  if (!result) return null;
+  if (result.reached)
+    return (
+      <p className="level-notice level-met">
+        ✓ ใบนี้ทุกข้อได้ {result.threshold} ขึ้นไป (ถึงเกณฑ์)
+      </p>
+    );
+  return (
+    <div className="level-notice">
+      <p>
+        <strong>ข้อที่ยังต่ำกว่า {result.threshold}</strong> ในใบนี้ ({result.below.length} ข้อ):
+      </p>
+      <ul>
+        {result.below.map((item) => (
+          <li key={item.id}>
+            {item.text} <span>({item.score})</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function StaffAvailabilityCard({ workspace, onSaved }) {
+  const me = (workspace.registeredStaff || []).find((person) => person.user_id === workspace.user.id);
+  const today = bangkokDate();
+  const until = me?.unavailable_until && me.unavailable_until >= today ? me.unavailable_until : "";
+  const [date, setDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(value) {
+    setBusy(true);
+    setError("");
+    try {
+      await setMyStaffAvailability(value);
+      setDate("");
+      await onSaved();
+    } catch (nextError) {
+      setError(nextError.message || "บันทึกไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="resident-panel staff-availability">
+      <h2>การรับประเมินของคุณ</h2>
+      <p className="attempt-note">
+        {until ? `ตอนนี้แจ้งไม่สะดวกรับการประเมินถึง ${thaiDate(until)} (Resident จะเลือกคุณไม่ได้)` : "ตอนนี้รับการประเมินตามปกติ"}
+      </p>
+      <div className="availability-row">
+        <label>
+          แจ้งไม่สะดวกถึงวันที่
+          <input type="date" value={date} min={today} onChange={(event) => setDate(event.target.value)} />
+        </label>
+        <button className="secondary-button" type="button" disabled={busy || !date} onClick={() => save(date)}>
+          บันทึก
+        </button>
+        {until && (
+          <button className="secondary-button" type="button" disabled={busy} onClick={() => save(null)}>
+            กลับมารับการประเมิน
+          </button>
+        )}
+      </div>
+      <p className="source-note">
+        ไม่ต้องระบุเหตุผล · ใช้เมื่อไม่สะดวกรับการประเมินชั่วคราว ระบบไม่จำกัดจำนวนที่ Staff รับต่อปี
+      </p>
+      {error && <p className="form-error">{error}</p>}
+    </section>
+  );
+}
+
 export function ResidentRequestForm({ workspace, onSaved }) {
   const { templates, registeredStaff, requests, user } = workspace;
   const [templateId, setTemplateId] = useState(templates[0]?.id || "");
@@ -152,8 +281,12 @@ export function ResidentRequestForm({ workspace, onSaved }) {
     (item) => item.template_id === templateId && item.status !== "cancelled",
   );
   const pending = past.some((item) => item.status === "pending");
-  const atLimit =
-    template?.max_attempts != null && past.length >= template.max_attempts;
+  const progress = (workspace.epaProgress || []).find((item) => item.template_id === templateId) || null;
+  const rules = useMemo(
+    () => evaluateRequestRules({ template, requests, progress, staffId, staff: registeredStaff }),
+    [template, requests, progress, staffId, registeredStaff],
+  );
+  const blocked = rules.reasons.length > 0;
   const previous = [...past]
     .filter((item) => item.status === "completed")
     .sort((a, b) => b.attempt_number - a.attempt_number)[0];
@@ -163,6 +296,7 @@ export function ResidentRequestForm({ workspace, onSaved }) {
       previous.previous_staff_name);
   async function submit(event) {
     event.preventDefault();
+    if (blocked) return setError(rules.reasons[0].text);
     if (!template || !staffId || !activity.trim())
       return setError("กรุณาเลือกแบบประเมิน Staff และชื่อกิจกรรม");
     if (
@@ -203,7 +337,7 @@ export function ResidentRequestForm({ workspace, onSaved }) {
       setSelfComment("");
       await onSaved();
     } catch (nextError) {
-      setError(nextError.message || "ส่งแบบประเมินไม่สำเร็จ");
+      setError(friendlyAssessmentError(nextError.message) || "ส่งแบบประเมินไม่สำเร็จ");
     } finally {
       setBusy(false);
     }
@@ -250,11 +384,15 @@ export function ResidentRequestForm({ workspace, onSaved }) {
             required
           >
             <option value="">เลือก Staff</option>
-            {registeredStaff.map((person) => (
-              <option key={person.user_id} value={person.user_id}>
-                {person.full_name} · {person.unit_name}
-              </option>
-            ))}
+            {registeredStaff.map((person) => {
+              const away = person.unavailable_until && person.unavailable_until >= bangkokDate();
+              return (
+                <option key={person.user_id} value={person.user_id} disabled={Boolean(away)}>
+                  {person.full_name} · {person.unit_name}
+                  {away ? ` · ไม่สะดวกถึง ${thaiDate(person.unavailable_until)}` : ""}
+                </option>
+              );
+            })}
           </select>
         </label>
         <label>
@@ -289,12 +427,14 @@ export function ResidentRequestForm({ workspace, onSaved }) {
       </div>
       {template && (
         <>
-          <p className="attempt-note">
-            {template.max_attempts
-              ? `การประเมินครั้งที่ ${past.length + 1} จาก ${template.max_attempts}`
-              : `การประเมินครั้งที่ ${past.length + 1}`}
+          <p className="attempt-note" data-testid="attempt-note">
+            การประเมินครั้งที่ {rules.attempt?.number ?? past.length + 1}
+            {rules.attempt?.cap ? ` จาก ${rules.attempt.cap}` : ""}
+            {rules.attempt?.perYear ? ` · ปีการศึกษานี้ ${rules.attempt.yearUsed}/${rules.attempt.perYear}` : ""}
             {previousStaff ? ` · ครั้งก่อนประเมินโดย ${previousStaff}` : ""}
           </p>
+          <RuleMessages rules={rules} />
+          <LevelProgressNotice progress={progress} template={template} />
           {template.template_type === "PBA" && (
             <p className="source-note">
               {(template.recommended_pgy || []).includes(user.pgy)
@@ -344,14 +484,14 @@ export function ResidentRequestForm({ workspace, onSaved }) {
       {message && <p className="form-success">{message}</p>}
       <button
         className="primary-button"
-        disabled={busy || pending || atLimit || !registeredStaff.length}
+        disabled={busy || pending || blocked || !registeredStaff.length}
       >
         {busy
           ? "กำลังส่ง…"
           : pending
             ? "มีคำขอรอประเมินอยู่"
-            : atLimit
-              ? "ครบจำนวนครั้งแล้ว"
+            : blocked
+              ? "ส่งไม่ได้ตามกติกา"
               : "ส่งให้ Staff ประเมิน"}
       </button>
     </form>
@@ -638,6 +778,13 @@ export function AssessmentHistory({
           <p>ครั้งก่อนประเมินโดย {request.previous_staff_name}</p>
         )}
         <ScoreLegend template={template} />
+        {user.role === "resident" && (
+          <BelowLevelCallout
+            template={template}
+            assessment={selected}
+            criteria={template?.allCriteria || template?.criteria || []}
+          />
+        )}
         {request?.self_submitted_at && (
           <div className="self-assessment-section">
             <h3>Resident ประเมินตนเอง · {request.self_overall_outcome}</h3>

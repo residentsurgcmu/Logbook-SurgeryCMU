@@ -186,6 +186,14 @@ export async function loadResidentWorkspace() {
   // the migration) the RLS policies still allow the read, so do not block the
   // whole workspace on it.
   if (counterpartStaffError) console.warn("Could not load counterpart Staff names", counterpartStaffError);
+  // Progress toward the EPA level (the criteria still below L4, attempts used, limit). Added by the attempt-rules
+  // migration: if it is not installed yet the form falls back to the older checks.
+  let epaProgress = [];
+  if (role.role === "resident") {
+    const { data: progress, error: progressError } = await supabase.rpc("get_my_epa_progress");
+    if (progressError) console.warn("Could not load EPA progress", progressError);
+    else epaProgress = progress || [];
+  }
   const profileIds = new Set((profiles || []).map((row) => row.user_id));
   const counterpartProfiles = (counterpartStaff || [])
     .filter((row) => !profileIds.has(row.user_id))
@@ -212,13 +220,14 @@ export async function loadResidentWorkspace() {
     assignments: assignments || [],
     staffDirectory: staffDirectory || [],
     registeredStaff: registeredStaff || [],
+    epaProgress,
     requests: requests || [],
     notifications: notifications || [],
     examRecords: examRecords || [],
   };
 }
 
-export async function syncSourceTemplates() {
+export async function syncSourceTemplates(options = {}) {
   for (const source of residentTemplates) {
     const { data: template, error } = await supabase
       .from("resident_template_definitions")
@@ -233,6 +242,8 @@ export async function syncSourceTemplates() {
           score_legend: source.scoreLegend,
           outcome_options: source.outcomeOptions,
           max_attempts: source.maxAttempts,
+          // Only once the database has the column (attempt-rules migration), so an older database keeps working.
+          ...(options.includePerYear ? { max_attempts_per_year: source.maxAttemptsPerYear ?? null } : {}),
           requires_self_assessment: source.requiresSelfAssessment,
           recommended_pgy: source.recommendedPgy,
           active: true,
@@ -311,6 +322,13 @@ export async function completeAssessmentRequest(form) {
   );
   fail(error);
   return data;
+}
+
+export async function setMyStaffAvailability(unavailableUntil) {
+  const { error } = await supabase.rpc("set_my_resident_staff_availability", {
+    p_unavailable_until: unavailableUntil || null,
+  });
+  fail(error);
 }
 
 export async function cancelAssessmentRequest(requestId) {

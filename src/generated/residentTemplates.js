@@ -41,7 +41,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -154,7 +155,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -237,7 +239,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -332,7 +335,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -415,7 +419,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -528,7 +533,8 @@ export const residentTemplates = [
       "Borderline",
       "Fail"
     ],
-    "maxAttempts": 2,
+    "maxAttempts": 3,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -614,6 +620,7 @@ export const residentTemplates = [
       "Fail"
     ],
     "maxAttempts": 1,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -705,6 +712,7 @@ export const residentTemplates = [
       "Fail"
     ],
     "maxAttempts": 1,
+    "maxAttemptsPerYear": 1,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -774,6 +782,7 @@ export const residentTemplates = [
       "ไม่ผ่านการประเมิน"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": false,
     "recommendedPgy": [],
     "criteria": [
@@ -858,6 +867,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       2
@@ -986,6 +996,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       1
@@ -1108,6 +1119,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -1236,6 +1248,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       4
@@ -1364,6 +1377,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       4
@@ -1480,6 +1494,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -1554,6 +1569,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -1676,6 +1692,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       2
@@ -1750,6 +1767,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       4
@@ -1872,6 +1890,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       1
@@ -1988,6 +2007,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       2
@@ -2176,6 +2196,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -2292,6 +2313,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       4
@@ -2402,6 +2424,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       4
@@ -2530,6 +2553,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       2
@@ -2646,6 +2670,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       1
@@ -2786,6 +2811,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -2902,6 +2928,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [],
     "criteria": [
@@ -3028,6 +3055,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       1
@@ -3162,6 +3190,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [
       3
@@ -3290,6 +3319,7 @@ export const residentTemplates = [
       "E"
     ],
     "maxAttempts": null,
+    "maxAttemptsPerYear": null,
     "requiresSelfAssessment": true,
     "recommendedPgy": [],
     "criteria": [
