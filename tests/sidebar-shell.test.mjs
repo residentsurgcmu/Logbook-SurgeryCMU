@@ -7,10 +7,10 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("menu items are grouped in their role order and nothing is dropped", () => {
   const staffNav = [["pending", "รอประเมิน (2)"], ["scan", "สแกน QR"], ["dashboard", "Dashboard"], ["history", "ผลการประเมิน"], ["attendance", "เช็กชื่อประชุม"], ["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"], ["notifications", "Notification"], ["exams", "ผลการสอบ"]];
-  const groups = groupNav(staffNav);
-  assert.deepEqual(groups.map(([title]) => title), ["การประเมิน", "เคสและประชุม", "อื่นๆ"]);
-  assert.deepEqual(groups[0][1].map(([id]) => id), ["pending", "scan", "dashboard", "history"]);
-  assert.deepEqual(groups[1][1].map(([id]) => id), ["attendance", "cases", "conference"]);
+  const groups = groupNav(staffNav, "staff");
+  assert.deepEqual(groups.map(([title]) => title), ["พื้นที่ทำงาน", "การประเมิน", "การเรียนรู้และกิจกรรม", "อื่นๆ"]);
+  assert.deepEqual(groups[1][1].map(([id]) => id), ["pending", "scan", "dashboard", "history", "exams"]);
+  assert.deepEqual(groups[0][1].map(([id]) => id), ["cases", "conference"]);
   assert.equal(groups.flatMap(([, items]) => items).length, staffNav.length);
 });
 
@@ -31,7 +31,7 @@ test("the shell is a sidebar with the original logo and a top bar with the user"
   const shell = await read("src/features/ResidentPlatform.jsx");
   assert.match(shell, /className=\{`app-sidebar\$\{menuOpen \? " open" : ""\}`\}/);
   assert.match(shell, /src="\/surgery-cmu-logo\.png"/);
-  assert.match(shell, /groupNav\(nav\)/);
+  assert.match(shell, /groupNav\(nav, workspace\.user\.role\)/);
   assert.match(shell, /className="app-topbar"/);
   assert.match(shell, /aria-expanded=\{menuOpen\}/);
   assert.match(shell, /setMenuOpen\(false\)/);

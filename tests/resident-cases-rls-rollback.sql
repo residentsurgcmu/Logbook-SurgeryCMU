@@ -43,8 +43,8 @@ begin
 
   -- Resident creates a case and edits it.
   perform public.zz_act_as(v_res);
-  v_case := public.create_resident_admission_case(
-    (now() at time zone 'Asia/Bangkok')::date, 64::smallint, 'female', 'TEST dx', 'mgmt', '', 'Upper GI', 'admit', v_res);
+  v_case := public.create_resident_admission_case_with_type(
+    (now() at time zone 'Asia/Bangkok')::date, 64::smallint, 'female', 'TEST dx', 'mgmt', '', 'Upper GI', 'admit', v_res, 'operative');
   select updated_at into v_ts from public.resident_admission_cases where id = v_case;
   v_ts2 := public.zz_upd(v_case, v_ts, 'TEST dx 2', v_res);
   if v_ts2 <= v_ts then raise exception 'updated_at must advance'; end if;

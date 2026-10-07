@@ -3,8 +3,6 @@ import test from "node:test";
 import {
   CASE_IMAGE_MAX_EDGE,
   CASE_UNITS,
-  CASE_VITALS,
-  formatVitals,
   splitCaseImageFiles,
   canDeleteCase,
   canDeleteMedia,
@@ -14,7 +12,8 @@ import {
   caseErrorMessage,
   caseImagePath,
   caseSexLabel,
-  caseStatusLabel,
+  caseTypeLabel,
+  CASE_TYPES,
   conferenceWeek,
   conferenceWeekForCase,
   conferenceWindow,
@@ -38,9 +37,26 @@ const good = {
 };
 
 test("labels fall back to the raw value", () => {
-  assert.equal(caseStatusLabel("pending_update"), "รออัปเดต");
+  assert.equal(caseTypeLabel("operative"), "Operative");
+  assert.equal(caseTypeLabel("conservative"), "Conservative");
+  assert.equal(caseTypeLabel(null), "ยังไม่ระบุ");
   assert.equal(caseSexLabel("female"), "หญิง");
-  assert.equal(caseStatusLabel("weird"), "weird");
+  assert.equal(caseTypeLabel("weird"), "weird");
+});
+
+test("Type is optional, limited to Conservative/Operative, and the old status is no longer validated", () => {
+  assert.deepEqual(CASE_TYPES.map(([key]) => key), ["conservative", "operative"]);
+  assert.equal(validateCaseForm({ ...good, treatment_type: "" }, NOW), "");
+  assert.equal(validateCaseForm({ ...good, treatment_type: "operative" }, NOW), "");
+  assert.equal(validateCaseForm({ ...good, treatment_type: "conservative", status: "anything-hidden" }, NOW), "");
+});
+
+test("Type can be demanded for new cases only; edits of old cases without a Type stay allowed", () => {
+  assert.match(validateCaseForm({ ...good, treatment_type: "" }, NOW, { requireType: true }), /Type/);
+  assert.match(validateCaseForm({ ...good }, NOW, { requireType: true }), /Type/);
+  assert.equal(validateCaseForm({ ...good, treatment_type: "operative" }, NOW, { requireType: true }), "");
+  assert.equal(validateCaseForm({ ...good, treatment_type: "" }, NOW, { requireType: false }), "");
+  assert.equal(validateCaseForm({ ...good, treatment_type: "" }, NOW), "");
 });
 
 test("a valid form passes", () => {
@@ -70,7 +86,7 @@ test("other fields are validated", () => {
   assert.match(validateCaseForm({ ...good, management: "a".repeat(1001) }, NOW), /1000/);
   assert.match(validateCaseForm({ ...good, operation: "a".repeat(181) }, NOW), /180/);
   assert.match(validateCaseForm({ ...good, unit_name: "ENT" }, NOW), /หน่วย/);
-  assert.match(validateCaseForm({ ...good, status: "x" }, NOW), /สถานะ/);
+  assert.match(validateCaseForm({ ...good, treatment_type: "x" }, NOW), /Type/);
   assert.match(validateCaseForm({ ...good, owner_id: "" }, NOW), /Owner/);
 });
 
@@ -175,8 +191,10 @@ test("a deactivated-owner error is shown in Thai", () => {
   assert.match(caseErrorMessage(new Error("Owner must be an active Resident")), /ต้องเป็น Resident/);
 });
 
-test("units are the five department units", () => {
-  assert.deepEqual(CASE_UNITS, ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular"]);
+test("units are the department units: five original ones plus Trauma", () => {
+  assert.deepEqual(CASE_UNITS, ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular", "Trauma"]);
+  assert.equal(validateCaseForm({ ...good, unit_name: "Trauma", treatment_type: "operative" }, NOW, { requireType: true }), "");
+  assert.match(validateCaseForm({ ...good, unit_name: "General surgery" }, NOW), /หน่วย/);
   assert.match(validateCaseForm({ ...good, unit_name: "General surgery" }, NOW), /หน่วย/);
   assert.equal(validateCaseForm({ ...good, unit_name: "B&E" }, NOW), "");
 });
@@ -201,29 +219,12 @@ test("no more than 10 images can wait to be uploaded at once", () => {
   assert.deepEqual(splitCaseImageFiles(null), { accepted: [], rejected: [] });
 });
 
-test("vital signs are optional but must be in range when given", () => {
-  const vitals = { bp_systolic: "120", bp_diastolic: "80", heart_rate: "88", resp_rate: "20", body_temp: "37.2", spo2: "98" };
-  assert.equal(validateCaseForm({ ...good, ...vitals }, NOW), "");
-  assert.equal(validateCaseForm({ ...good, bp_systolic: "", heart_rate: " " }, NOW), "");
-  assert.match(validateCaseForm({ ...good, heart_rate: "300" }, NOW), /HR.*20–250/);
-  assert.match(validateCaseForm({ ...good, spo2: "101" }, NOW), /SpO2/);
-  assert.match(validateCaseForm({ ...good, resp_rate: "18.5" }, NOW), /RR.*จำนวนเต็ม/);
-  assert.match(validateCaseForm({ ...good, body_temp: "37.25" }, NOW), /BT.*ทศนิยม 1 ตำแหน่ง/);
-  assert.match(validateCaseForm({ ...good, body_temp: "29.9" }, NOW), /BT.*30–45/);
-  assert.match(validateCaseForm({ ...good, bp_systolic: "120", bp_diastolic: "" }, NOW), /BP.*ทั้งสองค่า/);
-  assert.match(validateCaseForm({ ...good, bp_systolic: "80", bp_diastolic: "90" }, NOW), /diastolic.*น้อยกว่า systolic/);
-  assert.match(validateCaseForm({ ...good, heart_rate: "abc" }, NOW), /HR/);
-});
-
-test("present illness and physical examination are limited to 2000 characters", () => {
-  assert.equal(validateCaseForm({ ...good, present_illness: "a".repeat(2000), physical_exam: "b".repeat(2000) }, NOW), "");
-  assert.match(validateCaseForm({ ...good, present_illness: "a".repeat(2001) }, NOW), /Present illness.*2000/);
-  assert.match(validateCaseForm({ ...good, physical_exam: "a".repeat(2001) }, NOW), /Physical examination.*2000/);
-});
-
-test("vital signs read as one line and skip missing values", () => {
-  assert.equal(formatVitals({ bp_systolic: 120, bp_diastolic: 80, heart_rate: 88, resp_rate: 20, body_temp: "37.2", spo2: 98 }), "BP 120/80 mmHg · HR 88/min · RR 20/min · BT 37.2 °C · SpO2 98%");
-  assert.equal(formatVitals({ heart_rate: 110, spo2: 92 }), "HR 110/min · SpO2 92%");
-  assert.equal(formatVitals({}), "");
-  assert.deepEqual(CASE_VITALS.map((item) => item.key), ["bp_systolic", "bp_diastolic", "heart_rate", "resp_rate", "body_temp", "spo2"]);
+test("clinical detail (present illness, vital signs, physical examination) is not part of an admission case", async () => {
+  const helpers = await import("../src/residentCases.js");
+  assert.equal(helpers.CASE_VITALS, undefined);
+  assert.equal(helpers.formatVitals, undefined);
+  assert.equal(helpers.CASE_LIMITS.presentIllness, undefined);
+  assert.equal(helpers.CASE_LIMITS.physicalExam, undefined);
+  // Stray values in a form are ignored, never validated or kept.
+  assert.equal(validateCaseForm({ ...good, heart_rate: "999", present_illness: "x".repeat(5000) }, NOW), "");
 });

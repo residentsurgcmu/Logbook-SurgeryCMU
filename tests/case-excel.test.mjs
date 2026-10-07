@@ -11,7 +11,7 @@ const people = [
 ];
 const base = { age_years: 50, sex: "female", management: "", operation: "", status: "admit", owner_id: "r1", created_by: "s1", updated_at: "2026-10-02T02:00:00Z", media_count: 0, deleted_at: null };
 const cases = [
-  { ...base, id: "a", case_code: "ADM-00010", admit_date: "2026-09-30", unit_name: "Upper GI", diagnosis: "Perforated peptic ulcer", media_count: 2, present_illness: "ปวดท้อง", bp_systolic: 100, bp_diastolic: 60, heart_rate: 120, resp_rate: null, body_temp: 38.5, spo2: null, physical_exam: "Guarding" },
+  { ...base, id: "a", case_code: "ADM-00010", admit_date: "2026-09-30", unit_name: "Upper GI", diagnosis: "Perforated peptic ulcer", media_count: 2, treatment_type: "operative", present_illness: "ปวดท้อง", bp_systolic: 100, bp_diastolic: 60, heart_rate: 120, body_temp: 38.5, physical_exam: "Guarding" },
   { ...base, id: "b", case_code: "ADM-00011", admit_date: "2026-10-01", unit_name: "B&E", diagnosis: "Thyroid nodule" },
   { ...base, id: "c", case_code: "ADM-00012", admit_date: "2026-08-15", unit_name: "Upper GI", diagnosis: "Old case" },
   { ...base, id: "d", case_code: "ADM-00013", admit_date: "2026-10-01", unit_name: "HPB", diagnosis: "Deleted", deleted_at: "2026-10-02T00:00:00Z" },
@@ -53,21 +53,17 @@ test("the workbook has a case sheet and a discussion sheet with Thai values", as
   await reread.xlsx.load(await workbook.xlsx.writeBuffer());
   assert.deepEqual(reread.worksheets.map((sheet) => sheet.name), ["รายการเคส", "ข้ออภิปราย"]);
   const sheet = reread.getWorksheet("รายการเคส");
-  assert.deepEqual(sheet.getRow(1).values.slice(1), ["รหัสเคส", "วันที่รับ", "อายุ (ปี)", "เพศ", "หน่วย", "Diagnosis", "Present illness", "BP (mmHg)", "HR (/min)", "RR (/min)", "BT (°C)", "SpO2 (%)", "Physical examination", "Management", "Operation", "สถานะ", "Owner", "จำนวนภาพ", "ผู้บันทึก", "แก้ไขล่าสุด"]);
+  assert.deepEqual(sheet.getRow(1).values.slice(1), ["รหัสเคส", "วันที่รับ", "อายุ (ปี)", "เพศ", "หน่วย", "Diagnosis", "Management", "Operation", "Type", "Owner", "จำนวนภาพ", "ผู้บันทึก", "แก้ไขล่าสุด"]);
   assert.equal(sheet.rowCount, 1 + rows.length);
   const first = sheet.getRow(2).values.slice(1);
   assert.equal(first[0], "ADM-00010");
   assert.equal(first[3], "หญิง");
-  assert.equal(first[6], "ปวดท้อง");
-  assert.equal(first[7], "100/60");
-  assert.equal(first[8], 120);
-  assert.equal(first[9] ?? null, null); // empty cell reads back as undefined
-  assert.equal(first[10], 38.5);
-  assert.equal(first[12], "Guarding");
-  assert.equal(first[15], "Admit");
-  assert.equal(first[16], "Resident A");
-  assert.equal(first[17], 2);
-  assert.equal(first[18], "Staff A");
+  assert.equal(first[8], "Operative");
+  assert.equal(first[9], "Resident A");
+  assert.equal(first[10], 2);
+  assert.equal(first[11], "Staff A");
+  // Old rows may still carry clinical columns; none of it is exported.
+  assert.ok(!JSON.stringify(sheet.getRow(2).values).match(/ปวดท้อง|Guarding|100\/60|38\.5/));
   assert.equal(sheet.getRow(3).values[5], "B&E");
   const discussion = reread.getWorksheet("ข้ออภิปราย");
   assert.deepEqual(discussion.getRow(2).values.slice(1, 4), ["ADM-00010", "Perforated peptic ulcer", "Staff A"]);

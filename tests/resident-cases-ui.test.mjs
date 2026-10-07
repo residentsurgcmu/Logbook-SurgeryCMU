@@ -6,7 +6,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("cases screen validates, blocks double submit, and handles conflicts", async () => {
   const ui = await read("src/features/ResidentCases.jsx");
-  assert.match(ui, /validateCaseForm\(form\)/);
+  assert.match(ui, /validateCaseForm\(form, new Date\(\), \{ requireType: !initial \}\)/);
   assert.match(ui, /if \(busy\) return;/);
   assert.match(ui, /disabled=\{busy\}/);
   assert.match(ui, /isCaseConflict\(/);
@@ -53,7 +53,8 @@ test("conference loads one Mon-Fri week, guards stale loads, and shows notes per
   assert.match(ui, /shiftIsoDate\(weekStart, -7\)/);
   assert.match(ui, /shiftIsoDate\(weekStart, 7\)/);
   assert.match(ui, /seq\.current/);
-  assert.match(ui, /<CaseNotes key=\{current\.id\}/);
+  assert.match(ui, /<CaseNotes key=\{`\$\{current\.id\}\|\$\{meetingDate\}`\} caseId=\{current\.id\}/);
+  assert.match(ui, /meetingDate=\{meetingDate\}/);
   assert.match(ui, /initialCase/);
   assert.doesNotMatch(ui, /<header[\s>]/);
 });
@@ -91,7 +92,8 @@ test("admin can list soft-deleted cases (to purge them) and deleted rows are rea
 test("conference includes weekend admissions and never silently shows the wrong case", async () => {
   const ui = await read("src/features/ResidentConference.jsx");
   assert.match(ui, /conferenceWindow\(week\.start\)/);
-  assert.match(ui, /loadAdmissionCases\(\{ from: range\.from, to: range\.to \}\)/);
+  assert.match(ui, /saved\?\.range_from \|\| defaultRange\.from/);
+  assert.match(ui, /loadAdmissionCases\(\{ from, to \}\)/);
   assert.match(ui, /conferenceWeekForCase\(initialCase/);
   assert.match(ui, /ไม่พบเคสที่เลือก/);
 });
@@ -130,24 +132,14 @@ test("the case detail has a visible upload button at the top of the images secti
   assert.match(css, /\.case-upload-button:focus-within/);
 });
 
-test("the case form has present illness, vital signs and physical examination in clinical order", async () => {
-  const ui = await read("src/features/ResidentCases.jsx");
-  const dx = ui.indexOf(">Diagnosis<");
-  const pi = ui.indexOf("Present illness<");
-  const vitals = ui.indexOf("CASE_VITALS.map((vital) =>");
-  const pe = ui.indexOf("Physical examination<");
-  const management = ui.indexOf(">Management<");
-  assert.ok(dx > 0 && pi > dx && vitals > pi && pe > vitals && management > pe, "fields out of clinical order");
-  assert.match(ui, /inputMode="decimal"/);
-});
-
-test("case detail and conference show the clinical fields", async () => {
-  const ui = await read("src/features/ResidentCases.jsx");
-  assert.match(ui, /formatVitals\(row\)/);
+test("the case form, detail view and conference have no clinical history/vitals/examination fields", async () => {
+  const form = await read("src/features/ResidentCases.jsx");
   const conference = await read("src/features/ResidentConference.jsx");
-  assert.match(conference, /formatVitals\(current\)/);
-  assert.match(conference, /Present illness/);
-  assert.match(conference, /Physical examination/);
+  for (const [name, ui] of [["form/detail", form], ["conference", conference]]) {
+    assert.doesNotMatch(ui, /Present illness|Vital signs|Physical examination|CASE_VITALS|formatVitals|present_illness|physical_exam/, name);
+  }
+  assert.match(form, />Diagnosis</);
+  assert.match(form, />Management</);
 });
 
 test("Admin sees a permanent delete button for each image; uploaders keep the soft delete", async () => {

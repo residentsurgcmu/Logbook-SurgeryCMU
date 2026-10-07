@@ -7,7 +7,7 @@ const api = () => readFile(new URL("../src/residentCasesApi.js", import.meta.url
 test("every write goes through an RPC, never a direct table write", async () => {
   const src = await api();
   for (const rpc of [
-    "create_resident_admission_case", "update_resident_admission_case", "soft_delete_resident_admission_case",
+    "create_resident_admission_case_with_type", "update_resident_admission_case_with_type", "soft_delete_resident_admission_case",
     "admin_purge_resident_admission_case", "add_resident_case_media", "delete_resident_case_media",
     "add_resident_case_note", "edit_resident_case_note", "delete_resident_case_note", "list_resident_case_people",
   ]) assert.match(src, new RegExp(`"${rpc}"`));
@@ -49,14 +49,11 @@ test("several images upload one by one and one failure does not stop the rest", 
   assert.match(fn, /return \{ uploaded, failed \}/);
 });
 
-test("clinical fields are sent on create and update, and update says so explicitly", async () => {
+test("clinical fields are neither sent nor read; update leaves any stored clinical columns untouched", async () => {
   const src = await api();
-  assert.match(src, /p_present_illness: form\.present_illness \|\| ""/);
-  assert.match(src, /p_physical_exam: form\.physical_exam \|\| ""/);
-  assert.match(src, /p_body_temp: numberOrNull\(form\.body_temp\)/);
-  assert.match(src, /p_spo2: numberOrNull\(form\.spo2\)/);
-  assert.match(src, /p_set_clinical: true/);
-  assert.match(src, /CASE_COLUMNS = "[^"]*present_illness,physical_exam,bp_systolic,bp_diastolic,heart_rate,resp_rate,body_temp,spo2/);
+  assert.doesNotMatch(src, /present_illness|physical_exam|bp_systolic|bp_diastolic|heart_rate|resp_rate|body_temp|spo2/);
+  assert.doesNotMatch(src, /p_set_clinical/);
+  assert.match(src, /p_owner_id: form\.owner_id/);
 });
 
 test("Admin permanent image delete removes the row, then the storage file", async () => {
