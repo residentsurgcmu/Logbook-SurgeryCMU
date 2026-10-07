@@ -5,6 +5,8 @@
 --     and the history of extra attempts (today: Admin; it can move to other roles later without rewriting the functions).
 --   * admin_list_attempt_grants(): history of extra attempts an Admin granted (who, to whom, which form, reason, when).
 --   * admin_list_epa_pba_progress(): one row per active Resident per active form with the numbers needed for the Excel export.
+--     attempts_used counts every request not cancelled (a waiting request already uses an attempt); attempts_completed counts finished
+--     assessments only; done (PBA) = at least one FINISHED assessment; has_pending = a request is waiting for the Staff.
 --     It uses the same rules as get_my_epa_progress() (attempts used, limit incl. granted attempts, this academic year,
 --     "reached the level" = every criterion of ONE assessment at L4/L5, M/E for the F/M/E forms).
 -- Safe to run again.
@@ -49,11 +51,13 @@ $$;
 revoke all on function public.admin_list_attempt_grants(uuid) from public, anon;
 grant execute on function public.admin_list_attempt_grants(uuid) to authenticated;
 
-create or replace function public.admin_list_epa_pba_progress()
+-- (re-created: the output gained columns after the first staging run, so the old definition is dropped first)
+drop function if exists public.admin_list_epa_pba_progress();
+create function public.admin_list_epa_pba_progress()
 returns table (
   resident_id uuid, resident_name text, resident_pgy integer, template_id uuid, template_code text, template_type text,
   template_title text, counts_for_board boolean, attempts_used integer, attempts_cap integer, attempts_this_year integer,
-  met boolean, done boolean
+  met boolean, done boolean, attempts_completed integer, completed_this_year integer, has_pending boolean
 )
 language plpgsql stable security definer set search_path = public, private, auth as $$
 #variable_conflict use_column
@@ -101,6 +105,15 @@ begin
     ) rk on true
     group by a.resident_id, a.template_id, a.id
   ),
+  asm as (
+    select a.resident_id, a.template_id, count(*) as completed_total from public.resident_assessments a group by a.resident_id, a.template_id
+  ),
+  reqc as (
+    select q.resident_id, q.template_id,
+           count(*) filter (where q.status = 'completed' and q.submitted_at >= v_start_at and q.submitted_at < v_end_at) as completed_year_req,
+           bool_or(q.status = 'pending') as has_pending
+    from public.resident_assessment_requests q group by q.resident_id, q.template_id
+  ),
   reached as (
     select gd.resident_id, gd.template_id, bool_or(gd.min_rank >= tpl.need_rank) as is_met
     from graded gd join tpl on tpl.id = gd.template_id group by gd.resident_id, gd.template_id
@@ -111,12 +124,17 @@ begin
          case when tpl.max_attempts is null then null else (tpl.max_attempts + coalesce(grants.n, 0))::integer end,
          (coalesce(req.year_req, 0) + coalesce(hist.year_hist, 0))::integer,
          case when tpl.template_type = 'EPA' then coalesce(reached.is_met, false) else null end,
-         case when tpl.template_type = 'PBA' then (coalesce(req.used_req, 0) + coalesce(hist.used_hist, 0)) > 0 else null end
+         case when tpl.template_type = 'PBA' then coalesce(asm.completed_total, 0) > 0 else null end,
+         coalesce(asm.completed_total, 0)::integer,
+         (coalesce(reqc.completed_year_req, 0) + coalesce(hist.year_hist, 0))::integer,
+         coalesce(reqc.has_pending, false)
   from res cross join tpl
   left join req on req.resident_id = res.user_id and req.template_id = tpl.id
   left join hist on hist.resident_id = res.user_id and hist.template_id = tpl.id
   left join grants on grants.resident_id = res.user_id and grants.template_id = tpl.id
   left join reached on reached.resident_id = res.user_id and reached.template_id = tpl.id
+  left join asm on asm.resident_id = res.user_id and asm.template_id = tpl.id
+  left join reqc on reqc.resident_id = res.user_id and reqc.template_id = tpl.id
   order by res.full_name, res.user_id, tpl.template_code;
 end;
 $$;

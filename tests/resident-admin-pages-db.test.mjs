@@ -16,7 +16,9 @@ test("Admin pages migration: additive, one named capability, both functions gate
   ])
     assert.ok(sql.includes(statement), statement);
   assert.equal((sql.match(/Active Admin account required/g) || []).length, 2, "both data functions check the capability");
-  assert.doesNotMatch(sql, /\b(drop|truncate|delete\s+from|alter\s+table\s+public\.resident_assessment)/i, "nothing existing is dropped or deleted");
+  // The only DROP allowed is re-creating this release's own export function (its output gained columns after the first practice run).
+  const withoutOwnDrop = sql.replace("drop function if exists public.admin_list_epa_pba_progress();", "").replace(/--[^\n]*/g, "");
+  assert.doesNotMatch(withoutOwnDrop, /\b(drop|truncate|delete\s+from|alter\s+table\s+public\.resident_assessment)/i, "nothing existing is dropped or deleted");
   assert.doesNotMatch(sql, /create or replace function public\.(submit_resident_assessment_request|get_my_epa_progress|list_registered_resident_staff)/, "functions of release pieces 1-2 are not touched");
 });
 
