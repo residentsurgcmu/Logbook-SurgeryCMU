@@ -97,11 +97,20 @@ $$;
 revoke all on function public.list_registered_resident_staff() from public, anon;
 grant execute on function public.list_registered_resident_staff() to authenticated;
 
+-- Who may grant extra attempts is one named capability so it can move from Admin to the course director later
+-- without rewriting the function.
+create or replace function private.resident_can_grant_extra_attempts()
+returns boolean language sql stable security definer set search_path = public, private, auth as $$
+  select private.resident_role_is('admin')
+$$;
+revoke all on function private.resident_can_grant_extra_attempts() from public, anon;
+grant execute on function private.resident_can_grant_extra_attempts() to authenticated;
+
 create or replace function public.admin_grant_resident_extra_attempt(p_resident_id uuid, p_template_id uuid, p_reason text)
 returns uuid language plpgsql security definer set search_path = public, private, auth as $$
 declare v_id uuid;
 begin
-  if not (select private.resident_role_is('admin')) then raise exception 'Active Admin account required'; end if;
+  if not (select private.resident_can_grant_extra_attempts()) then raise exception 'Active Admin account required'; end if;
   if char_length(btrim(coalesce(p_reason, ''))) not between 5 and 500 then raise exception 'A reason of 5-500 characters is required'; end if;
   if not exists (select 1 from public.resident_user_roles r join public.resident_profiles p on p.user_id = r.user_id
                  where r.user_id = p_resident_id and r.role = 'resident' and r.active and p.active)
@@ -250,7 +259,8 @@ begin
   where assessment.resident_id = (select auth.uid()) and assessment.template_id = p_template_id
     and not exists (select 1 from public.resident_assessment_requests linked where linked.assessment_id = assessment.id);
   v_used := v_requests + v_hist;
-  v_attempt := greatest(v_max_request, v_hist) + 1;
+  -- The number shown to the Resident is the true count + 1, even if an Admin recorded a historical assessment later.
+  v_attempt := greatest(v_max_request, v_used) + 1;
 
   -- Lifetime limit (an Admin may grant extra attempts to one Resident for one form).
   if v_template.max_attempts is not null then

@@ -143,7 +143,7 @@ test("migration: new tables are closed to direct access; every new function is c
 
 test("front end: the form checks the rules, explains refusals in Thai, and blocks sending", async () => {
   const views = await read("../src/features/ResidentAssessmentViews.jsx");
-  assert.match(views, /evaluateRequestRules\(\{ template, requests, progress, staffId, staff: registeredStaff \}\)/);
+  assert.match(views, /evaluateRequestRules\(\{\s*template,\s*requests,\s*assessments: workspace\.assessments \|\| \[\],\s*residentId: user\.id,/);
   assert.match(views, /disabled=\{busy \|\| pending \|\| blocked \|\| !registeredStaff\.length\}/);
   assert.match(views, /friendlyAssessmentError\(nextError\.message\)/);
   assert.match(views, /disabled=\{Boolean\(away\)\}/, "an unavailable Staff cannot be selected");
@@ -178,4 +178,27 @@ test("the Staff availability card is independent of the request form (it must no
   const form = views.slice(views.indexOf("export function ResidentRequestForm"), views.indexOf("export function StaffEvaluationForm"));
   assert.match(form, /rules\.attempt\?\.number/);
   assert.equal((form.match(/<RuleMessages rules=\{rules\} \/>/g) || []).length, 1);
+});
+
+test("rules: assessments an Admin recorded directly (no request row) count as attempts: a PBA topic cannot be repeated and the limits include them", () => {
+  const recorded = (template, date, over = {}) => ({ id: `a-${date}`, template_id: template.id, resident_id: "me", assessment_date: date, ...over });
+  const pbaBlocked = evaluateRequestRules({ template: pba, assessments: [recorded(pba, "2025-08-01")], residentId: "me", now });
+  assert.ok(codes(pbaBlocked).includes("pba-repeat"), "a PBA recorded by an Admin blocks the same topic before sending");
+  assert.deepEqual(codes(evaluateRequestRules({ template: pba, assessments: [recorded(pba, "2025-08-01", { resident_id: "someone-else" })], residentId: "me", now })), [], "another Resident's record never counts");
+  const thisYear = evaluateRequestRules({ template: epa, assessments: [recorded(epa, "2026-09-10")], residentId: "me", now });
+  assert.ok(codes(thisYear).includes("per-year"), "a historical EPA dated in this academic year uses the yearly limit");
+  const old3 = [recorded(epa, "2023-09-10"), recorded(epa, "2024-09-10"), recorded(epa, "2025-09-10")];
+  const limit = evaluateRequestRules({ template: epa, assessments: old3, residentId: "me", now });
+  assert.ok(codes(limit).includes("limit"));
+  assert.equal(limit.attempt.number, 4);
+  const linked = evaluateRequestRules({ template: epa, requests: [request(epa, { assessment_id: "a-2025-09-10", submitted_at: "2025-09-10T10:00:00+07:00" })], assessments: [recorded(epa, "2025-09-10")], residentId: "me", now });
+  assert.equal(linked.attempt.number, 2, "an assessment that came from a request is not counted twice");
+});
+
+test("migration: the attempt number is the true count + 1; who may grant extra attempts is one named capability", async () => {
+  const sql = await migration();
+  assert.match(sql, /v_attempt := greatest\(v_max_request, v_used\) \+ 1;/);
+  assert.match(sql, /function private\.resident_can_grant_extra_attempts\(\)/);
+  assert.match(sql, /if not \(select private\.resident_can_grant_extra_attempts\(\)\) then raise exception 'Active Admin account required'/);
+  assert.match(sql, /revoke all on function private\.resident_can_grant_extra_attempts\(\) from public, anon/);
 });

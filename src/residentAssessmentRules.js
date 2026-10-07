@@ -49,19 +49,34 @@ export function criteriaBelowLevel(template, rows = [], criteria = []) {
   return { threshold: threshold.label, below, reached: rows.length > 0 && below.length === 0 };
 }
 
-export function evaluateRequestRules({ template, requests = [], progress = null, staffId = "", staff = [], now = new Date() }) {
+export function evaluateRequestRules({
+  template,
+  requests = [],
+  assessments = [],
+  residentId = "",
+  progress = null,
+  staffId = "",
+  staff = [],
+  now = new Date(),
+}) {
   const reasons = [];
   const warnings = [];
   if (!template) return { reasons, warnings, attempt: null };
   const today = bangkokDate(now);
   const yearStart = academicYearStart(now);
   const past = requests.filter((item) => item.template_id === template.id && item.status !== "cancelled");
-  const used = progress ? progress.attempts_used : past.length;
+  // Assessments an Admin recorded directly (no request row) are real attempts too.
+  const linked = new Set(requests.map((item) => item.assessment_id).filter(Boolean));
+  const historical = assessments.filter(
+    (item) => item.template_id === template.id && (!residentId || item.resident_id === residentId) && !linked.has(item.id),
+  );
+  const used = progress ? progress.attempts_used : past.length + historical.length;
   const cap = progress && progress.attempts_cap != null ? progress.attempts_cap : (template.max_attempts ?? null);
   const perYear = template.max_attempts_per_year ?? null;
   const yearUsed = progress
     ? progress.attempts_this_year
-    : past.filter((item) => inAcademicYear(item.submitted_at, yearStart)).length;
+    : past.filter((item) => inAcademicYear(item.submitted_at, yearStart)).length +
+      historical.filter((item) => inAcademicYear(item.assessment_date, yearStart)).length;
   const isEpa = template.template_type === "EPA";
   if (cap != null && used >= cap)
     reasons.push({
@@ -72,7 +87,7 @@ export function evaluateRequestRules({ template, requests = [], progress = null,
           ? " และยังไม่ถึงเกณฑ์ → ปรึกษาผู้อำนวยการหลักสูตรเพื่อพิจารณาเพิ่มจำนวนครั้ง"
           : ""),
     });
-  if (template.template_type === "PBA" && past.length > 0)
+  if (template.template_type === "PBA" && past.length + historical.length > 0)
     reasons.push({ code: "pba-repeat", text: "เรื่องนี้ส่งไปแล้ว PBA ไม่สอบเรื่องซ้ำ" });
   if (perYear != null && yearUsed >= perYear)
     reasons.push({

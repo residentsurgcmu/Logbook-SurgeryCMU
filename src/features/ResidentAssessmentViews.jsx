@@ -283,8 +283,17 @@ export function ResidentRequestForm({ workspace, onSaved }) {
   const pending = past.some((item) => item.status === "pending");
   const progress = (workspace.epaProgress || []).find((item) => item.template_id === templateId) || null;
   const rules = useMemo(
-    () => evaluateRequestRules({ template, requests, progress, staffId, staff: registeredStaff }),
-    [template, requests, progress, staffId, registeredStaff],
+    () =>
+      evaluateRequestRules({
+        template,
+        requests,
+        assessments: workspace.assessments || [],
+        residentId: user.id,
+        progress,
+        staffId,
+        staff: registeredStaff,
+      }),
+    [template, requests, workspace.assessments, user.id, progress, staffId, registeredStaff],
   );
   const blocked = rules.reasons.length > 0;
   const previous = [...past]

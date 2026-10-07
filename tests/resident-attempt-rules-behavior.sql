@@ -206,5 +206,23 @@ select t.ok(t.submit('r1', 'EPA-8', 's1') is not null, 'L3 EPA 8 can be requeste
 select t.as_user('r1'); select public.cancel_resident_assessment_request((select id from public.resident_assessment_requests where resident_id = t.uid('r1') and template_id = t.tpl('EPA-8') and status = 'pending'));
 select t.ok(t.submit('r1', 'EPA-8', 's1') is not null, 'L4 EPA 8 can be requested again right after (unlimited)');
 
+-- ===== M. attempt numbers stay in step with the real count when an Admin records a historical assessment AFTER a request
+select t.as_user('r2');
+insert into ctx values ('m1', t.submit('r2', 'EPA-4', 's1'));
+select t.complete('s1', (select v from ctx where k='m1'), 'L3');
+select t.shift_years((select v from ctx where k='m1'), 2);
+select t.hist('r2', 'EPA-4', 's2', (clock_timestamp() at time zone 'Asia/Bangkok')::date - 400, 'L3');
+select t.as_user('r2');
+select t.ok((select attempts_used = 2 from public.get_my_epa_progress() where template_code = 'EPA-4'), 'M1 progress counts the request and the historical assessment (2 used)');
+insert into ctx values ('m2', t.submit('r2', 'EPA-4', 's3'));
+select t.ok((select attempt_number = 3 from public.resident_assessment_requests where id = (select v from ctx where k='m2')), 'M2 the new request is stored as attempt 3 (the screen says "attempt 3 of 3"), not 2');
+select t.ok((select attempts_used = 3 and attempts_cap = 3 from public.get_my_epa_progress() where template_code = 'EPA-4'), 'M3 progress now shows 3 of 3 used');
+
+-- ===== N. the right to give extra attempts is one named capability (today: Admin; later it can move to the course director)
+select t.ok(to_regprocedure('private.resident_can_grant_extra_attempts()') is not null, 'N1 a named capability function decides who may grant extra attempts');
+select t.as_user('adm'); select t.ok((select private.resident_can_grant_extra_attempts()), 'N2 today an Admin has the capability');
+select t.as_user('s1'); select t.ok(not (select private.resident_can_grant_extra_attempts()), 'N3 Staff do not');
+select t.as_user('r1'); select t.ok(not (select private.resident_can_grant_extra_attempts()), 'N4 Residents do not');
+
 do $$ begin raise notice 'ALL BEHAVIOUR TESTS PASSED'; end $$;
 rollback;
