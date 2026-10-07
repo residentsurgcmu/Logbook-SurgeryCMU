@@ -302,8 +302,11 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 .case-note p { margin:4px 0; white-space:pre-wrap; }
 .case-present { display:grid; gap:16px; }
 .case-present h2 { font-size:28px; margin:8px 0; }
-.case-present-image { aspect-ratio:16/10; width:100%; display:grid; place-items:center; overflow:hidden; border-radius:12px; background:var(--resident-soft); color:var(--resident-muted); }
-.case-present-image img { width:100%; height:100%; object-fit:contain; }
+.case-present-image { position:relative; aspect-ratio:16/10; width:100%; display:grid; place-items:center; overflow:hidden; border-radius:12px; background:var(--resident-soft); color:var(--resident-muted); }
+/* The picture fills the frame and is scaled to FIT inside it (never cropped). An absolutely positioned image has a definite
+   frame to measure against; with height:100% inside an aspect-ratio box some browsers used the picture's own height and the
+   frame's overflow:hidden then cut tall pictures off. */
+.case-present-image img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
 .case-weekbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px; }
 @media (max-width:700px) { .case-grid, .case-split { grid-template-columns:1fr; } }
 .case-check { display:flex !important; align-items:center; gap:8px; min-width:0; }
