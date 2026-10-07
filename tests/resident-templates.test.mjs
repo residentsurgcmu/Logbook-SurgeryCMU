@@ -57,7 +57,13 @@ test("database seed matches every generated form and criterion", async () => {
   const sql = await readFile(new URL("../supabase/migrations/20260919095717_rebuild_resident_epa_pba_catalog.sql", import.meta.url), "utf8");
   // 20260928140000_code_review_fixes.sql renames the "Boarderline" typo in place.
   const seed = JSON.parse(sql.match(/\$catalog_json\$([\s\S]*?)\$catalog_json\$/)[1].replaceAll('"Boarderline"', '"Borderline"'));
-  assert.deepEqual(seed, residentTemplates);
+  // 20261007090000_epa_pba_attempt_rules.sql later raised the EPA 1-6 limit to 3 and added the per-year limit.
+  const expected = seed.map((item) => ({
+    ...item,
+    maxAttempts: /^EPA-[1-6]$/.test(item.code) ? 3 : item.maxAttempts,
+    maxAttemptsPerYear: /^(EPA-[1-6]|EPA-7-L1-L2|EPA-7-L3)$/.test(item.code) ? 1 : null,
+  }));
+  assert.deepEqual(expected, residentTemplates);
 });
 
 test("PBA assessment options preserve the source F/M/E scale", () => {
