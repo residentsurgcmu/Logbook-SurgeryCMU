@@ -9,6 +9,7 @@ import {
   syncSourceTemplates,
 } from "../residentApi";
 import ResidentDashboard from "./ResidentDashboard";
+import AdminAttemptPages from "./AdminAttemptPages";
 import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
 import ResidentSchedule from "./ResidentSchedule";
 import {
@@ -579,6 +580,7 @@ function Admin({ workspace, onRefresh }) {
           {syncing ? "กำลังซิงก์…" : "ซิงก์ source catalog"}
         </button>
       </section>
+      {workspace.user.role === "admin" && <AdminAttemptPages workspace={workspace} />}
       <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
       <HistoricalAssessmentEntry workspace={workspace} onRefresh={onRefresh} />
       <div className="admin-grid">

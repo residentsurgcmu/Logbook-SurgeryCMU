@@ -621,3 +621,23 @@ export async function deleteResidentAssessment(
   if (!data?.ok) throw new Error(data?.error || "ไม่สามารถลบหัตถการได้");
   return data;
 }
+
+export async function listEpaPbaProgress() {
+  const { data, error } = await supabase.rpc("admin_list_epa_pba_progress");
+  fail(error);
+  return data || [];
+}
+
+export async function listAttemptGrants(residentId = null) {
+  const { data, error } = await supabase.rpc("admin_list_attempt_grants", { p_resident_id: residentId });
+  fail(error);
+  return data || [];
+}
+
+export async function grantExtraAttempt({ residentId, templateId, reason }) {
+  const { data, error } = await supabase.rpc("admin_grant_resident_extra_attempt", {
+    p_resident_id: residentId, p_template_id: templateId, p_reason: reason,
+  });
+  fail(error);
+  return data;
+}

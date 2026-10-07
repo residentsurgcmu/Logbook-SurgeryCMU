@@ -260,5 +260,58 @@ select t.expect_denied_as('authenticated', $$select * from public.resident_staff
 select t.expect_denied_as('authenticated', $$select * from public.resident_attempt_grants$$, 'Q5 nor the grants table');
 select t.expect_denied_as('anon', $$select * from public.list_registered_resident_staff()$$, 'Q6 a logged-out visitor cannot list Staff');
 
+-- ===== R. Admin pages: who may call them
+create temp table cross_r1 as select * from (select 1) x where false;
+select t.as_user('adm');
+select t.ok(private.resident_can_view_cohort_progress(), 'R1 the named capability says yes for an Admin');
+select t.as_user('s1'); select t.ok(not private.resident_can_view_cohort_progress(), 'R2 ...and no for Staff');
+select t.as_user('r1'); select t.ok(not private.resident_can_view_cohort_progress(), 'R3 ...and no for a Resident');
+select t.expect_error($$select * from public.admin_list_epa_pba_progress()$$, 'Active Admin account required', 'R4 a Resident cannot pull everybody''s progress');
+select t.expect_error($$select * from public.admin_list_attempt_grants()$$, 'Active Admin account required', 'R5 a Resident cannot read the grants history');
+select t.as_user('s1');
+select t.expect_error($$select * from public.admin_list_epa_pba_progress()$$, 'Active Admin account required', 'R6 Staff cannot pull everybody''s progress either');
+select t.expect_denied_as('anon', $$select * from public.admin_list_epa_pba_progress()$$, 'R7 a logged-out visitor cannot call the progress export function');
+select t.expect_denied_as('anon', $$select * from public.admin_list_attempt_grants()$$, 'R8 nor the grants history');
+select t.as_user('adm');
+select t.expect_allowed_as('authenticated', $$select * from public.admin_list_epa_pba_progress()$$, 'R9 an Admin through the real logged-in role can');
+
+-- ===== S. the numbers are the same as each Resident sees for themselves (cross-check, 2 Residents)
+insert into auth.users(id, email) values (gen_random_uuid(), 'r3@example.test');
+insert into public.resident_profiles(user_id, full_name, email, pgy, active) select id, 'Test r3 inactive role', email, 1, true from auth.users where email = 'r3@example.test';
+insert into public.resident_user_roles(user_id, role, active) select id, 'resident', false from auth.users where email = 'r3@example.test';
+create temp table admin_all as select * from public.admin_list_epa_pba_progress();
+select t.ok((select count(distinct resident_id) from admin_all) = 2 and not exists (select 1 from admin_all where resident_name like '%inactive%'), 'S1 only active Residents are listed (an inactive account is not)');
+select t.ok((select count(*) from admin_all) = 2 * (select count(*) from public.resident_template_definitions where active), 'S2 one row per Resident per active form (2 x 30)');
+create temp table mine_r1 as select * from (select 1 as x) z where false;
+drop table mine_r1;
+select t.as_user('r1'); create temp table mine_r1 as select * from public.get_my_epa_progress();
+select t.as_user('r2'); create temp table mine_r2 as select * from public.get_my_epa_progress();
+select t.ok(not exists (select 1 from mine_r1 m join admin_all a on a.template_code = m.template_code and a.resident_id = t.uid('r1')
+       where (m.attempts_used, m.attempts_cap, m.attempts_this_year, m.met) is distinct from (a.attempts_used, a.attempts_cap, a.attempts_this_year, a.met))
+   and (select count(*) from mine_r1) = (select count(*) from admin_all a where a.resident_id = t.uid('r1') and a.template_type = 'EPA'), 'S3 Resident r1: the export numbers equal what r1 sees for every EPA form');
+select t.ok(not exists (select 1 from mine_r2 m join admin_all a on a.template_code = m.template_code and a.resident_id = t.uid('r2')
+       where (m.attempts_used, m.attempts_cap, m.attempts_this_year, m.met) is distinct from (a.attempts_used, a.attempts_cap, a.attempts_this_year, a.met))
+   and (select count(*) from mine_r2) = (select count(*) from admin_all a where a.resident_id = t.uid('r2') and a.template_type = 'EPA'), 'S4 Resident r2 (with an Admin-granted attempt): equal too');
+select t.ok((select attempts_cap = 4 from admin_all where resident_id = t.uid('r2') and template_code = 'EPA-3'), 'S5 the granted extra attempt shows in the limit (3 + 1)');
+select t.ok((select count(*) filter (where done) = 1 and count(*) filter (where done is not null) = 21 and count(*) filter (where has_pending) = 1 and count(*) filter (where attempts_used > 0) = 2 from admin_all where resident_id = t.uid('r2') and template_type = 'PBA'), 'S6 PBA for r2: 1 topic FINISHED (done), 1 more waiting for the Staff (has_pending), 2 topics requested in all');
+select t.ok((select (attempts_used, attempts_completed, has_pending) = (4, 3, true) from admin_all where resident_id = t.uid('r2') and template_code = 'EPA-3'), 'S10 EPA 3 for r2: 4 attempts used, 3 finished, 1 waiting');
+select t.ok((select completed_this_year = 0 from admin_all where resident_id = t.uid('r2') and template_code = 'EPA-3'), 'S11 the 3 finished EPA 3 assessments are from earlier years: none finished this academic year');
+select t.ok((select completed_this_year = 1 and attempts_completed = 1 from admin_all where resident_id = t.uid('r2') and template_code = 'PBA-01'), 'S12 PBA-01 for r2 was finished this academic year');
+select t.ok((select bool_and(met is null) from admin_all where template_type = 'PBA') and (select bool_and(done is null) from admin_all where template_type = 'EPA'), 'S7 met is only for EPA and done only for PBA');
+select t.ok((select counts_for_board is false and attempts_cap is null from admin_all where resident_id = t.uid('r1') and template_code = 'EPA-8'), 'S8 EPA 8 is marked as not counted for the board and unlimited');
+select t.ok((select count(*) = 0 from admin_all where resident_pgy is null), 'S9 every row carries the Resident''s year (PGY)');
+
+-- ===== T. history of extra attempts + the Admin tag
+select t.as_user('adm');
+update public.resident_user_roles set admin_tag = 'Admin หลัก (F)' where user_id = t.uid('adm');
+select t.ok((select count(*) = 1 and bool_and(granted_by_tag = 'Admin หลัก (F)') and bool_and(reason like 'Course director%') and bool_and(template_code = 'EPA-3') and bool_and(resident_name = 'Test r2') from public.admin_list_attempt_grants()), 'T1 the history shows who, to whom, which form, why, and the Admin label');
+select t.ok((select count(*) = 0 from public.admin_list_attempt_grants(t.uid('r1'))), 'T2 filtering by another Resident returns nothing');
+select t.ok((select count(*) = 1 from public.admin_list_attempt_grants(t.uid('r2'))), 'T3 filtering by the right Resident returns the grant');
+select t.expect_error($$update public.resident_user_roles set admin_tag = repeat('x', 41) where user_id = t.uid('adm')$$, 'admin_tag_check', 'T4 a label longer than 40 characters is refused');
+select t.expect_error($$update public.resident_user_roles set admin_tag = '   ' where user_id = t.uid('adm')$$, 'admin_tag_check', 'T5 an empty label is refused');
+select t.ok((select count(*) = 0 from public.admin_list_attempt_grants() g where g.reason is null), 'T6 no grant without a reason');
+select t.ok((select count(*) from public.resident_user_roles where role = 'admin' and admin_tag is not null) = 1, 'T7 the label belongs to the one Admin it was set for');
+select t.ok(not has_function_privilege('anon', 'public.admin_list_epa_pba_progress()', 'execute') and not has_function_privilege('anon', 'public.admin_list_attempt_grants(uuid)', 'execute') and not has_function_privilege('anon', 'private.resident_can_view_cohort_progress()', 'execute'), 'T8 none of the new functions is open to logged-out visitors');
+
 do $$ begin raise notice 'ALL BEHAVIOUR TESTS PASSED'; end $$;
 rollback;
