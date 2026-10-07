@@ -148,14 +148,14 @@ begin
   ),
   graded as (
     select a.id as assessment_id, a.template_id, a.assessment_date, a.created_at,
-           min(rank.ord) as min_rank
+           min(coalesce(rank.ord, 0)) as min_rank
     from public.resident_assessments a
     join tpl on tpl.id = a.template_id
     join public.resident_assessment_scores s on s.assessment_id = a.id
-    cross join lateral (
+    left join lateral (
       select o.ord from jsonb_array_elements_text(tpl.score_options) with ordinality as o(val, ord)
       where o.val = s.score
-    ) rank
+    ) rank on true
     where a.resident_id = v_me
     group by a.id, a.template_id, a.assessment_date, a.created_at
   ),
@@ -186,7 +186,7 @@ begin
            from public.resident_assessment_scores s
            join public.resident_template_criteria c on c.id = s.criterion_id
            where s.assessment_id = latest.assessment_id
-             and (select o.ord from jsonb_array_elements_text(tpl.score_options) with ordinality as o(val, ord) where o.val = s.score) < tpl.need_rank
+             and coalesce((select o.ord from jsonb_array_elements_text(tpl.score_options) with ordinality as o(val, ord) where o.val = s.score), 0) < tpl.need_rank
          ), '[]'::jsonb) end
   from tpl
   left join latest on latest.template_id = tpl.id

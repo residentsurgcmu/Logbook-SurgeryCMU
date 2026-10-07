@@ -26,6 +26,25 @@ end $$;
 create function t.ok(p_cond boolean, p_label text) returns void language plpgsql as $$
 begin if p_cond is not true then raise exception 'FAIL %', p_label; end if; raise notice 'PASS %', p_label; end $$;
 
+create function t.expect_denied_as(p_role text, p_sql text, p_label text) returns void language plpgsql as $$
+declare v_denied boolean := false;
+begin
+  execute format('set local role %I', p_role);
+  begin execute p_sql; exception when insufficient_privilege then v_denied := true; end;
+  execute 'reset role';
+  if not v_denied then raise exception 'FAIL % : expected "permission denied" for role %', p_label, p_role; end if;
+  raise notice 'PASS %', p_label;
+end $$;
+create function t.expect_allowed_as(p_role text, p_sql text, p_label text) returns void language plpgsql as $$
+declare v_msg text;
+begin
+  execute format('set local role %I', p_role);
+  begin execute p_sql; exception when others then get stacked diagnostics v_msg = message_text; end;
+  execute 'reset role';
+  if v_msg is not null then raise exception 'FAIL % : % (%)', p_label, v_msg, p_role; end if;
+  raise notice 'PASS %', p_label;
+end $$;
+
 -- people: 2 residents, 3 staff, 1 admin
 insert into t.users(name) values ('r1'),('r2'),('s1'),('s2'),('s3'),('adm');
 insert into auth.users(id, email) select id, name || '@example.test' from t.users;
@@ -223,6 +242,23 @@ select t.ok(to_regprocedure('private.resident_can_grant_extra_attempts()') is no
 select t.as_user('adm'); select t.ok((select private.resident_can_grant_extra_attempts()), 'N2 today an Admin has the capability');
 select t.as_user('s1'); select t.ok(not (select private.resident_can_grant_extra_attempts()), 'N3 Staff do not');
 select t.as_user('r1'); select t.ok(not (select private.resident_can_grant_extra_attempts()), 'N4 Residents do not');
+
+-- ===== P. defensive second layer: a stored score that is not one of the form's options never counts as reaching the level
+update public.resident_assessment_scores set score = 'ZZ'
+ where assessment_id = (select id from public.resident_assessments where resident_id = t.uid('r1') and template_id = t.tpl('EPA-4') limit 1)
+   and criterion_id = (select criterion_id from public.resident_assessment_scores where assessment_id = (select id from public.resident_assessments where resident_id = t.uid('r1') and template_id = t.tpl('EPA-4') limit 1) order by criterion_id limit 1);
+select t.as_user('r1');
+select t.ok((select not met from public.get_my_epa_progress() where template_code = 'EPA-4'), 'P1 one unreadable score makes that assessment NOT reach the level');
+select t.ok((select jsonb_array_length(latest_below) >= 1 from public.get_my_epa_progress() where template_code = 'EPA-4'), 'P2 and it is listed as below the level');
+
+-- ===== Q. through the REAL database roles (what the web app uses), not only the identity claim
+select t.as_user('r1');
+select t.expect_allowed_as('authenticated', $$select * from public.get_my_epa_progress()$$, 'Q1 a logged-in Resident can read their own progress');
+select t.expect_denied_as('anon', $$select * from public.get_my_epa_progress()$$, 'Q2 a logged-out visitor cannot call the progress function');
+select t.expect_denied_as('anon', $$select public.submit_resident_assessment_request(null::uuid, null::uuid, current_date, '', 'x', null, null, '[]'::jsonb)$$, 'Q3 a logged-out visitor cannot submit a request');
+select t.expect_denied_as('authenticated', $$select * from public.resident_staff_availability$$, 'Q4 a logged-in user cannot read the availability table directly');
+select t.expect_denied_as('authenticated', $$select * from public.resident_attempt_grants$$, 'Q5 nor the grants table');
+select t.expect_denied_as('anon', $$select * from public.list_registered_resident_staff()$$, 'Q6 a logged-out visitor cannot list Staff');
 
 do $$ begin raise notice 'ALL BEHAVIOUR TESTS PASSED'; end $$;
 rollback;
