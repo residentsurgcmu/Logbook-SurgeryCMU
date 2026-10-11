@@ -198,7 +198,7 @@ export function RoundAdmin({ user }) {
     if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขรอบนี้หรือเปิดสแกนต่อไม่ได้อีก (ถ้าตั้งผิด ให้เลือก "ยกเลิกรอบนี้" แทน)`)) return;
     setBusy("close"); setError("");
     try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
-    catch (nextError) { setError(nextError.message || "ปิดการเช็กชื่อไม่สำเร็จ"); }
+    catch (nextError) { setError(nextError.message || "ปิดการเช็คชื่อไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function cancel(session) {
@@ -259,7 +259,7 @@ export function RoundAdmin({ user }) {
   </>;
   return <div className="round-layout">
     <section className="resident-panel round-admin-panel">
-      <h2>MM &amp; Grand Round · เช็กชื่อเข้าประชุม</h2>
+      <h2>MM &amp; Grand Round · เช็คชื่อเข้าประชุม</h2>
       <p>Admin ตั้งวันที่และช่วงเวลาที่ต้องการเปิดรับสแกน QR ล่วงหน้าได้ ไม่จำกัดเฉพาะวันศุกร์หรือเวลา 11:00 น. ระบบจะเปิด-ปิดการสแกนให้อัตโนมัติตามเวลาที่ตั้งไว้</p>
       <form className="round-schedule-form" onSubmit={createSchedule}>
         <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(scheduleDateError)} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: event.target.value }); setScheduleDateError(""); }} /></label>
@@ -281,12 +281,12 @@ export function RoundAdmin({ user }) {
           <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)} <span className={`round-status-chip round-status-chip-${status}`}>{ROUND_STATUS_LABELS[status]}</span></h3>
           {!isEditing && <p>{timeLabel && !timeLabel.startsWith("ช่วงสแกน") && <><strong>{timeLabel}</strong> · </>}สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย{canEdit && <> · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></>}</p>}
           {isEditing && renderEditForm()}
-          {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็กชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
+          {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็คชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
           {!isLiveNow && status === "upcoming" && <p role="status" className="round-status round-status-upcoming">ยังไม่ถึงเวลา · QR จะแสดงอัตโนมัติเมื่อถึง {thaiHM(session.starts_at)} น. ของวันที่ {thaiDate(session.meeting_date)}</p>}
           {!isLiveNow && status === "live" && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน · กำลังโหลด QR…</p>}
           {isLiveNow && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน ถึง {thaiHM(session.ends_at)} น.</p>}
           {status === "ended" && <p role="status" className="round-status">หมดเวลาสแกนแล้ว · ปิดรอบเพื่อยืนยันว่าจบแล้ว หรือแก้เวลาถ้าตั้งผิด</p>}
-          {status === "closed" && <p role="status" className="round-status">ปิดรอบแล้ว · {attendanceCount.get(session.id) || 0} คนเช็กชื่อ</p>}
+          {status === "closed" && <p role="status" className="round-status">ปิดรอบแล้ว · {attendanceCount.get(session.id) || 0} คนเช็คชื่อ</p>}
           <div className="round-session-actions">
             {acceptsScans && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรับก่อนกำหนดเวลา</button>}
             {status === "ended" && <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรอบ</button>}
@@ -295,7 +295,7 @@ export function RoundAdmin({ user }) {
           </div>
           {acceptsScans && <section className="round-cme-qr" aria-labelledby={`round-cme-title-${session.id}`}>
             <h4 id={`round-cme-title-${session.id}`}>QR CME สำหรับฉายในห้องประชุม</h4>
-            <p>เป็นภาพ QR แยกจาก QR เช็กชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
+            <p>เป็นภาพ QR แยกจาก QR เช็คชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
             {cmeUrls[session.id] && <img src={cmeUrls[session.id]} alt={`QR CME สำหรับวันที่ ${session.meeting_date}`} />}
             <label className="secondary-button cme-upload-control">{busy === `cme-upload-${session.id}` ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={(event) => uploadCme(session, event)} /></label>
             {cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => removeCme(session)}>{busy === `cme-remove-${session.id}` ? "กำลังลบ…" : "ลบ QR CME"}</button>}
@@ -331,7 +331,7 @@ export function RoundAdmin({ user }) {
         </div>
         <div className="round-export"><span>{pdfDateRangeInvalid ? "ตรวจสอบช่วงวันที่" : `${pdfSessions.length} วันประชุม`}</span><button className="secondary-button" type="button" disabled={Boolean(busy) || pdfDateRangeInvalid || !pdfSessions.length} onClick={() => runPdfExport(false)}>{busy === "pdf-combined" ? "กำลังสร้าง PDF…" : "ดาวน์โหลด PDF รวม"}</button><button className="secondary-button" type="button" disabled={Boolean(busy) || pdfDateRangeInvalid || !pdfSessions.length} onClick={() => runPdfExport(true)}>{busy === "pdf-split" ? "กำลังสร้าง PDF…" : "ดาวน์โหลด PDF แยกวัน"}</button></div>
       </section>
-      <div className="resident-table-wrap"><table><thead><tr><th>ชื่อ</th><th>PGY</th><th>อีเมล</th><th>บทบาท</th><th>Timestamp scan QR (Asia/Bangkok)</th></tr></thead><tbody>{rows.map((row) => <tr key={row.user_id}><td>{row.resident_profiles?.full_name || "—"}</td><td>{row.resident_profiles?.pgy ? `PGY ${row.resident_profiles.pgy}` : "—"}</td><td>{row.resident_profiles?.email || "—"}</td><td>{row.role_at_check_in === "staff" ? "Staff" : "Resident"}</td><td>{thaiTime(row.checked_in_at)}</td></tr>)}{!rows.length && <tr><td colSpan="5">ยังไม่มีผู้เช็กชื่อตามตัวกรอง</td></tr>}</tbody></table></div>
+      <div className="resident-table-wrap"><table><thead><tr><th>ชื่อ</th><th>PGY</th><th>อีเมล</th><th>บทบาท</th><th>Timestamp scan QR (Asia/Bangkok)</th></tr></thead><tbody>{rows.map((row) => <tr key={row.user_id}><td>{row.resident_profiles?.full_name || "—"}</td><td>{row.resident_profiles?.pgy ? `PGY ${row.resident_profiles.pgy}` : "—"}</td><td>{row.resident_profiles?.email || "—"}</td><td>{row.role_at_check_in === "staff" ? "Staff" : "Resident"}</td><td>{thaiTime(row.checked_in_at)}</td></tr>)}{!rows.length && <tr><td colSpan="5">ยังไม่มีผู้เช็คชื่อตามตัวกรอง</td></tr>}</tbody></table></div>
     </section>
   </div>;
 }
@@ -378,18 +378,18 @@ export function RoundCheckIn({ token, onTokenUsed }) {
       try {
         const records = await loadOwnRoundAttendance();
         if (mounted.current) setHistory(records);
-      } catch (nextError) { if (mounted.current) setError(nextError.message || "โหลดประวัติการเช็กชื่อไม่สำเร็จ"); }
+      } catch (nextError) { if (mounted.current) setError(nextError.message || "โหลดประวัติการเช็คชื่อไม่สำเร็จ"); }
       finally { if (mounted.current) setBusy(false); }
     }
     run();
   }, [token]);
   return <section className="resident-panel round-checkin">
-    <h2>เช็กชื่อ MM &amp; Grand Round</h2>
+    <h2>เช็คชื่อ MM &amp; Grand Round</h2>
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
-    {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็กชื่อไว้แล้ว" : "เช็กชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
+    {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!token && <p>สแกน QR ที่แสดงในห้องประชุมด้วยโทรศัพท์เครื่องนี้เพื่อเช็กชื่อ</p>}
-    <h3>ประวัติการเช็กชื่อของฉัน</h3>
-    {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็กชื่อ</p>}
+    {!token && <p>สแกน QR ที่แสดงในห้องประชุมด้วยโทรศัพท์เครื่องนี้เพื่อเช็คชื่อ</p>}
+    <h3>ประวัติการเช็คชื่อของฉัน</h3>
+    {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
   </section>;
 }

@@ -804,7 +804,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   if (workspace.user.role === "staff")
     nav.unshift(["pending", "รอประเมิน"], ["scan", "สแกน QR"]);
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
-    nav.push(["attendance", "เช็กชื่อประชุม"]);
+    nav.push(["attendance", "เช็คชื่อประชุม"]);
   nav.push(["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"]);
   nav.push(["notifications", "Notification"]);
   // Counts that need action are badges, not part of the label.
@@ -838,7 +838,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
     notifications: "Notification",
     export: "Export ข้อมูลการประเมิน",
     admin: "จัดการระบบ Resident",
-    attendance: "เช็กชื่อ MM & Grand Round",
+    attendance: "เช็คชื่อ MM & Grand Round",
     "round-admin": "MM & Grand Round",
     exams: workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "การสอบ",
     cases: "New admissions",

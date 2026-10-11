@@ -19,7 +19,7 @@ try {
   for(const text of ['New admissions','Friday conference','คลังวิดีโอ','ตารางเวร','บัญชีที่เชื่อมต่อ']) assert.ok(html.includes(text),role+': '+text);
   assert.equal(html.includes('คิวประเมินของคุณ'),role==='staff');
   const token='0f8fad5b-d9cb-469f-a165-70867728950e';
-  if(role!=='admin') {window.location.pathname='/attendance/'+token;assert.ok(render().includes('<h1>เช็กชื่อ MM &amp; Grand Round</h1>'));}
+  if(role!=='admin') {window.location.pathname='/attendance/'+token;assert.ok(render().includes('<h1>เช็คชื่อ MM &amp; Grand Round</h1>'));}
   if(role==='staff') {window.location.pathname='/evaluate/'+token;assert.ok(render().includes('<h1>สแกน QR เพื่อประเมิน</h1>'));}
  }
  for(const service of ['videos','schedule','accounts']) {
