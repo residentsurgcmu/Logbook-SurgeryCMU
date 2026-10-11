@@ -6,7 +6,7 @@ import { NAV_GROUPS, groupNav } from "../src/navGroups.js";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("menu items are grouped in their role order and nothing is dropped", () => {
-  const staffNav = [["pending", "รอประเมิน (2)"], ["scan", "สแกน QR"], ["dashboard", "Dashboard"], ["history", "ผลการประเมิน"], ["attendance", "เช็กชื่อประชุม"], ["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"], ["notifications", "Notification"], ["exams", "ผลการสอบ"]];
+  const staffNav = [["pending", "รอประเมิน (2)"], ["scan", "สแกน QR"], ["dashboard", "Dashboard"], ["history", "ผลการประเมิน"], ["attendance", "เช็คชื่อประชุม"], ["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"], ["notifications", "Notification"], ["exams", "ผลการสอบ"]];
   const groups = groupNav(staffNav, "staff");
   assert.deepEqual(groups.map(([title]) => title), ["พื้นที่ทำงาน", "การประเมิน", "การเรียนรู้และกิจกรรม", "อื่นๆ"]);
   assert.deepEqual(groups[1][1].map(([id]) => id), ["pending", "scan", "dashboard", "history", "exams"]);

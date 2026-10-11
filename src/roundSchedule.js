@@ -90,7 +90,7 @@ export function validateRoundTimes({ start, end, activityStart = "", activityEnd
 export function roundScheduleErrorMessage(error) {
   const message = String(error?.message || "");
   if (/overlaps/i.test(message)) return "ช่วงเวลาสแกนซ้อนกับรอบอื่นที่ยังเปิดอยู่ กรุณาเลือกเวลาอื่น หรือยกเลิกรอบเดิมก่อน";
-  if (/already has attendance/i.test(message)) return "ยกเลิกไม่ได้ เพราะรอบนี้มีผู้เช็กชื่อแล้ว ใช้ \"ปิดรอบ\" แทน";
+  if (/already has attendance/i.test(message)) return "ยกเลิกไม่ได้ เพราะรอบนี้มีผู้เช็คชื่อแล้ว ใช้ \"ปิดรอบ\" แทน";
   if (/Activity end time must be after start time|Activity start and end/i.test(message)) return "เวลาสิ้นสุดกิจกรรมต้องหลังเวลาเริ่ม และต้องกรอกทั้งสองช่อง";
   if (/End time must be after start time/i.test(message)) return "เวลาสิ้นสุดสแกนต้องหลังเวลาเริ่มสแกน";
   if (/not found or already cancelled/i.test(message)) return "ไม่พบรอบนี้ หรือถูกยกเลิกไปแล้ว";
@@ -106,6 +106,6 @@ export function parseRoundToken(pathname) {
 export function roundCheckInErrorMessage(error) {
   const message = String(error?.message || "");
   if (/expired or is invalid/i.test(message)) return "QR หมดอายุหรือไม่ถูกต้อง กรุณาสแกน QR ที่แสดงอยู่ตอนนี้อีกครั้ง";
-  if (/Active Resident or Staff account required/i.test(message)) return "บัญชีนี้ไม่ใช่ Resident หรือ Staff ที่เปิดใช้งาน จึงเช็กชื่อไม่ได้";
-  return message || "เช็กชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง";
+  if (/Active Resident or Staff account required/i.test(message)) return "บัญชีนี้ไม่ใช่ Resident หรือ Staff ที่เปิดใช้งาน จึงเช็คชื่อไม่ได้";
+  return message || "เช็คชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง";
 }

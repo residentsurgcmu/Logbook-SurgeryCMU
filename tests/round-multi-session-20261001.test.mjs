@@ -126,7 +126,7 @@ test("same-day sessions are ordered by start time inside a date range", () => {
 
 test("server messages are shown in Thai", () => {
   assert.match(roundScheduleErrorMessage(new Error("Another scan window overlaps this time")), /ซ้อนกับ/);
-  assert.match(roundScheduleErrorMessage(new Error("Cannot cancel a session that already has attendance")), /มีผู้เช็กชื่อแล้ว/);
+  assert.match(roundScheduleErrorMessage(new Error("Cannot cancel a session that already has attendance")), /มีผู้เช็คชื่อแล้ว/);
   assert.match(roundScheduleErrorMessage(new Error("Activity end time must be after start time")), /เวลาสิ้นสุด/);
   assert.equal(roundScheduleErrorMessage(new Error("something else")), "something else");
 });

@@ -116,7 +116,7 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
 
   const drawSessionHeading = (session, count, continued = false) => {
     const time = formatRoundTimeRange(session);
-    const text = `${continued ? "ต่อเนื่อง · " : ""}${thaiDate(session.meeting_date)}${time ? ` · ${time}` : ""} · ผู้เช็กชื่อ ${count} คน`;
+    const text = `${continued ? "ต่อเนื่อง · " : ""}${thaiDate(session.meeting_date)}${time ? ` · ${time}` : ""} · ผู้เช็คชื่อ ${count} คน`;
     page.drawText(text, { x: PAGE_LEFT, y, size: 11, font, color: ink });
     y -= 17;
     drawTableHeader();
@@ -133,7 +133,7 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
     if (sessionIndex > 0 && y < PAGE_BOTTOM + 55) addPage();
     drawSessionHeading(session, rows.length);
     if (!rows.length) {
-      page.drawText("ยังไม่มีผู้เช็กชื่อ", { x: PAGE_LEFT, y, size: 9, font, color: muted });
+      page.drawText("ยังไม่มีผู้เช็คชื่อ", { x: PAGE_LEFT, y, size: 9, font, color: muted });
       y -= 22;
       return;
     }
