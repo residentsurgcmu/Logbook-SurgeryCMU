@@ -79,10 +79,46 @@ See `README.md` for features, local run and secrets.
   department target of 2 assessments per EPA/PBA form (`TARGET_ASSESSMENTS_PER_FORM`; counted per form up to 2). Assumed the same target
   for every PGY and every form — change the constant if that differs.
 
-## Still open (owner: Chagkrit)
-- Supabase Auth: disable sign-up, or turn on Confirm email.
-- Send one real assessment request to confirm the email reaches Staff, and that a Resident's
-  history shows Staff names.
+- 2026-10-07 (PR #6 `feat/resident-corner`, merged 8ff1bd2, **deployed**; database files run first, one at a time): case **Type**
+  (Conservative/Operative) required on create/update (`create_/update_resident_admission_case_with_type`, `set_resident_case_treatment_type`;
+  a lock file then closed the old create function to browsers); unit **Trauma**; Friday-conference agenda saved permanently
+  (`resident_conference_sessions`, `save_/reset_resident_conference_agenda`, `add_resident_conference_note`, PowerPoint); the schedule/OR page embeds
+  two outside pages whose addresses an Admin sets (`resident_embed_links`, `set_/clear_resident_embed_link`); assessor name on results.
+- 2026-10-07 (PR #7 `fix/deck-image-fit`, merged 19071e0, no migration): Deck pictures scale to fit their frame (`.case-present-image` is the
+  positioning box; before, tall pictures were cut off). Checked in a headless browser at phone and desktop widths.
+- 2026-10-07 (PR #8 `feat/rules-epa-pba`, merged 62c9012, **deployed**; migration `20261007090000_epa_pba_attempt_rules.sql` first): EPA 1-6: one request
+  per form per academic year (starts 1 July, Bangkok time) and 3 attempts in total; EPA 7 forms 1 each; EPA 8 unlimited and not counted for the board; PBA
+  topics never repeat; "reached the level" = every criterion of ONE assessment at L4/L5 (M/E for EPA 7). Staff can declare "unavailable until"
+  (`resident_staff_availability`); an Admin can grant extra attempts with a reason (`resident_attempt_grants`, raises only the total limit);
+  `get_my_epa_progress()`; rules in `src/residentAssessmentRules.js`; who may grant is one named function (`private.resident_can_grant_extra_attempts()`).
+- 2026-10-07 (PR #9 `feat/admin-pages`, merged 1137bd2, **deployed**; migration `20261008090000_admin_attempt_pages.sql` first): Admin screen got
+  "เพิ่มครั้งการประเมิน" (pick Resident + form + reason, confirm, history) and "ดึงข้อมูลความคืบหน้า" (Excel: อ่านก่อน / EPA / PBA; no scores, no assessor
+  names). `admin_list_attempt_grants`, `admin_list_epa_pba_progress`, optional label `resident_user_roles.admin_tag` ("Admin หลัก (F)" / "Admin รอง (N)"; no
+  extra rights), who may see everybody's progress is `private.resident_can_view_cohort_progress()`. Screens were written by a second AI from a spec and
+  reviewed here (database function output was fed through the Excel builder and compared cell by cell).
+- 2026-10-11 (PR #10 `fix/checkin-spelling`, merged 678a2a8, no migration): "เช็กชื่อ" -> "เช็คชื่อ" in src, tests and scripts (old docs left as history).
+- 2026-10-11 e-mail: assessment notices (Edge Function secret `SMTP_PASS`) and invite / password reset (Supabase Auth custom SMTP; no Send Email Hook is
+  configured, so `auth-send-email-gmail` is not used) are delivered. The Gmail app password is used in TWO places; if it is replaced, change both.
+  `00d` health check reads `resident_assessment_email_deliveries`.
+- Release practice since 2026-10-07: one piece per release; the database file first (state check before, the same checks again before COMMIT so a
+  failure rolls everything back), then merge with "Create a merge commit", then a click-through with test accounts. Rollback files were tested for the lock,
+  the rules and the Admin pages. The release SQL files are wrappers around the migrations and are kept outside git; copies are with the project owner.
+  `npm test` (267 tests) still does not run SQL: the behaviour suite `tests/resident-attempt-rules-behavior.sql` (101 checks) was run on a throwaway local
+  PostgreSQL 16 with a small Supabase stand-in, and each release file was also run on the staging project before production.
+
+## Still open (owner: Chagkrit unless stated)
+- Done: sign-up disabled; real e-mail delivery confirmed on 2026-10-11 (invite, password reset, assessor notice).
+- **PDPA / public repository:** the repository is public and old migration history contains real names and e-mail addresses (including an older
+  year-4 project's). Decide: make the repository private (check Vercel still deploys), purge git history, or ask the faculty PDPA officer.
+- Create the real Admin officer accounts (owner: Sense), then run `set-admin-tags.sql` (label only). Run the one-time test-data wipe
+  (`10-reset-test-data-DANGER-IRREVERSIBLE.sql`, outside git, needs today's date in its confirm line) right before real use, and delete the test
+  accounts by hand in Authentication -> Users (the script does not delete accounts).
+- Real-phone checks (iPhone found: the Staff "unavailable until" card overlapped on iOS - CSS fix prepared, to be confirmed on a phone; the Staff queue
+  table and the scoring matrix need sideways scrolling, so the criterion names disappear while choosing a level). Mobile redesign (queue as cards, collapsible
+  criteria with the criterion text beside the level buttons) is being designed first.
+- In progress / not started: "My space" for Residents (spec with the second AI); academic calendar (in stages); seat-map check-in (read-only first).
+- Clean-up to decide: unused Edge Function `auth-send-email-gmail` and its leftover fallback sender address; Admin guide for the office staff.
+- Not yet decided by the department: recognition / rewards / ranking (kept out of the system until a policy exists).
 
 ## Not in git
 Private rosters, `*.xlsx`, `Staff.docx`, `data/`, `.env*`, `.vercel/` are git-ignored on purpose.
