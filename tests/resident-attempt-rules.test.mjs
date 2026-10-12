@@ -177,7 +177,7 @@ test("the Staff availability card is independent of the request form (it must no
   assert.doesNotMatch(card, /\bprogress\b/);
   const form = views.slice(views.indexOf("export function ResidentRequestForm"), views.indexOf("export function StaffEvaluationForm"));
   assert.match(form, /rules\.attempt\?\.number/);
-  assert.equal((form.match(/<RuleMessages rules=\{rules\} \/>/g) || []).length, 1);
+  assert.equal((form.match(/<RuleMessages rules=\{rules\} hideAlreadyMet=\{Boolean\(levelThreshold\(template\) && progress\?\.met\)\} \/>/g) || []).length, 1);
 });
 
 test("rules: assessments an Admin recorded directly (no request row) count as attempts: a PBA topic cannot be repeated and the limits include them", () => {
