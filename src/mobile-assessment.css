@@ -1,0 +1,113 @@
+/* Mobile renovation round 1 (2026-10-12): Staff queue + assessment form.
+   Reads tokens.css and never redefines it.
+   Spec: docs/superpowers/specs/2026-10-12-mobile-assessment-design.md
+   Phone layout starts where the bottom nav starts (900px, see resident.css). */
+
+:root {
+  /* semantic */
+  --touch-min: 44px;
+  --space-card: 14px;
+  /* component */
+  --score-btn-h: var(--touch-min);
+  --score-btn-gap: 4px;
+  --card-pad: var(--space-card);
+  --action-bar-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  --action-bar-height: 96px; /* sign/save bar: ~71px at 390px, ~95px at 320px where the sign label wraps */
+}
+
+/* Visible on every width; the colour and weight come from the phone rules below. */
+.criterion-missing { margin-left: 8px; }
+
+/* Mobile-only elements: hidden on desktop, shown inside the media block below. */
+.criterion-comment-toggle,
+.score-legend-toggle,
+.criterion-progress,
+.queue-cards {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  /* --- scoring form: one card per criterion (text first, buttons under it) --- */
+  .criterion-list { display: grid; gap: 10px; margin: 16px 0; border: 0; overflow: visible; }
+  .criterion-head { display: none; }
+  .criterion-progress { display: block; margin: 0; font-weight: 700; color: var(--text-muted); }
+  .criterion-row {
+    display: grid;
+    grid-template-columns: repeat(var(--score-count, 5), minmax(0, 1fr));
+    gap: var(--score-btn-gap);
+    min-width: 0;
+    padding: 12px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+  .criterion-row > div:first-child { grid-column: 1 / -1; min-width: 0; }
+  .criterion-row > div:first-child p { margin: 4px 0 6px; overflow-wrap: anywhere; }
+  .criterion-row .score-radio { margin: 0; } /* styles.css adds 20px under every label in the form */
+  .criterion-row .score-radio span {
+    display: flex; align-items: center; justify-content: center;
+    box-sizing: border-box; width: 100%; min-width: 0;
+    min-height: var(--score-btn-h); padding: 0 2px;
+  }
+  .score-radio input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .criterion-comment-toggle {
+    display: block; grid-column: 1 / -1; min-height: var(--touch-min);
+    border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+    background: transparent; color: var(--brand); font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .criterion-row > input {
+    grid-column: 1 / -1; box-sizing: border-box; width: 100%; min-width: 0;
+    min-height: var(--touch-min); font-size: 16px;
+  }
+  .criterion-row[data-comment-open="false"] > input { display: none; }
+  .criterion-row[data-unanswered="true"] { border-left: 3px solid var(--warning); }
+  .criterion-missing { color: var(--warning); font-weight: 700; }
+
+  /* --- level legend: folded on phones --- */
+  .score-legend-toggle {
+    display: block; width: 100%; min-height: var(--touch-min); padding: 0 var(--card-pad);
+    border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface);
+    color: var(--brand); font: inherit; font-weight: 700; text-align: left; cursor: pointer;
+  }
+  .score-legend-fold > .score-legend { margin-top: 8px; }
+  .score-legend-fold[data-open="false"] > .score-legend { display: none; }
+
+  /* --- sign/save bar: sticky, always above the bottom nav (nav z-index is 40) --- */
+  /* styles.css gives .assessment-form overflow:hidden, which turns it into the sticky container's scroller. */
+  .assessment-form { overflow: visible; }
+  .assessment-actions {
+    position: sticky; bottom: var(--action-bar-bottom); z-index: 30;
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 8px;
+    margin-top: 14px; padding: 10px 0;
+    border-top: 1px solid var(--line); background: var(--surface);
+  }
+  /* a focused field must not end up under the bar + bottom nav */
+  html:has(.assessment-actions) { scroll-padding-bottom: calc(var(--action-bar-bottom) + var(--action-bar-height)); }
+  .assessment-actions button { width: 100%; min-height: var(--touch-min); }
+
+  /* --- Staff queue: cards instead of a sideways-scrolling table --- */
+  .queue-table { display: none; }
+  .queue-cards { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .queue-card {
+    display: grid; gap: 4px; padding: var(--card-pad);
+    border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface);
+    overflow-wrap: anywhere;
+  }
+  .queue-card small { color: var(--text-muted); }
+  .queue-card button { width: 100%; min-height: var(--touch-min); margin-top: 6px; }
+
+  /* --- "การรับประเมินของคุณ" card: stacked, nothing can run under a button (iOS date field) --- */
+  .staff-availability .availability-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .staff-availability .availability-row label { min-width: 0; }
+  .staff-availability input[type="date"] {
+    box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+    min-height: var(--touch-min); -webkit-appearance: none; appearance: none;
+  }
+  .staff-availability .availability-row button { width: 100%; min-height: var(--touch-min); }
+
+  /* --- Resident submit page: PBA guidance is a plain muted line, not another box --- */
+  .pba-guidance {
+    margin: 4px 0; padding: 0; border-left: 0; background: none;
+    color: var(--text-muted); font-size: 13px;
+  }
+}

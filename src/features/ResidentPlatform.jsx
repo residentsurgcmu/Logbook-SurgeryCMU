@@ -84,7 +84,8 @@ function RequestQueue({ requests, profiles, onSelect }) {
   return (
     <section className="resident-panel">
       <h2>แบบประเมินที่รอดำเนินการ</h2>
-      <div className="resident-table-wrap">
+      {/* Phone shows .queue-cards instead of this table; a column added here must be added to the card too. */}
+      <div className="resident-table-wrap queue-table">
         <table>
           <thead>
             <tr>
@@ -121,6 +122,28 @@ function RequestQueue({ requests, profiles, onSelect }) {
           </tbody>
         </table>
       </div>
+      <ul className="queue-cards">
+        {pending.map((request) => (
+          <li className="queue-card" key={request.id}>
+            <small>{readableDateTime(request.submitted_at)}</small>
+            <strong>
+              {request.resident_template_definitions?.template_code} ·{" "}
+              {request.resident_template_definitions?.title}
+            </strong>
+            <span>
+              {names.get(request.resident_id) || "—"} · ครั้งที่ {request.attempt_number}
+            </span>
+            <span>{request.procedure_or_activity}</span>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => onSelect(request)}
+            >
+              เปิดประเมิน
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -1002,14 +1025,14 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
             />
           ) : (
             <>
+              <RequestQueue
+                requests={workspace.requests}
+                profiles={workspace.allProfiles || workspace.profiles}
+                onSelect={setSelectedRequest}
+              />
               {workspace.user.role === "staff" && (
                 <StaffAvailabilityCard workspace={workspace} onSaved={onRefresh} />
               )}
-              <RequestQueue
-              requests={workspace.requests}
-              profiles={workspace.allProfiles || workspace.profiles}
-              onSelect={setSelectedRequest}
-            />
             </>
           )
         ) : tab === "notifications" ? (

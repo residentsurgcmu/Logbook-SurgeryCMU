@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   cancelAssessmentRequest,
   completeAssessmentRequest,
@@ -13,6 +14,7 @@ import {
   levelThreshold,
   thaiDate,
 } from "../residentAssessmentRules";
+import { visibleRuleWarnings } from "../ruleMessageFilter";
 
 const localDate = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -43,19 +45,33 @@ const attemptLabel = (request, template) =>
     : `ครั้งที่ ${request.attempt_number}`;
 
 export function ScoreLegend({ template }) {
+  // Folding is decided by CSS (phone only); on desktop the legend is always shown.
+  const [open, setOpen] = useState(false);
+  const legendId = useId();
   return (
-    <div className="score-legend" aria-label="ความหมายของระดับคะแนน">
-      <span>
-        <strong>{template?.template_type}</strong> ={" "}
-        {template?.template_type === "EPA"
-          ? "Entrustable Professional Activities"
-          : "Procedure-Based Assessment"}
-      </span>
-      {(template?.score_legend || []).map(([code, meaning]) => (
-        <span key={code}>
-          <strong>{code}</strong> = {meaning}
+    <div className="score-legend-fold" data-open={open ? "true" : "false"}>
+      <button
+        type="button"
+        className="score-legend-toggle"
+        aria-expanded={open}
+        aria-controls={legendId}
+        onClick={() => setOpen((current) => !current)}
+      >
+        ความหมายของระดับ {open ? "▲" : "▼"}
+      </button>
+      <div className="score-legend" id={legendId} aria-label="ความหมายของระดับคะแนน">
+        <span>
+          <strong>{template?.template_type}</strong> ={" "}
+          {template?.template_type === "EPA"
+            ? "Entrustable Professional Activities"
+            : "Procedure-Based Assessment"}
         </span>
-      ))}
+        {(template?.score_legend || []).map(([code, meaning]) => (
+          <span key={code}>
+            <strong>{code}</strong> = {meaning}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -67,15 +83,27 @@ export function ScoreGrid({
   comments,
   onComment,
   selfScores,
+  showMissing = false,
 }) {
+  // Which comment boxes the user opened on a phone. A box that already holds text stays open.
+  const [openComments, setOpenComments] = useState({});
   const selfByCriterion = new Map(
     (selfScores || []).map((row) => [row.criterion_id, row]),
   );
+  const answered = template.criteria.filter((criterion) => scores[criterion.id]).length;
+  function openComment(id) {
+    // Open and focus inside the tap itself: iOS Safari only raises the keyboard for a focus() made in the gesture.
+    flushSync(() => setOpenComments((current) => ({ ...current, [id]: true })));
+    document.getElementById(`comment-${id}`)?.focus();
+  }
   return (
     <div
       className="criterion-list"
       style={{ "--score-count": template.score_options.length }}
     >
+      <p className="criterion-progress" aria-live="polite">
+        ให้คะแนนแล้ว {answered}/{template.criteria.length}
+      </p>
       <div className="criterion-head">
         <span>เกณฑ์ประเมิน</span>
         {template.score_options.map((score) => (
@@ -83,41 +111,62 @@ export function ScoreGrid({
         ))}
         <span>ข้อเสนอแนะ</span>
       </div>
-      {template.criteria.map((criterion) => (
-        <div className="criterion-row" key={criterion.id}>
-          <div>
-            <small>{criterion.criterion_code}</small>
-            <p>{criterion.criterion_text}</p>
-            {selfByCriterion.has(criterion.id) && (
-              <small className="self-score-hint">
-                Resident: {selfByCriterion.get(criterion.id).score}
-                {selfByCriterion.get(criterion.id).comment
-                  ? ` · ${selfByCriterion.get(criterion.id).comment}`
-                  : ""}
-              </small>
+      {template.criteria.map((criterion) => {
+        const commentOpen = Boolean(openComments[criterion.id] || comments[criterion.id]);
+        const missing = showMissing && !scores[criterion.id];
+        return (
+          <div
+            className="criterion-row"
+            key={criterion.id}
+            data-comment-open={commentOpen ? "true" : "false"}
+            data-unanswered={missing ? "true" : undefined}
+          >
+            <div>
+              <small>{criterion.criterion_code}</small>
+              {missing && <small className="criterion-missing">ยังไม่ได้เลือกระดับ</small>}
+              <p>{criterion.criterion_text}</p>
+              {selfByCriterion.has(criterion.id) && (
+                <small className="self-score-hint">
+                  Resident: {selfByCriterion.get(criterion.id).score}
+                  {selfByCriterion.get(criterion.id).comment
+                    ? ` · ${selfByCriterion.get(criterion.id).comment}`
+                    : ""}
+                </small>
+              )}
+            </div>
+            {template.score_options.map((score) => (
+              <label className="score-radio" key={score}>
+                <input
+                  type="radio"
+                  name={`score-${criterion.id}`}
+                  value={score}
+                  checked={scores[criterion.id] === score}
+                  onChange={() => onScore(criterion.id, score)}
+                />
+                <span>{score}</span>
+              </label>
+            ))}
+            {!commentOpen && (
+              <button
+                type="button"
+                className="criterion-comment-toggle"
+                aria-label={`เพิ่มข้อเสนอแนะ ${criterion.criterion_code}`}
+                onClick={() => openComment(criterion.id)}
+              >
+                + ข้อเสนอแนะ
+              </button>
             )}
+            <input
+              id={`comment-${criterion.id}`}
+              aria-label={`ข้อเสนอแนะ ${criterion.criterion_code}`}
+              value={comments[criterion.id] || ""}
+              onChange={(event) => onComment(criterion.id, event.target.value)}
+              maxLength="1000"
+              placeholder="ข้อเสนอแนะ (ถ้ามี)"
+            />
           </div>
-          {template.score_options.map((score) => (
-            <label className="score-radio" key={score}>
-              <input
-                type="radio"
-                name={`score-${criterion.id}`}
-                value={score}
-                checked={scores[criterion.id] === score}
-                onChange={() => onScore(criterion.id, score)}
-              />
-              <span>{score}</span>
-            </label>
-          ))}
-          <input
-            aria-label={`ข้อเสนอแนะ ${criterion.criterion_code}`}
-            value={comments[criterion.id] || ""}
-            onChange={(event) => onComment(criterion.id, event.target.value)}
-            maxLength="1000"
-            placeholder="ถ้ามี"
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -142,8 +191,9 @@ export function OutcomeSelect({ template, value, onChange, label }) {
   );
 }
 
-function RuleMessages({ rules }) {
-  if (!rules.reasons.length && !rules.warnings.length) return null;
+function RuleMessages({ rules, hideAlreadyMet = false }) {
+  const warnings = visibleRuleWarnings(rules, { hideAlreadyMet });
+  if (!rules.reasons.length && !warnings.length) return null;
   return (
     <div className="rule-messages" aria-live="polite">
       {rules.reasons.map((item) => (
@@ -151,7 +201,7 @@ function RuleMessages({ rules }) {
           ✗ {item.text}
         </p>
       ))}
-      {rules.warnings.map((item) => (
+      {warnings.map((item) => (
         <p className="rule-warning" key={item.code}>
           △ {item.text}
         </p>
@@ -167,7 +217,7 @@ function LevelProgressNotice({ progress, template }) {
   if (progress.met)
     return (
       <p className="level-notice level-met">
-        ✓ แบบนี้ถึงเกณฑ์แล้ว (ทุกข้อในใบประเมินใบเดียวได้ {threshold.label} ขึ้นไป)
+        ✓ แบบนี้ถึงเกณฑ์แล้ว (ทุกข้อในใบประเมินใบเดียวได้ {threshold.label} ขึ้นไป) · ไม่จำเป็นต้องส่งเพิ่ม (ส่งได้ถ้ายังเหลือครั้งและอยากดูพัฒนาการ)
       </p>
     );
   const below = progress.latest_below || [];
@@ -442,10 +492,10 @@ export function ResidentRequestForm({ workspace, onSaved }) {
             {rules.attempt?.perYear ? ` · ปีการศึกษานี้ ${rules.attempt.yearUsed}/${rules.attempt.perYear}` : ""}
             {previousStaff ? ` · ครั้งก่อนประเมินโดย ${previousStaff}` : ""}
           </p>
-          <RuleMessages rules={rules} />
+          <RuleMessages rules={rules} hideAlreadyMet={Boolean(levelThreshold(template) && progress?.met)} />
           <LevelProgressNotice progress={progress} template={template} />
           {template.template_type === "PBA" && (
-            <p className="source-note">
+            <p className="source-note pba-guidance">
               {(template.recommended_pgy || []).includes(user.pgy)
                 ? `แนะนำสำหรับ PGY ${user.pgy}`
                 : `แบบนี้ไม่ได้อยู่ในรายการแนะนำของ PGY ${user.pgy} แต่ยังเลือกประเมินได้`}{" "}
@@ -520,12 +570,22 @@ export function StaffEvaluationForm({
   const [comments, setComments] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showMissing, setShowMissing] = useState(false);
+  const [missingTick, setMissingTick] = useState(0);
   const template = templates.find((item) => item.id === request.template_id);
   const resident = profiles.find((item) => item.id === request.resident_id);
+  // The error line sits below the fold once the sign button is sticky, so bring the first empty row into view.
+  useEffect(() => {
+    if (!missingTick) return;
+    document.querySelector('.criterion-row[data-unanswered="true"]')?.scrollIntoView({ block: "center" });
+  }, [missingTick]);
   async function submit(event) {
     event.preventDefault();
-    if (template.criteria.some((criterion) => !scores[criterion.id]))
+    if (template.criteria.some((criterion) => !scores[criterion.id])) {
+      setShowMissing(true);
+      setMissingTick((tick) => tick + 1);
       return setError("กรุณาเลือกระดับทุกข้อก่อนลงนาม");
+    }
     setBusy(true);
     setError("");
     try {
@@ -542,6 +602,8 @@ export function StaffEvaluationForm({
       await onSaved();
     } catch (nextError) {
       setError(nextError.message || "บันทึกผลประเมินไม่สำเร็จ");
+      // The error line sits above the sticky bar and may be off screen mid-form.
+      requestAnimationFrame(() => document.querySelector("form.assessment-form .form-error")?.scrollIntoView({ block: "center" }));
     } finally {
       setBusy(false);
     }
@@ -598,6 +660,7 @@ export function StaffEvaluationForm({
           setComments((current) => ({ ...current, [id]: value }))
         }
         selfScores={request.resident_self_assessment_scores}
+        showMissing={showMissing}
       />
       <div className="resident-form-grid footer-fields">
         <OutcomeSelect
@@ -616,8 +679,8 @@ export function StaffEvaluationForm({
           />
         </label>
       </div>
-      {error && <p className="form-error">{error}</p>}
-      <div className="button-row">
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="button-row assessment-actions">
         <button className="primary-button" disabled={busy}>
           {busy ? "กำลังบันทึก…" : "ลงนามและบันทึกผล"}
         </button>

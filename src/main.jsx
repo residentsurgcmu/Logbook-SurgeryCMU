@@ -4,6 +4,7 @@ import App from "./App";
 import "./tokens.css";
 import "./styles.css";
 import "./resident.css";
+import "./mobile-assessment.css";
 import "./residentCorner.css";
 import "./mySpace.css";
 

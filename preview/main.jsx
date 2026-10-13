@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import ResidentPlatform from '../src/features/ResidentPlatform';
 import '../src/styles.css';
 import '../src/resident.css';
+import '../src/mobile-assessment.css';
 import '../src/residentCorner.css';
 import '../src/mySpace.css';
 import './preview.css';
