@@ -5,6 +5,7 @@ import '../src/styles.css';
 import '../src/resident.css';
 import '../src/mobile-assessment.css';
 import '../src/residentCorner.css';
+import '../src/mySpace.css';
 import './preview.css';
 
 const names = {resident:'Resident ตัวอย่าง',staff:'Staff ตัวอย่าง',admin:'Admin ตัวอย่าง'};

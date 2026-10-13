@@ -6,6 +6,7 @@ import "./styles.css";
 import "./resident.css";
 import "./mobile-assessment.css";
 import "./residentCorner.css";
+import "./mySpace.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
