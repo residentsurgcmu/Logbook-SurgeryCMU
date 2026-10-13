@@ -19,7 +19,7 @@ A Resident opens one page and sees their own progress: what is waiting, what was
 | D5 | "Reached the level" comes only from `workspace.epaProgress[].met` (database function), never recomputed in the browser. | Same source as the send page and the Admin file. |
 | D6 | Meeting attendance: new `loadOwnRoundAttendanceSince(isoDate)` in `residentApi.js` that pages through all rows from the academic-year start (`fetchAllRows`). `loadOwnRoundAttendance()` (20 rows, used by the live check-in page) is not changed. | Sense's answer to Sol. |
 | D7 | The attendance list shows check-in **timestamps only** ("ครั้งที่ n · วันที่ เวลา"), not meeting names. | Residents cannot read `resident_round_sessions` (select policy is admin-only, migration `20260920102939`); adding a policy or RPC would be a database change, which is out of scope. |
-| D8 | Staff names come from the same lookup `ResidentRequestHistory` uses (`workspace.allProfiles \|\| workspace.profiles`, fallback `previous_staff_name`/"—"). | Residents never see Staff e-mails; names only. |
+| D8 | Staff names come from the same lookup `ResidentRequestHistory` uses (`workspace.allProfiles \|\| workspace.profiles`, fallback "—"; `previous_staff_name` is the PREVIOUS Staff, never used). | Residents never see Staff e-mails; names only. |
 | D9 | The page is built in the repo's current style: React function component, class-based CSS using `tokens.css` variables, Thai copy, source-guard regex tests plus behavioural tests for the pure module. | Matches the codebase. |
 
 ## 3. Data and counting rules (the pure module)
@@ -33,7 +33,7 @@ A Resident opens one page and sees their own progress: what is waiting, what was
 - **pbaFinished / pbaTotal**: distinct PBA forms (`PBA_CODES`, 21 forms) having at least one finished assessment; target constant 16. A pending request is not finished.
 - **recent**: last 5 finished assessments (date desc): form, date, Staff.
 - **boardChecklist**: per EPA board form (8): `reached` or `{used, cap, thisYear, perYear, belowCount}` from `epaProgress` (`attempts_used`, `attempts_cap`, `attempts_this_year`, template `max_attempts_per_year`, `latest_below.length`); stuck at the cap and not reached → text "ติดต่อ Admin เพื่อพิจารณาเพิ่มครั้ง". PBA: count plus each of the 21 forms as finished / waiting / empty.
-- **yearPlan**: EPA forms that can still be sent this academic year = not reached AND `attempts_this_year < per_year` AND `attempts_used < attempts_cap` (EPA-8 excluded); PBA finished this academic year `n/4` (distinct forms).
+- **yearPlan**: EPA forms that can still be sent this academic year = not reached AND `attempts_this_year < per_year` AND `attempts_used < attempts_cap` (EPA-8 excluded); PBA finished this academic year `n/4` (distinct forms; a request-linked assessment counts in the year its request was sent, like the Admin progress file, a directly recorded one by its assessment date). An EPA form whose latest attempt is still waiting shows "รอ Staff ประเมิน" (not the Admin-limit message) and is not offered again.
 - **attendance**: `countThisYear` and the last 5 timestamps from the rows loaded since the year start.
 - Cancelled requests are ignored everywhere.
 

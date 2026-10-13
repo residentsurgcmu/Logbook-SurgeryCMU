@@ -17,6 +17,7 @@ function EpaRow({ item }) {
       <span>ใช้แล้ว {item.used} จาก {limit} ครั้ง · ปีการศึกษานี้ {year}</span>
       {item.belowCount > 0 && <span>ข้อที่ยังต่ำกว่า {item.level}: {item.belowCount} ข้อ</span>}
       {item.state === "stuck" && <span className="ms-stuck">{STUCK_TEXT}</span>}
+      {item.state === "waiting" && <span className="ms-muted">รอ Staff ประเมิน</span>}
     </li>
   );
 }

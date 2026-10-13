@@ -10,7 +10,7 @@ export const RECENT_LIMIT = 5;
 export const STUCK_TEXT = "ติดต่อ Admin เพื่อพิจารณาเพิ่มครั้ง";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const dayOf = (value) => (DATE_ONLY.test(value) ? value : bangkokDate(value));
+const dayOf = (value) => (!value ? "" : DATE_ONLY.test(value) ? value : bangkokDate(value));
 const nextYearStart = (start) => `${Number(start.slice(0, 4)) + 1}-07-01`;
 const inYear = (value, start) => {
   if (!value) return false;
@@ -57,7 +57,7 @@ export function buildMySpace({
       title: form.title,
       staffName: nameOf(row.staff_id),
       submittedAt,
-      daysWaiting: Math.max(0, dayNumber(today) - dayNumber(submittedAt)),
+      daysWaiting: submittedAt ? Math.max(0, dayNumber(today) - dayNumber(submittedAt)) : 0,
     };
   });
 
@@ -72,15 +72,21 @@ export function buildMySpace({
     });
 
   // PBA: a form is finished when at least one FINISHED assessment exists; a waiting request is not finished.
+  const requestByAssessment = new Map(
+    requests.filter((row) => mine(row) && row.status === "completed" && row.assessment_id).map((row) => [row.assessment_id, row]),
+  );
   const pbaDone = new Set();
   const pbaDoneThisYear = new Set();
   for (const row of finished) {
     const { code } = formOf(row);
     if (!PBA_CODES.includes(code)) continue;
     pbaDone.add(code);
-    if (inYear(row.assessment_date, start)) pbaDoneThisYear.add(code);
+    // Same basis as the Admin progress file: a request-linked assessment counts in the year its request was sent
+    // (the activity date may be earlier); a directly recorded one counts by its assessment date.
+    if (inYear(requestByAssessment.get(row.id)?.submitted_at || row.assessment_date, start)) pbaDoneThisYear.add(code);
   }
-  const pbaWaiting = new Set(waitingList.map((item) => item.code).filter((code) => PBA_CODES.includes(code)));
+  const waitingCodes = new Set(waitingList.map((item) => item.code));
+  const pbaWaiting = new Set([...waitingCodes].filter((code) => PBA_CODES.includes(code)));
   const pbaForms = PBA_CODES.map((code) => ({
     code,
     title: templatesByCode.get(code)?.title || "",
@@ -102,17 +108,19 @@ export function buildMySpace({
     const thisYear = row.attempts_this_year ?? 0;
     const perYear = template?.max_attempts_per_year ?? null;
     const atCap = cap != null && used >= cap;
+    // The last attempt may still be waiting for Staff and could reach the level: do not tell the Resident to ask for more.
+    const waiting = waitingCodes.has(code);
     return {
       code,
       title,
-      state: met ? "reached" : atCap ? "stuck" : "open",
+      state: met ? "reached" : waiting ? "waiting" : atCap ? "stuck" : "open",
       used,
       cap,
       thisYear,
       perYear,
       belowCount: Array.isArray(row.latest_below) ? row.latest_below.length : null,
       level,
-      canSendThisYear: !met && !atCap && (perYear == null || thisYear < perYear),
+      canSendThisYear: !met && !waiting && !atCap && (perYear == null || thisYear < perYear),
     };
   });
 

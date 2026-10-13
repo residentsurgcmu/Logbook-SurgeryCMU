@@ -12,7 +12,6 @@ const templates = [...EPA_CODES, ...PBA_CODES].map((code) => ({
   max_attempts_per_year: code.startsWith("EPA") && code !== "EPA-8" ? 1 : null,
   score_options: code.startsWith("EPA-7") ? ["F", "M", "E"] : code.startsWith("EPA") ? ["L1", "L2", "L3", "L4", "L5"] : [],
 }));
-const tpl = (code) => templates.find((t) => t.template_code === code);
 const progressRow = (code, patch = {}) => ({
   template_id: `t-${code}`, template_code: code, title: `ชื่อแบบ ${code}`, counts_for_board: code !== "EPA-8",
   attempts_used: 0, attempts_cap: 3, attempts_this_year: 0, met: false, latest_assessment_date: null, latest_below: null, ...patch,
@@ -186,4 +185,26 @@ test("greeting carries name and PGY; the module shares the Admin file's form lis
   assert.equal(admin.PBA_CODES.length, 21);
   assert.equal(space.board.pba.forms.map((f) => f.code).join(), admin.PBA_CODES.join());
   assert.equal(space.board.epa.map((f) => f.code).join(), admin.EPA_CODES.filter((c) => c !== "EPA-8").join());
+});
+
+test("last attempt still waiting for Staff: 'waiting' not 'stuck', and not offered again this year", () => {
+  const rows = epaProgress().map((row) => (row.template_code === "EPA-2" ? { ...row, attempts_used: 3, attempts_cap: 3, attempts_this_year: 1 } : row.template_code === "EPA-4" ? { ...row, attempts_used: 1, attempts_this_year: 0 } : row));
+  const space = build({ epaProgress: rows, requests: [request("EPA-2"), request("EPA-4", { submitted_at: "2026-06-20T03:00:00Z" })] });
+  const row = (code) => space.board.epa.find((item) => item.code === code);
+  assert.equal(row("EPA-2").state, "waiting");
+  assert.equal(row("EPA-4").state, "waiting");
+  assert.ok(!space.plan.epaCanSend.some((item) => item.code === "EPA-4")); // pending request sent last year still blocks a new one
+});
+
+test("PBA this year follows the Admin file: request-linked rows by the request's sent date, direct rows by assessment date", () => {
+  const linked = { ...assessment("PBA-01", "2026-06-28"), id: "a-linked" }; // activity before 1 July
+  const done = request("PBA-01", { status: "completed", assessment_id: "a-linked", submitted_at: "2026-07-02T03:00:00Z" });
+  assert.equal(build({ assessments: [linked], requests: [done] }).plan.pbaThisYear, 1);
+  const direct = assessment("PBA-02", "2026-06-28"); // recorded by an Admin, no request
+  assert.equal(build({ assessments: [direct] }).plan.pbaThisYear, 0);
+});
+
+test("a request with no sent date does not crash or claim 'today'", () => {
+  const space = build({ requests: [{ id: "r", resident_id: "me", template_id: "t-EPA-3", staff_id: "s1", status: "pending", submitted_at: null }] });
+  assert.equal(space.waitingList[0].submittedAt, "");
 });
