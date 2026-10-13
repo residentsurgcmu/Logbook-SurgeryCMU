@@ -25,12 +25,12 @@
 .ms-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--line); font-weight: 700; font-size: 1rem; }
 .ms-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; margin-top: 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--brand-dark); font: inherit; font-weight: 700; cursor: pointer; }
 .ms-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.ms-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ms-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
 .ms-chip { display: grid; justify-items: center; gap: 2px; min-height: 52px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--canvas); text-align: center; }
 .ms-chip span { font-weight: 700; }
-.ms-chip small { font-size: 0.75rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.ms-chip.ms-finished { background: var(--success-soft); }
-.ms-chip.ms-waiting { background: var(--warning-soft); }
+.ms-chip small { font-size: 1rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ms-chip.ms-chip-finished { background: var(--success-soft); }
+.ms-chip.ms-chip-waiting { background: var(--warning-soft); }
 @media (max-width: 900px) {
   .ms-page { max-width: none; }
 }

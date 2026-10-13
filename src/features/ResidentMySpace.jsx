@@ -29,7 +29,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
     setAttendance({ rows: null, error: "", loading: true });
     loadOwnRoundAttendanceSince(yearStart)
       .then((rows) => { if (live) setAttendance({ rows, error: "", loading: false }); })
-      .catch((error) => { if (live) setAttendance({ rows: null, error: error?.message || "โหลดข้อมูลการประชุมไม่สำเร็จ", loading: false }); });
+      .catch((error) => { if (live) setAttendance({ rows: null, error: "โหลดข้อมูลการประชุมไม่สำเร็จ ลองรีเฟรชหน้านี้", loading: false }); });
     return () => { live = false; };
   }, [yearStart]);
 
@@ -109,7 +109,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
         <p>เสร็จแล้ว {data.board.pba.finished} เรื่อง (เป้า {PBA_TARGET})</p>
         <ul className="ms-chips">
           {data.board.pba.forms.map((form) => (
-            <li key={form.code} className={`ms-chip ms-${form.state}`} title={form.title}>
+            <li key={form.code} className={`ms-chip ms-chip-${form.state}`} title={form.title}>
               <span>{form.code.replace("PBA-", "")}</span>
               <small>{form.state === "finished" ? "✓ เสร็จแล้ว" : form.state === "waiting" ? "… รอประเมิน" : "ยังไม่ส่ง"}</small>
             </li>
@@ -146,7 +146,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
             {data.attendance.last5.length === 0 ? (
               <p className="ms-empty">ยังไม่มีการเช็คชื่อในปีการศึกษานี้</p>
             ) : (
-              <ul className="ms-list">{data.attendance.last5.map((iso, i) => <li key={iso} className="ms-row"><span>ครั้งที่ {data.attendance.countThisYear - i} · {checkInTime(iso)}</span></li>)}</ul>
+              <ul className="ms-list">{data.attendance.last5.map((iso, i) => <li key={`${iso}-${i}`} className="ms-row"><span>ครั้งที่ {data.attendance.countThisYear - i} · {checkInTime(iso)}</span></li>)}</ul>
             )}
           </>
         )}
