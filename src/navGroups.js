@@ -1,6 +1,6 @@
 // Preserve every role-authorized tab, including future modules.
 export const NAV_GROUPS = [
-  ["พื้นที่ทำงาน", ["home", "cases", "conference", "schedule"]],
+  ["พื้นที่ทำงาน", ["home", "myspace", "cases", "conference", "schedule"]],
   ["การเรียนรู้และกิจกรรม", ["videos", "attendance", "round-admin"]],
   ["การประเมิน", ["request", "pending", "scan", "dashboard", "qr", "history", "exams"]],
   ["อื่นๆ", ["accounts", "notifications", "export", "admin"]],

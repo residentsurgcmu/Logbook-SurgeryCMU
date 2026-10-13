@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { BOTTOM_NAV, NAV_GROUPS, groupNav } from "../src/navGroups.js";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const functionBody = (source, name) => {
@@ -62,4 +63,34 @@ test("mobile rules: 44px targets, no horizontal page scroll, wrapped long titles
   assert.match(css, /overflow-wrap:\s*anywhere/);
   assert.match(css, /@media \(max-width: 900px\)/);
   assert.doesNotMatch(css, /overflow-x:\s*scroll/);
+});
+
+test("navGroups: myspace sits right after home in the first group; nothing else moved; BOTTOM_NAV untouched", () => {
+  assert.deepEqual(NAV_GROUPS[0], ["พื้นที่ทำงาน", ["home", "myspace", "cases", "conference", "schedule"]]);
+  assert.deepEqual(NAV_GROUPS.slice(1), [
+    ["การเรียนรู้และกิจกรรม", ["videos", "attendance", "round-admin"]],
+    ["การประเมิน", ["request", "pending", "scan", "dashboard", "qr", "history", "exams"]],
+    ["อื่นๆ", ["accounts", "notifications", "export", "admin"]],
+  ]);
+  assert.deepEqual(BOTTOM_NAV, {
+    resident: [["request", "ส่งประเมิน"], ["history", "ผลประเมิน"], ["qr", "QR ของฉัน"], ["cases", "เคส"]],
+    staff: [["pending", "รอประเมิน"], ["scan", "สแกน"], ["dashboard", "ภาพรวม"], ["history", "ประวัติ"]],
+    admin: [["dashboard", "ภาพรวม"], ["history", "ผลประเมิน"], ["cases", "เคส"], ["admin", "จัดการ"]],
+  });
+  const groups = groupNav([["home", "หน้าแรก"], ["myspace", "My space"], ["cases", "New admissions"]], "resident");
+  assert.deepEqual(groups[0][1].map(([id]) => id), ["home", "myspace", "cases"]);
+});
+
+test("the shell adds the My space tab for residents only and renders it only for residents", async () => {
+  const shell = await read("src/features/ResidentPlatform.jsx");
+  assert.match(shell, /if \(workspace\.user\.role === "resident"\)\s*nav\.push\(\["myspace", "My space"\]\)/);
+  assert.match(shell, /myspace: "My space"/);
+  assert.match(shell, /tab === "myspace" && workspace\.user\.role === "resident"/);
+  assert.match(shell, /import ResidentMySpace from "\.\/ResidentMySpace"/);
+  assert.equal((shell.match(/\["myspace", "My space"\]/g) || []).length, 1);
+});
+
+test("both entry points load the My space styles", async () => {
+  assert.match(await read("src/main.jsx"), /import "\.\/mySpace\.css";/);
+  assert.match(await read("preview/main.jsx"), /import '\.\.\/src\/mySpace\.css';/);
 });

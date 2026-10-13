@@ -12,6 +12,7 @@ import ResidentDashboard from "./ResidentDashboard";
 import AdminAttemptPages from "./AdminAttemptPages";
 import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
 import ResidentSchedule from "./ResidentSchedule";
+import ResidentMySpace from "./ResidentMySpace";
 import {
   AssessmentHistory,
   OutcomeSelect,
@@ -801,6 +802,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   if (workspace.user.role === "resident")
     nav.unshift(["request", "ส่งแบบประเมิน"]);
   if (workspace.user.role === "resident") nav.splice(2, 0, ["qr", "QR ของฉัน"]);
+  if (workspace.user.role === "resident") nav.push(["myspace", "My space"]);
   if (workspace.user.role === "staff")
     nav.unshift(["pending", "รอประเมิน"], ["scan", "สแกน QR"]);
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
@@ -823,6 +825,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   nav.push(["videos", "คลังวิดีโอ"], ["schedule", "ตารางเวร / OR"], ["accounts", "บัญชีที่เชื่อมต่อ"]);
   const titles = {
     home: "Resident Corner",
+    myspace: "My space",
     videos: "คลังวิดีโอ",
     schedule: "ตารางเวร / ตาราง OR",
     accounts: "บัญชีที่เชื่อมต่อ",
@@ -939,6 +942,12 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
               setHistoryFocus(focus);
               setTab("history");
             }}
+          />
+        ) : tab === "myspace" && workspace.user.role === "resident" ? (
+          <ResidentMySpace
+            workspace={workspace}
+            onOpenHistory={() => goTo("history")}
+            onOpenRequest={() => goTo("request")}
           />
         ) : tab === "cases" ? (
           <ResidentCases
