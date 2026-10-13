@@ -1,0 +1,39 @@
+/* My space (Resident page). Component classes only; colours and radii come from tokens.css. Mobile first. */
+.ms-page { display: grid; gap: 16px; max-width: 720px; margin: 0 auto; padding-bottom: 24px; }
+.ms-page h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.ms-page h3 { margin: 16px 0 6px; font-size: 1rem; color: var(--text-muted); }
+.ms-page p { margin: 6px 0; font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.ms-hero { padding: 16px; border-radius: var(--radius-lg); background: var(--brand-soft); border: 1px solid var(--line); }
+.ms-hero h2 { font-size: 1.3rem; }
+.ms-counters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.ms-counters li { display: grid; gap: 4px; padding: 14px; min-height: 88px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+.ms-counters b { font-size: 1.8rem; line-height: 1.1; color: var(--brand-dark); }
+.ms-counters span { font-size: 1rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ms-card { padding: 16px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); min-width: 0; }
+.ms-list { display: grid; gap: 8px; margin: 8px 0; padding: 0; list-style: none; }
+.ms-row { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--canvas); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.ms-row strong { color: var(--brand-dark); }
+.ms-row span { font-size: 1rem; }
+.ms-title { color: var(--text); }
+.ms-ok { background: var(--success-soft); }
+.ms-warn { background: var(--warning-soft); }
+.ms-stuck { font-weight: 700; color: var(--danger); }
+.ms-muted { color: var(--text-muted); }
+.ms-empty { color: var(--text-muted); padding: 8px 0; }
+.ms-note { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--warning-soft); border: 1px solid var(--line); }
+.ms-error { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--danger-soft); color: var(--danger); font-weight: 700; }
+.ms-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--line); font-weight: 700; font-size: 1rem; }
+.ms-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; margin-top: 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--brand-dark); font: inherit; font-weight: 700; cursor: pointer; }
+.ms-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ms-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.ms-chip { display: grid; justify-items: center; gap: 2px; min-height: 52px; padding: 6px 4px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--canvas); text-align: center; }
+.ms-chip span { font-weight: 700; }
+.ms-chip small { font-size: 0.75rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ms-chip.ms-finished { background: var(--success-soft); }
+.ms-chip.ms-waiting { background: var(--warning-soft); }
+@media (max-width: 900px) {
+  .ms-page { max-width: none; }
+}
+@media (min-width: 901px) {
+  .ms-counters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
