@@ -513,6 +513,20 @@ export async function loadOwnRoundAttendance() {
   return data || [];
 }
 
+// Every own check-in since the academic year began (Bangkok midnight). The page loop keeps this complete past
+// PostgREST's 1,000-row cap; the order has a tie-breaker so offset paging never skips or repeats a row.
+export async function loadOwnRoundAttendanceSince(isoDate) {
+  const { data, error } = await fetchAllRows(() =>
+    supabase.from("resident_round_attendance")
+      .select("session_id,checked_in_at")
+      .gte("checked_in_at", `${isoDate}T00:00:00+07:00`)
+      .order("checked_in_at", { ascending: false })
+      .order("session_id"),
+  );
+  fail(error);
+  return data || [];
+}
+
 export async function recordHistoricalAssessment(form) {
   const { data, error } = await supabase.rpc(
     "admin_record_historical_resident_assessment",
