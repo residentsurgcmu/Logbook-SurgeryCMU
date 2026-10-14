@@ -7,6 +7,7 @@ import "./resident.css";
 import "./mobile-assessment.css";
 import "./residentCorner.css";
 import "./mySpace.css";
+import "./seatMap.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

@@ -991,6 +991,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
         ) : tab === "attendance" ? (
           <RoundCheckIn
             token={roundToken}
+            user={workspace.user}
             onTokenUsed={() => {
               setRoundToken("");
               window.history.replaceState({}, document.title, "/");

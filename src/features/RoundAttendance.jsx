@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
+import { RoundQrScanner } from "./RoundQrScanner";
+import { SeatMapPanel } from "./SeatMap";
+import { SeatAdminPanel } from "./SeatMapAdmin";
+import { adminListSeatConfigs } from "../seatMapApi";
 import { ROUND_STATUS_LABELS, bangkokIsoDate, formatRoundTimeRange, roundCheckInErrorMessage, roundScheduleErrorMessage, roundSessionFileKey, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate, validateRoundTimes } from "../roundSchedule";
 
 const thaiTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
@@ -61,6 +65,7 @@ export function RoundAdmin({ user }) {
   const [data, setData] = useState({ sessions: [], attendance: [], cmeQr: [] });
   const [selectedId, setSelectedId] = useState("");
   const [qr, setQr] = useState(null);
+  const [seatConfigs, setSeatConfigs] = useState(null);
   const [offsetMs, setOffsetMs] = useState(0);
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState("");
@@ -90,6 +95,11 @@ export function RoundAdmin({ user }) {
     .filter((item) => item.meeting_date >= todayIso)
     .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
   const endedSessions = reportSessions.filter((item) => item.meeting_date < todayIso && !item.closed_at);
+  // Past sessions that have a seat map: the Admin can still open last Friday's report (read-only, no configuration).
+  const pastSeatSessions = useMemo(
+    () => (seatConfigs ? reportSessions.filter((item) => item.meeting_date < todayIso && seatConfigs[item.id]).sort((left, right) => new Date(right.starts_at) - new Date(left.starts_at)) : []),
+    [reportSessions, seatConfigs, todayIso],
+  );
   const minMeetingDate = shiftIsoDate(todayIso, -366);
   const maxMeetingDate = shiftIsoDate(todayIso, 366);
   const cmeQrFor = (sessionId) => data.cmeQr.find((item) => item.session_id === sessionId) || null;
@@ -122,13 +132,14 @@ export function RoundAdmin({ user }) {
     const seq = ++refreshSeq.current;
     try {
       const requestedAt = Date.now();
-      const [nextData, nextQr] = await Promise.all([loadRoundAdminData(), currentRoundQr()]);
+      const [nextData, nextQr, nextSeatConfigs] = await Promise.all([loadRoundAdminData(), currentRoundQr(), adminListSeatConfigs().catch(() => null)]);
       // Ignore a slower, older response (e.g. the 10 s poll) that finishes
       // after a newer refresh, so it cannot hide a just-created session.
       if (!mounted.current || seq !== refreshSeq.current) return;
       setData(nextData);
       setSelectedId((previous) => previous || nextData.sessions.find((item) => !item.cancelled_at)?.id || "");
       setQr(nextQr);
+      setSeatConfigs(nextSeatConfigs ? Object.fromEntries(nextSeatConfigs.map((row) => [row.session_id, row])) : null);
       if (nextQr) setOffsetMs(new Date(nextQr.server_now).getTime() - requestedAt);
       setError("");
     } catch (nextError) { if (mounted.current && seq === refreshSeq.current) setError(nextError.message || "โหลดข้อมูลการประชุมไม่สำเร็จ"); }
@@ -300,6 +311,7 @@ export function RoundAdmin({ user }) {
             <label className="secondary-button cme-upload-control">{busy === `cme-upload-${session.id}` ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={(event) => uploadCme(session, event)} /></label>
             {cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => removeCme(session)}>{busy === `cme-remove-${session.id}` ? "กำลังลบ…" : "ลบ QR CME"}</button>}
           </section>}
+          {seatConfigs && status !== "cancelled" && <SeatAdminPanel key={`${session.id}:${seatConfigs[session.id]?.on_time_at || ""}`} session={session} config={seatConfigs[session.id] || null} canConfigure={status !== "closed"} onChanged={refresh} />}
         </section>;
       })}
       {endedSessions.length > 0 && <details className="round-ended-sessions" open={endedSessions.some((session) => session.id === editingId) ? true : undefined}>
@@ -313,6 +325,13 @@ export function RoundAdmin({ user }) {
             <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรอบ</button>
           </span>
           {editingId === session.id && <div className="round-ended-edit">{renderEditForm()}</div>}
+        </li>)}</ul>
+      </details>}
+      {pastSeatSessions.length > 0 && <details className="round-ended-sessions">
+        <summary>ผังที่นั่งของรอบที่ผ่านมา ({pastSeatSessions.length})</summary>
+        <ul>{pastSeatSessions.map((session) => <li key={session.id}>
+          <span>{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
+          <SeatAdminPanel key={`${session.id}:past`} session={session} config={seatConfigs[session.id]} canConfigure={false} onChanged={refresh} />
         </li>)}</ul>
       </details>}
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -341,7 +360,10 @@ export function RoundAdmin({ user }) {
 // token again; a remounted copy now waits for the first request instead.
 const roundCheckIns = new Map();
 
-export function RoundCheckIn({ token, onTokenUsed }) {
+export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user }) {
+  const [scannedToken, setScannedToken] = useState("");
+  const token = linkToken || scannedToken;
+  const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
@@ -375,6 +397,8 @@ export function RoundCheckIn({ token, onTokenUsed }) {
         }
         return;
       }
+      // Without a token the page is back to history: allow the same QR to be scanned again.
+      submittedToken.current = "";
       try {
         const records = await loadOwnRoundAttendance();
         if (mounted.current) setHistory(records);
@@ -388,8 +412,9 @@ export function RoundCheckIn({ token, onTokenUsed }) {
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
     {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!token && <p>สแกน QR ที่แสดงในห้องประชุมด้วยโทรศัพท์เครื่องนี้เพื่อเช็คชื่อ</p>}
+    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
+    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} />}
   </section>;
 }
