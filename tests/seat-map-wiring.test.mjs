@@ -24,3 +24,42 @@ test("the API module only talks to the seat-map functions", async () => {
   assert.doesNotMatch(api, /\.from\(/, "no direct table access");
   assert.doesNotMatch(api, /resident_round_attendance|resident_round_sessions/);
 });
+
+test("the seat map is wired into the existing check-in and round-admin pages without touching protected files", async () => {
+  const round = await read("src/features/RoundAttendance.jsx");
+  const platform = await read("src/features/ResidentPlatform.jsx");
+  const main = await read("src/main.jsx");
+  const preview = await read("preview/main.jsx");
+  const nav = await read("src/navGroups.js");
+  assert.match(round, /import \{ SeatMapPanel \} from "\.\/SeatMap"/);
+  assert.match(round, /import \{ SeatAdminPanel \} from "\.\/SeatMapAdmin"/);
+  assert.match(round, /<SeatMapPanel user=\{user\} refreshKey=/);
+  assert.match(round, /<SeatAdminPanel[^>]*session=\{session\}/);
+  assert.match(round, /adminListSeatConfigs\(\)\.catch\(\(\) => null\)/);
+  assert.match(platform, /<RoundCheckIn[\s\S]{0,120}user=\{workspace\.user\}/);
+  assert.match(main, /import "\.\/seatMap\.css"/);
+  assert.match(preview, /import '\.\.\/src\/seatMap\.css'/);
+  assert.doesNotMatch(nav, /seat/i, "no new menu item: the map lives on the existing check-in page");
+});
+
+test("the containers poll every 8 s, pause while hidden or while a dialog is open, and never poll the Admin report", async () => {
+  const panel = await read("src/features/SeatMap.jsx");
+  const admin = await read("src/features/SeatMapAdmin.jsx");
+  assert.match(panel, /SEAT_POLL_MS/);
+  assert.match(panel, /shouldPoll\(\{ hidden: document\.hidden, dialogOpen, ended \}\)/);
+  assert.match(panel, /visibilitychange/);
+  assert.doesNotMatch(admin, /setInterval/);
+  assert.match(panel, /ENDED_NOTE/);
+  assert.match(panel, /listSeatRequests/);
+  assert.match(panel, /reviewSeatRequest/);
+  assert.doesNotMatch(admin, /eviewSeatRequest/, "Admin only reads requests; Staff decide them (D7)");
+});
+
+test("the seat map pieces avoid forbidden wording and never present on-time as a penalty", async () => {
+  for (const path of ["src/seatMap.js", "src/features/SeatMapViews.jsx", "src/features/SeatMap.jsx", "src/features/SeatMapAdmin.jsx", "src/seatMap.css"]) {
+    const source = await read(path);
+    assert.doesNotMatch(source, /ผู้อำนวยการหลักสูตร|เช็กชื่อ|ลงโทษอัตโนมัติ|คะแนนลงโทษ/, path);
+  }
+  const views = await read("src/features/SeatMapViews.jsx");
+  assert.match(views, /ข้อมูลประกอบ ไม่ใช่คะแนนหรือเกณฑ์ลงโทษ/);
+});
