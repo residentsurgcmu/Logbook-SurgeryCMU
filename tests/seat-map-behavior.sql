@@ -250,5 +250,75 @@ select t.expect_error(format($q$select public.review_seat_request(%L, 'rejected'
 select t.as_user('s1');
 select t.expect_error(format($q$select public.review_seat_request(%L, 'approved')$q$, (select id from public.resident_seat_requests where user_id = t.uid('s1') and kind = 'correction')), 'cannot review your own request', 'Staff cannot decide their own request');
 
+-- B4: session list
+select t.as_user('r1');
+select t.ok((select count(*) from public.list_resident_seat_sessions()) = 2
+            and exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('live'))
+            and exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('ended')), 'a Resident sees the live session and the one that ended within 48 h, not future or unconfigured ones');
+select t.expect_denied_as('anon', 'select * from public.list_resident_seat_sessions()', 'anon cannot list seat sessions');
+
+-- B4: the map as a Resident
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('live'))->'seats') = 37, 'the map lists all 37 seats');
+select t.ok(public.get_resident_seat_map(t.sid('live'))->'me'->>'seat' = 'L2' and public.get_resident_seat_map(t.sid('live'))->'me'->>'status' = 'seat'
+            and (public.get_resident_seat_map(t.sid('live'))->'me'->>'in_room')::boolean, 'my own seat and status are right');
+select t.ok((select e->'occupant'->>'name' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'C1') = 'Test r2', 'names are visible on the map (decision B)');
+select t.ok(position('@example.test' in public.get_resident_seat_map(t.sid('live'))::text) = 0, 'no e-mail address in the map');
+select t.ok(not exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'status' in ('absent', 'urgent')), 'a Resident cannot see who is absent or on urgent duty');
+select t.ok(exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('s1')::text and p->>'status' = 'staff'), 'Staff in the room are listed');
+select t.ok(not exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('s2')::text), 'Staff who are not in the room are not listed to a Resident');
+select t.ok((select p->>'checked_in_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r2')::text) is null
+            and (select p->>'checked_in_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r1')::text) is not null, 'a Resident sees entry times only for themselves');
+select t.as_user('r2');
+select public.hold_resident_seat(t.sid('live'), 'L5');
+select t.as_user('r1');
+select t.ok((select (e->>'held')::boolean from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'L5')
+            and (select e->'occupant' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'L5') = 'null'::jsonb
+            and public.get_resident_seat_map(t.sid('live'))->'me'->'hold' = 'null'::jsonb, 'a hold shows as held, never who holds it');
+select t.expect_error(format($q$select public.get_resident_seat_map(%L)$q$, t.sid('future')), 'Seat map is closed', 'a Resident cannot read a session that starts in hours');
+select t.expect_error(format($q$select public.get_resident_seat_map(%L)$q$, t.sid('noconfig')), 'not open for this session', 'a session without a map has nothing to read');
+select t.ok((public.get_resident_seat_map(t.sid('ended'))->'session'->>'ended')::boolean and not (public.get_resident_seat_map(t.sid('ended'))->'session'->>'open')::boolean, 'an ended session reads as ended');
+select t.expect_denied_as('anon', format('select public.get_resident_seat_map(%L)', t.sid('live')), 'anon cannot read the map');
+
+-- B4: my own history
+select t.ok(exists (select 1 from public.get_my_seat_events(t.sid('live')) where kind = 'staff_set' and seat_code = 'L2')
+            and not exists (select 1 from public.get_my_seat_events(t.sid('live')) where kind = 'hold'), 'my history lists what happened to me, without the hold taps');
+select t.ok(not exists (select 1 from public.get_my_seat_events(t.sid('live')) where seat_code = 'C1'), 'my history never shows another person''s seat events');
+select t.expect_denied_as('anon', format('select * from public.get_my_seat_events(%L)', t.sid('live')), 'anon cannot read a history');
+
+-- B4: the map as Staff and Admin
+select t.as_user('s1');
+select t.ok(exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r5')::text and p->>'status' = 'absent')
+            and exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r4')::text and p->>'status' = 'urgent'), 'Staff see absent and urgent-duty people');
+select t.ok((select p->>'checked_in_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r2')::text) is not null, 'Staff see entry times');
+select t.as_user('adm');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('future'))->'seats') >= 1, 'Admin may read any configured session');
+
+-- B4: the Admin report
+insert into public.resident_round_attendance(session_id, user_id, role_at_check_in, checked_in_at)
+  select t.sid('live'), t.uid('r5'), 'resident', on_time_at + interval '1 minute' from public.resident_round_seat_config where session_id = t.sid('live');
+select t.ok((public.admin_seat_report(t.sid('live'))->'counts'->>'residents_attended')::int = 4
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'before_on_time')::int = 3
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'after_on_time')::int = 1
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'staff_attended')::int = 1, 'report: entries before and after the on-time time');
+select t.ok((public.admin_seat_report(t.sid('live'))->'counts'->>'seated')::int = 3
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'urgent_pending')::int = 1
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'urgent_approved')::int = 1
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'correction_pending')::int = 2
+            and (public.admin_seat_report(t.sid('live'))->'counts'->>'certifications')::int = 1, 'report: seats, requests and certifications');
+select t.ok(jsonb_array_length(public.admin_seat_report(t.sid('live'))->'requests') = 4 and jsonb_array_length(public.admin_seat_report(t.sid('live'))->'events') > 10, 'report: requests and the event log are listed');
+select t.as_user('s1');
+select t.expect_error(format($q$select public.admin_seat_report(%L)$q$, t.sid('live')), 'Active Admin account required', 'Staff cannot read the report');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.admin_seat_report(%L)$q$, t.sid('live')), 'Active Admin account required', 'a Resident cannot read the report');
+
+-- B4: the request list (Staff decide, Admin may read)
+select t.expect_error(format($q$select * from public.list_seat_requests(%L)$q$, t.sid('live')), 'Active Staff account required', 'a Resident cannot list requests');
+select t.as_user('s2');
+select t.ok((select count(*) from public.list_seat_requests(t.sid('live'))) = 4
+            and exists (select 1 from public.list_seat_requests(t.sid('live')) where kind = 'urgent' and state = 'approved' and reviewed_by_name = 'Test s2'), 'Staff list the requests of the session and see who decided');
+select t.as_user('adm');
+select t.ok((select count(*) from public.list_seat_requests(t.sid('live'))) = 4, 'Admin may read the request list');
+select t.expect_denied_as('anon', format('select * from public.list_seat_requests(%L)', t.sid('live')), 'anon cannot list requests');
+
 -- <<< later tasks append their blocks above this line >>>
 rollback;

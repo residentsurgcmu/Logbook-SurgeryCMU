@@ -597,3 +597,235 @@ end;
 $$;
 revoke all on function public.admin_list_seat_configs() from public, anon;
 grant execute on function public.admin_list_seat_configs() to authenticated;
+
+-- ---------- Read functions ----------
+
+-- Residents cannot read resident_round_sessions (Admin-only RLS), so the sessions that have a seat map come from here.
+create or replace function public.list_resident_seat_sessions()
+returns table (session_id uuid, meeting_date date, starts_at timestamptz, ends_at timestamptz, effective_end timestamptz, on_time_at timestamptz)
+language plpgsql stable security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+begin
+  if not exists (select 1 from private.resident_seat_actor()) then raise exception 'Active account required'; end if;
+  return query
+  select s.id, s.meeting_date, s.starts_at, s.ends_at, least(s.ends_at, coalesce(s.closed_at, s.ends_at)), c.on_time_at
+  from public.resident_round_sessions s
+  join public.resident_round_seat_config c on c.session_id = s.id
+  where s.cancelled_at is null
+    and clock_timestamp() between s.starts_at - interval '1 hour' and s.ends_at + interval '48 hours'
+  order by s.starts_at, s.id;
+end;
+$$;
+revoke all on function public.list_resident_seat_sessions() from public, anon;
+grant execute on function public.list_resident_seat_sessions() to authenticated;
+
+-- The whole picture for one session in one call. Names are visible to every signed-in user (decision B); absent people,
+-- urgent-duty status and other people's entry times are visible only to Staff and Admin; a hold shows as a flag, never as a person.
+create or replace function public.get_resident_seat_map(p_session_id uuid)
+returns jsonb language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_priv boolean;
+  v_att timestamptz;
+  v_seat text;
+  v_hold record;
+  v_urgent text;
+  v_reserve boolean;
+  v_status text;
+  v_seats jsonb;
+  v_people jsonb;
+  v_counts jsonb;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'read');
+  v_priv := c.role in ('staff', 'admin');
+  select t.checked_in_at into v_att from public.resident_round_attendance t where t.session_id = p_session_id and t.user_id = c.user_id;
+  select a.seat_code into v_seat from public.resident_seat_assignments a where a.session_id = p_session_id and a.user_id = c.user_id and a.released_at is null;
+  select h.seat_code, h.expires_at into v_hold from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = c.user_id and h.expires_at > c.now_ts;
+  select q.state into v_urgent from public.resident_seat_requests q
+    where q.session_id = p_session_id and q.user_id = c.user_id and q.kind = 'urgent' and q.state <> 'rejected' order by q.created_at desc limit 1;
+  v_reserve := exists (select 1 from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = c.user_id);
+  v_status := case when v_seat is not null then 'seat' when v_reserve then 'reserve'
+                   when v_att is not null and c.role = 'staff' then 'staff' when v_att is not null then 'room'
+                   when v_urgent is not null then 'urgent' else 'absent' end;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'seat_code', s.seat_code, 'zone', s.zone, 'row_no', s.row_no, 'col_no', s.col_no,
+      'held', (h.seat_code is not null),
+      'occupant', case when a.user_id is null then null else jsonb_build_object(
+          'user_id', a.user_id, 'name', p.full_name, 'pgy', p.pgy, 'role', r.role, 'seated_at', a.seated_at) end
+    ) order by s.zone, s.row_no, s.col_no), '[]'::jsonb)
+  into v_seats
+  from public.resident_room_seats s
+  left join public.resident_seat_assignments a on a.session_id = p_session_id and a.seat_code = s.seat_code and a.released_at is null
+  left join public.resident_profiles p on p.user_id = a.user_id
+  left join public.resident_user_roles r on r.user_id = a.user_id
+  left join public.resident_seat_holds h on h.session_id = p_session_id and h.seat_code = s.seat_code and h.expires_at > c.now_ts
+  where s.layout_id = c.layout_id;
+
+  with base as (
+    select p.user_id, p.full_name, p.pgy, r.role::text as role, t.checked_in_at, a.seat_code, (st.user_id is not null) as reserve,
+           (select q.state from public.resident_seat_requests q
+             where q.session_id = p_session_id and q.user_id = p.user_id and q.kind = 'urgent' and q.state <> 'rejected'
+             order by q.created_at desc limit 1) as urgent_state
+    from public.resident_profiles p
+    join public.resident_user_roles r on r.user_id = p.user_id and r.active and r.role in ('resident', 'staff')
+    left join public.resident_round_attendance t on t.session_id = p_session_id and t.user_id = p.user_id
+    left join public.resident_seat_assignments a on a.session_id = p_session_id and a.user_id = p.user_id and a.released_at is null
+    left join public.resident_seat_status st on st.session_id = p_session_id and st.user_id = p.user_id
+    where p.active
+  ), shown as (
+    select b.*, case
+        when b.seat_code is not null then 'seat'
+        when b.reserve then 'reserve'
+        when b.checked_in_at is not null and b.role = 'staff' then 'staff'
+        when b.checked_in_at is not null then 'room'
+        when b.urgent_state is not null then 'urgent'
+        else 'absent' end as status
+    from base b
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'user_id', s.user_id, 'name', s.full_name, 'pgy', s.pgy, 'role', s.role, 'status', s.status, 'seat_code', s.seat_code,
+      'checked_in_at', case when v_priv or s.user_id = c.user_id then s.checked_in_at end,
+      'on_time', case when (v_priv or s.user_id = c.user_id) and s.checked_in_at is not null then s.checked_in_at < c.on_time_at end
+    ) order by s.full_name, s.user_id), '[]'::jsonb)
+  into v_people
+  from shown s
+  where v_priv or s.status in ('seat', 'reserve', 'room', 'staff');
+
+  select jsonb_build_object(
+    'seats_total', (select count(*) from public.resident_room_seats s where s.layout_id = c.layout_id),
+    'seats_taken', (select count(*) from public.resident_seat_assignments a where a.session_id = p_session_id and a.released_at is null),
+    'residents_total', (select count(*) from public.resident_user_roles r join public.resident_profiles p on p.user_id = r.user_id where r.role = 'resident' and r.active and p.active),
+    'residents_in_room', (select count(*) from public.resident_round_attendance t where t.session_id = p_session_id and t.role_at_check_in = 'resident')
+  ) into v_counts;
+
+  return jsonb_build_object(
+    'session', jsonb_build_object('id', p_session_id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'effective_end', c.effective_end,
+                                  'on_time_at', c.on_time_at, 'layout_id', c.layout_id, 'now', c.now_ts,
+                                  'ended', c.now_ts > c.effective_end, 'open', c.now_ts between c.starts_at and c.effective_end),
+    'me', jsonb_build_object('user_id', c.user_id, 'role', c.role, 'in_room', v_att is not null, 'checked_in_at', v_att,
+                             'on_time', case when v_att is null then null else v_att < c.on_time_at end,
+                             'seat', v_seat, 'reserve', v_reserve,
+                             'hold', case when v_hold.seat_code is null then null else jsonb_build_object('seat_code', v_hold.seat_code, 'expires_at', v_hold.expires_at) end,
+                             'urgent_state', v_urgent, 'status', v_status),
+    'seats', v_seats, 'people', v_people, 'counts', v_counts);
+end;
+$$;
+revoke all on function public.get_resident_seat_map(uuid) from public, anon;
+grant execute on function public.get_resident_seat_map(uuid) to authenticated;
+
+-- On-screen report for the Admin: who came before / after the on-time time, requests, and the full event log.
+create or replace function public.admin_seat_report(p_session_id uuid)
+returns jsonb language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_counts jsonb;
+  v_people jsonb;
+  v_requests jsonb;
+  v_events jsonb;
+begin
+  if not (select private.resident_can_view_seat_report()) then raise exception 'Active Admin account required'; end if;
+  select * into c from private.resident_seat_context(p_session_id, 'read');
+
+  v_counts := (select jsonb_build_object(
+      'residents_attended', count(*) filter (where t.role_at_check_in = 'resident'),
+      'before_on_time', count(*) filter (where t.role_at_check_in = 'resident' and t.checked_in_at < c.on_time_at),
+      'after_on_time', count(*) filter (where t.role_at_check_in = 'resident' and t.checked_in_at >= c.on_time_at),
+      'staff_attended', count(*) filter (where t.role_at_check_in = 'staff'))
+    from public.resident_round_attendance t where t.session_id = p_session_id)
+  || (select jsonb_build_object(
+      'urgent_pending', count(*) filter (where q.kind = 'urgent' and q.state = 'pending'),
+      'urgent_approved', count(*) filter (where q.kind = 'urgent' and q.state = 'approved'),
+      'urgent_rejected', count(*) filter (where q.kind = 'urgent' and q.state = 'rejected'),
+      'correction_pending', count(*) filter (where q.kind = 'correction' and q.state = 'pending'),
+      'correction_approved', count(*) filter (where q.kind = 'correction' and q.state = 'approved'),
+      'correction_rejected', count(*) filter (where q.kind = 'correction' and q.state = 'rejected'))
+    from public.resident_seat_requests q where q.session_id = p_session_id)
+  || jsonb_build_object(
+      'seated', (select count(*) from public.resident_seat_assignments a where a.session_id = p_session_id and a.released_at is null),
+      'reserve', (select count(*) from public.resident_seat_status s where s.session_id = p_session_id),
+      'certifications', (select count(*) from public.resident_seat_events e where e.session_id = p_session_id and e.kind = 'certify'));
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'user_id', p.user_id, 'name', p.full_name, 'pgy', p.pgy, 'role', r.role, 'checked_in_at', t.checked_in_at,
+      'on_time', case when t.checked_in_at is null then null else t.checked_in_at < c.on_time_at end,
+      'seat_code', a.seat_code, 'reserve', (st.user_id is not null),
+      'urgent_state', (select q.state from public.resident_seat_requests q where q.session_id = p_session_id and q.user_id = p.user_id and q.kind = 'urgent' and q.state <> 'rejected' order by q.created_at desc limit 1)
+    ) order by p.full_name, p.user_id), '[]'::jsonb)
+  into v_people
+  from public.resident_profiles p
+  join public.resident_user_roles r on r.user_id = p.user_id and r.active and r.role in ('resident', 'staff')
+  left join public.resident_round_attendance t on t.session_id = p_session_id and t.user_id = p.user_id
+  left join public.resident_seat_assignments a on a.session_id = p_session_id and a.user_id = p.user_id and a.released_at is null
+  left join public.resident_seat_status st on st.session_id = p_session_id and st.user_id = p.user_id
+  where p.active;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', q.id, 'kind', q.kind, 'reason', q.reason, 'note', q.note, 'state', q.state, 'user_id', q.user_id, 'name', up.full_name,
+      'created_at', q.created_at, 'reviewed_by_name', rp.full_name, 'reviewed_at', q.reviewed_at
+    ) order by q.created_at, q.id), '[]'::jsonb)
+  into v_requests
+  from public.resident_seat_requests q
+  join public.resident_profiles up on up.user_id = q.user_id
+  left join public.resident_profiles rp on rp.user_id = q.reviewed_by
+  where q.session_id = p_session_id;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'id', e.id, 'at', e.at, 'actor_name', ap.full_name, 'subject_name', sp.full_name, 'kind', e.kind, 'seat_code', e.seat_code, 'detail', e.detail
+    ) order by e.at, e.id), '[]'::jsonb)
+  into v_events
+  from public.resident_seat_events e
+  join public.resident_profiles ap on ap.user_id = e.actor_id
+  left join public.resident_profiles sp on sp.user_id = e.subject_id
+  where e.session_id = p_session_id;
+
+  return jsonb_build_object(
+    'session', jsonb_build_object('id', p_session_id, 'starts_at', c.starts_at, 'ends_at', c.ends_at, 'effective_end', c.effective_end, 'on_time_at', c.on_time_at, 'now', c.now_ts),
+    'counts', v_counts, 'people', v_people, 'requests', v_requests, 'events', v_events);
+end;
+$$;
+revoke all on function public.admin_seat_report(uuid) from public, anon;
+grant execute on function public.admin_seat_report(uuid) to authenticated;
+
+-- A person's own history for one session (what the Resident sees on "ประวัติของฉัน"). Hold taps are noise and are left out.
+create or replace function public.get_my_seat_events(p_session_id uuid)
+returns table (at timestamptz, kind text, seat_code text, detail jsonb)
+language plpgsql stable security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'read');
+  return query
+  select e.at, e.kind, e.seat_code, e.detail
+  from public.resident_seat_events e
+  where e.session_id = p_session_id and e.subject_id = c.user_id and e.kind <> 'hold'
+  order by e.at, e.id;
+end;
+$$;
+revoke all on function public.get_my_seat_events(uuid) from public, anon;
+grant execute on function public.get_my_seat_events(uuid) to authenticated;
+
+-- The requests of one session with who decided: Staff use it to decide, Admin may read it. Residents cannot.
+create or replace function public.list_seat_requests(p_session_id uuid)
+returns table (id uuid, kind text, reason text, note text, state text, user_id uuid, name text, created_at timestamptz, reviewed_by_name text, reviewed_at timestamptz)
+language plpgsql stable security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'read');
+  if c.role not in ('staff', 'admin') then raise exception 'Active Staff account required'; end if;
+  return query
+  select q.id, q.kind, q.reason, q.note, q.state, q.user_id, up.full_name, q.created_at, rp.full_name, q.reviewed_at
+  from public.resident_seat_requests q
+  join public.resident_profiles up on up.user_id = q.user_id
+  left join public.resident_profiles rp on rp.user_id = q.reviewed_by
+  where q.session_id = p_session_id
+  order by q.created_at, q.id;
+end;
+$$;
+revoke all on function public.list_seat_requests(uuid) from public, anon;
+grant execute on function public.list_seat_requests(uuid) to authenticated;
