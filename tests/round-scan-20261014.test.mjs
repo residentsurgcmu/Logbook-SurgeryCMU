@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { isInAppBrowser, parseRoundTokenInput } from "../src/roundSchedule.js";
 
@@ -27,4 +28,17 @@ test("parseRoundTokenInput rejects other QR codes and garbage", () => {
   assert.equal(parseRoundTokenInput(null), "");
   assert.equal(parseRoundTokenInput(`https://x.test/attendance/${T}/extra`), "");
   assert.equal(parseRoundTokenInput("not-a-uuid"), "");
+});
+
+test("RoundCheckIn offers the in-app scanner and reuses the existing token path", async () => {
+  const page = await readFile(new URL("../src/features/RoundAttendance.jsx", import.meta.url), "utf8");
+  const scanner = await readFile(new URL("../src/features/RoundQrScanner.jsx", import.meta.url), "utf8");
+  assert.match(page, /import \{ RoundQrScanner \} from "\.\/RoundQrScanner"/);
+  assert.match(page, /<RoundQrScanner[^>]*onToken=/);
+  assert.match(page, /scannedToken/);
+  assert.match(scanner, /import\("html5-qrcode"\)/);
+  assert.match(scanner, /import \{ isInAppBrowser, parseRoundTokenInput \} from "\.\.\/roundSchedule"/);
+  assert.match(scanner, /เปิดด้วย Safari|เปิดด้วย Chrome/);
+  assert.match(scanner, /วางลิงก์/);
+  assert.doesNotMatch(scanner, /supabase|rpc\(/);
 });

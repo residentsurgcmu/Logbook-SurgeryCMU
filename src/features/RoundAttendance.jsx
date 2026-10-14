@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
+import { RoundQrScanner } from "./RoundQrScanner";
 import { ROUND_STATUS_LABELS, bangkokIsoDate, formatRoundTimeRange, roundCheckInErrorMessage, roundScheduleErrorMessage, roundSessionFileKey, roundSessionStatus, shiftIsoDate, validateRoundMeetingDate, validateRoundTimes } from "../roundSchedule";
 
 const thaiTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(value));
@@ -341,7 +342,10 @@ export function RoundAdmin({ user }) {
 // token again; a remounted copy now waits for the first request instead.
 const roundCheckIns = new Map();
 
-export function RoundCheckIn({ token, onTokenUsed }) {
+export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed }) {
+  const [scannedToken, setScannedToken] = useState("");
+  const token = linkToken || scannedToken;
+  const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
@@ -388,7 +392,7 @@ export function RoundCheckIn({ token, onTokenUsed }) {
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
     {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!token && <p>สแกน QR ที่แสดงในห้องประชุมด้วยโทรศัพท์เครื่องนี้เพื่อเช็คชื่อ</p>}
+    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
   </section>;
