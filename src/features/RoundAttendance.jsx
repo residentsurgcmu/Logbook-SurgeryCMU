@@ -95,6 +95,11 @@ export function RoundAdmin({ user }) {
     .filter((item) => item.meeting_date >= todayIso)
     .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
   const endedSessions = reportSessions.filter((item) => item.meeting_date < todayIso && !item.closed_at);
+  // Past sessions that have a seat map: the Admin can still open last Friday's report (read-only, no configuration).
+  const pastSeatSessions = useMemo(
+    () => (seatConfigs ? reportSessions.filter((item) => item.meeting_date < todayIso && seatConfigs[item.id]).sort((left, right) => new Date(right.starts_at) - new Date(left.starts_at)) : []),
+    [reportSessions, seatConfigs, todayIso],
+  );
   const minMeetingDate = shiftIsoDate(todayIso, -366);
   const maxMeetingDate = shiftIsoDate(todayIso, 366);
   const cmeQrFor = (sessionId) => data.cmeQr.find((item) => item.session_id === sessionId) || null;
@@ -320,6 +325,13 @@ export function RoundAdmin({ user }) {
             <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => stop(session)}>ปิดรอบ</button>
           </span>
           {editingId === session.id && <div className="round-ended-edit">{renderEditForm()}</div>}
+        </li>)}</ul>
+      </details>}
+      {pastSeatSessions.length > 0 && <details className="round-ended-sessions">
+        <summary>ผังที่นั่งของรอบที่ผ่านมา ({pastSeatSessions.length})</summary>
+        <ul>{pastSeatSessions.map((session) => <li key={session.id}>
+          <span>{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
+          <SeatAdminPanel key={`${session.id}:past`} session={session} config={seatConfigs[session.id]} canConfigure={false} onChanged={refresh} />
         </li>)}</ul>
       </details>}
       {error && <p className="form-error" role="alert">{error}</p>}

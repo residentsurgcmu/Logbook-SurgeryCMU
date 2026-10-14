@@ -97,8 +97,8 @@ export function PersonalCard({ map, busy, onRelease, onReserve, onUrgent, onCorr
   return <section className="seatmap-personal" aria-label="สถานะของคุณ">
     <strong className="seatmap-personal-status">{messages[phase] || ""}</strong>
     {me.checked_in_at && <p>เข้าห้องเวลา {bangkokHm(me.checked_in_at)} น.</p>}
-    {me.urgent_state === "pending" && <p className="seatmap-note">แจ้งภารกิจจำเป็นแล้ว · รอผู้ดูแลตรวจสอบ</p>}
-    {me.urgent_state === "approved" && <p className="seatmap-note">ผู้ดูแลอนุมัติภารกิจจำเป็นของคุณแล้ว</p>}
+    {me.urgent_state === "pending" && <p className="seatmap-note">แจ้งภารกิจจำเป็นแล้ว · รออาจารย์ตรวจสอบ</p>}
+    {me.urgent_state === "approved" && <p className="seatmap-note">อาจารย์อนุมัติภารกิจจำเป็นของคุณแล้ว</p>}
     <div className="seatmap-actions">
       {phase === "seated" && <button type="button" className="secondary-button" disabled={busy} onClick={onRelease}>คืนที่นั่ง</button>}
       {me.role === "resident" && ["seated", "pick"].includes(phase) && <button type="button" className="secondary-button" disabled={busy} onClick={onReserve}>ใช้พื้นที่นั่งเสริม</button>}
@@ -182,7 +182,7 @@ export function UrgentDialog({ busy, error, onSubmit, onCancel }) {
   const [note, setNote] = useState("");
   const unsafe = hnHint(note);
   return <Modal title="แจ้งภารกิจจำเป็น" onClose={onCancel} error={error}>
-    <p>เลือกเหตุผลสั้น ๆ ไม่ใส่ข้อมูลผู้ป่วยหรือ HN · แจ้งย้อนหลังได้ประมาณ 48 ชั่วโมงหลังจบประชุม · ที่นั่งเดิมจะถูกคืน ผู้ดูแลจะตรวจสอบกับตารางปฏิบัติงาน</p>
+    <p>เลือกเหตุผลสั้น ๆ ไม่ใส่ข้อมูลผู้ป่วยหรือ HN · แจ้งย้อนหลังได้ประมาณ 48 ชั่วโมงหลังจบประชุม · ที่นั่งเดิมจะถูกคืน อาจารย์จะตรวจสอบกับตารางปฏิบัติงาน</p>
     <label>เหตุผล<select value={reason} onChange={(event) => setReason(event.target.value)}>{URGENT_REASONS.map((item) => <option key={item}>{item}</option>)}</select></label>
     <label>หมายเหตุสั้น ๆ (ไม่บังคับ)<textarea value={note} maxLength={URGENT_NOTE_MAX} onChange={(event) => setNote(event.target.value)} placeholder="เช่น ปฏิบัติงานตามตารางเวร" /></label>
     {unsafe && <p className="form-error" role="alert">กรุณาลบ HN หรือเลขยาวที่อาจระบุตัวผู้ป่วย</p>}
@@ -197,7 +197,7 @@ export function CorrectionDialog({ busy, error, onSubmit, onCancel }) {
   const [note, setNote] = useState("");
   const unsafe = hnHint(note);
   return <Modal title="ขอแก้ไขข้อมูลการเข้าร่วม" onClose={onCancel} error={error}>
-    <p>บอกข้อมูลที่ควรแก้ไขและเหตุผลสั้น ๆ ไม่แนบข้อมูลผู้ป่วย ผู้ดูแลจะตรวจสอบ</p>
+    <p>บอกข้อมูลที่ควรแก้ไขและเหตุผลสั้น ๆ ไม่แนบข้อมูลผู้ป่วย อาจารย์จะตรวจสอบ</p>
     <label>รายละเอียด<textarea value={note} maxLength={CORRECTION_NOTE_MAX} onChange={(event) => setNote(event.target.value)} placeholder="เช่น เข้าห้องก่อนเริ่ม แต่ลืมสแกน QR" /></label>
     {unsafe && <p className="form-error" role="alert">กรุณาลบ HN หรือเลขยาวที่อาจระบุตัวผู้ป่วย</p>}
     <div className="seatmap-dialog-actions">

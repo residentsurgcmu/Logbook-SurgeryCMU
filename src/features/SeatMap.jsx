@@ -11,7 +11,8 @@ import { CorrectionDialog, DesktopRoom, HistoryTab, HoldDialog, ManageDialog, Mi
 const thaiDate = (iso) => new Intl.DateTimeFormat("th-TH", { dateStyle: "full", timeZone: "Asia/Bangkok" }).format(new Date(iso));
 const TABS = [["map", "ผังที่นั่ง"], ["people", "ผู้เข้าร่วม"], ["history", "ประวัติของฉัน"]];
 
-// Shown on the "เช็คชื่อประชุม" page for every session that has a seat map; renders nothing when there is none.
+// Shown on the "เช็คชื่อประชุม" page for every session that has a seat map. Renders nothing when there is none and also
+// nothing when the session list cannot be loaded (the page works without it); only refresh() failures show a message.
 export function SeatMapPanel({ user, refreshKey = "" }) {
   const [sessions, setSessions] = useState(null);
   const [sessionId, setSessionId] = useState("");
@@ -40,7 +41,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
       setSessions(list);
       setSessionId((previous) => (previous && list.some((item) => item.session_id === previous) ? previous : pickDefaultSession(list, Date.now())));
     } catch (nextError) {
-      if (mounted.current) { setSessions([]); setLoadError(seatErrorMessage(nextError)); }
+      if (mounted.current) setSessions([]);
     }
   }, []);
 
@@ -113,7 +114,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
     } finally { if (mounted.current) setBusy(false); }
   }
 
-  if (sessions === null || !sessions.length) return loadError && sessions ? <p className="form-error" role="alert">{loadError}</p> : null;
+  if (sessions === null || !sessions.length) return null;
   const session = sessions.find((item) => item.session_id === sessionId) || sessions[0];
   const pendingRequests = requests.filter((request) => request.state === "pending" && request.user_id !== map?.me?.user_id).length;
   const tabs = map && canReviewRequests(map) ? [...TABS, ["requests", pendingRequests ? `คำขอรอตรวจ (${pendingRequests})` : "คำขอ"]] : TABS;
@@ -160,7 +161,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
       onSet={(residentId) => act(() => staffSetSeat(sessionId, residentId, dialog.seat.seat_code), "จัดที่นั่งแล้ว")}
       onRelease={(residentId) => act(() => staffReleaseSeat(sessionId, residentId), "คืนที่นั่งแล้ว")} onClose={() => setDialog(null)} />}
     {dialog?.type === "urgent" && <UrgentDialog busy={busy} error={dialogError}
-      onSubmit={({ reason, note }) => act(() => reportUrgentDuty(sessionId, reason, note), "บันทึกภารกิจจำเป็นแล้ว · รอผู้ดูแลตรวจสอบ")} onCancel={() => setDialog(null)} />}
+      onSubmit={({ reason, note }) => act(() => reportUrgentDuty(sessionId, reason, note), "บันทึกภารกิจจำเป็นแล้ว · รออาจารย์ตรวจสอบ")} onCancel={() => setDialog(null)} />}
     {dialog?.type === "correction" && <CorrectionDialog busy={busy} error={dialogError}
       onSubmit={({ note }) => act(() => requestSeatCorrection(sessionId, note), "ส่งคำขอแก้ไขแล้ว")} onCancel={() => setDialog(null)} />}
   </section>;

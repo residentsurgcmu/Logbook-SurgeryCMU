@@ -75,3 +75,29 @@ test("refresh() never clears action errors: load failures and action failures ha
   assert.match(panel, /const \[loadError, setLoadError\] = useState\(""\)/);
   assert.match(panel, /const \[error, setError\] = useState\(""\)/);
 });
+
+test("RoundAdmin lists past sessions with a seat map so the Admin can open last Friday's report", async () => {
+  const round = await read("src/features/RoundAttendance.jsx");
+  assert.match(round, /ผังที่นั่งของรอบที่ผ่านมา/);
+  assert.match(round, /<SeatAdminPanel[^>]*canConfigure=\{false\}/, "past sessions are read-only: no configuration");
+  assert.match(round, /item\.meeting_date < todayIso && seatConfigs\[item\.id\]/);
+});
+
+test("when the session list cannot be loaded the seat map renders nothing and shows no error", async () => {
+  const panel = await read("src/features/SeatMap.jsx");
+  assert.match(panel, /if \(sessions === null \|\| !sessions\.length\) return null;/);
+  const loadSessions = panel.match(/const loadSessions = useCallback\([\s\S]*?\n  \}, \[\]\);/);
+  assert.ok(loadSessions, "loadSessions found");
+  assert.match(loadSessions[0], /catch \(nextError\) \{\n\s+if \(mounted\.current\) setSessions\(\[\]\);/);
+  assert.doesNotMatch(loadSessions[0], /setLoadError/, "a failed session list is silent");
+  assert.match(panel, /setLoadError\(seatErrorMessage\(nextError\)\)/, "refresh() failures still reach the screen");
+});
+
+test("Staff decide requests, so Resident-facing text says อาจารย์ and not ผู้ดูแล for who decides", async () => {
+  for (const path of ["src/seatMap.js", "src/features/SeatMapViews.jsx", "src/features/SeatMap.jsx"]) {
+    const source = await read(path);
+    for (const phrase of ["รอผู้ดูแลตรวจสอบ", "ผู้ดูแลอนุมัติ", "ผู้ดูแลจะตรวจสอบ", "ผู้ดูแลไม่อนุมัติ"]) {
+      assert.ok(!source.includes(phrase), `${path} must not contain ${phrase}`);
+    }
+  }
+});

@@ -164,7 +164,7 @@ export function eventText(event) {
     case "correction": return "ส่งคำขอแก้ไขข้อมูล";
     case "staff_set": return from ? `อาจารย์ย้ายที่นั่งจาก ${from} เป็น ${seat}` : `อาจารย์จัดที่นั่ง ${seat} ให้`;
     case "staff_release": return `อาจารย์คืนที่นั่ง ${seat}`;
-    case "review": return event?.detail?.decision === "approved" ? "ผู้ดูแลอนุมัติคำขอของคุณ" : "ผู้ดูแลไม่อนุมัติคำขอของคุณ";
+    case "review": return event?.detail?.decision === "approved" ? "อาจารย์อนุมัติคำขอของคุณ" : "อาจารย์ไม่อนุมัติคำขอของคุณ";
     default: return "—";
   }
 }

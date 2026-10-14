@@ -180,7 +180,7 @@ test("the history describes what happened in plain Thai", () => {
   assert.equal(eventText({ kind: "move", seat_code: "L2", detail: { from: "C1" } }), "ย้ายจาก C1 ไป L2");
   assert.equal(eventText({ kind: "release", seat_code: "L2", detail: {} }), "คืนที่นั่ง L2");
   assert.equal(eventText({ kind: "staff_set", seat_code: "R6", detail: {} }), "อาจารย์จัดที่นั่ง R6 ให้");
-  assert.equal(eventText({ kind: "review", seat_code: null, detail: { decision: "approved" } }), "ผู้ดูแลอนุมัติคำขอของคุณ");
-  assert.equal(eventText({ kind: "review", seat_code: null, detail: { decision: "rejected" } }), "ผู้ดูแลไม่อนุมัติคำขอของคุณ");
+  assert.equal(eventText({ kind: "review", seat_code: null, detail: { decision: "approved" } }), "อาจารย์อนุมัติคำขอของคุณ");
+  assert.equal(eventText({ kind: "review", seat_code: null, detail: { decision: "rejected" } }), "อาจารย์ไม่อนุมัติคำขอของคุณ");
   assert.equal(eventText({ kind: "weird" }), "—");
 });
