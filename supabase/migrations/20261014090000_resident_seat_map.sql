@@ -226,3 +226,181 @@ returns boolean language sql stable security definer set search_path = public, p
 $$;
 revoke all on function private.resident_can_view_seat_report() from public, anon;
 grant execute on function private.resident_can_view_seat_report() to authenticated;
+
+-- ---------- Resident functions ----------
+
+-- Take a seat in two steps: hold it for 60 s, then confirm. Two people tapping the same seat cannot both succeed.
+create or replace function public.hold_resident_seat(p_session_id uuid, p_seat_code text)
+returns timestamptz language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_exp timestamptz;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if c.role <> 'resident' then raise exception 'Active Resident account required'; end if;
+  if not exists (select 1 from public.resident_round_attendance a where a.session_id = p_session_id and a.user_id = c.user_id) then
+    raise exception 'Scan the room QR before choosing a seat';
+  end if;
+  if not exists (select 1 from public.resident_room_seats s where s.layout_id = c.layout_id and s.seat_code = p_seat_code) then
+    raise exception 'Seat does not exist';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_session_id::text || ':' || p_seat_code, 0));
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.expires_at <= c.now_ts;
+  if exists (select 1 from public.resident_seat_assignments a where a.session_id = p_session_id and a.seat_code = p_seat_code and a.released_at is null)
+     or exists (select 1 from public.resident_seat_holds h where h.session_id = p_session_id and h.seat_code = p_seat_code and h.user_id <> c.user_id) then
+    raise exception 'Seat is not available';
+  end if;
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = c.user_id;
+  insert into public.resident_seat_holds(session_id, seat_code, user_id, expires_at)
+  values (p_session_id, p_seat_code, c.user_id, c.now_ts + interval '60 seconds')
+  returning expires_at into v_exp;
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, 'hold', p_seat_code, '{}'::jsonb);
+  return v_exp;
+end;
+$$;
+revoke all on function public.hold_resident_seat(uuid, text) from public, anon;
+grant execute on function public.hold_resident_seat(uuid, text) to authenticated;
+
+create or replace function public.confirm_resident_seat(p_session_id uuid, p_seat_code text)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_old text;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if c.role <> 'resident' then raise exception 'Active Resident account required'; end if;
+  if not exists (select 1 from public.resident_round_attendance a where a.session_id = p_session_id and a.user_id = c.user_id) then
+    raise exception 'Scan the room QR before choosing a seat';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_session_id::text || ':' || p_seat_code, 0));
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.expires_at <= c.now_ts;
+  if not exists (select 1 from public.resident_seat_holds h where h.session_id = p_session_id and h.seat_code = p_seat_code and h.user_id = c.user_id) then
+    raise exception 'Seat hold expired. Choose the seat again';
+  end if;
+  if exists (select 1 from public.resident_seat_assignments a where a.session_id = p_session_id and a.seat_code = p_seat_code and a.released_at is null) then
+    raise exception 'Seat is not available';
+  end if;
+  begin
+    update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'moved'
+    where a.session_id = p_session_id and a.user_id = c.user_id and a.released_at is null
+    returning a.seat_code into v_old;
+    insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by)
+    values (p_session_id, c.user_id, p_seat_code, c.now_ts, c.user_id);
+  exception when unique_violation then
+    raise exception 'Seat is not available';
+  end;
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = c.user_id;
+  delete from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = c.user_id;
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, case when v_old is null then 'confirm' else 'move' end, p_seat_code,
+    case when v_old is null then '{}'::jsonb else jsonb_build_object('from', v_old) end);
+end;
+$$;
+revoke all on function public.confirm_resident_seat(uuid, text) from public, anon;
+grant execute on function public.confirm_resident_seat(uuid, text) to authenticated;
+
+create or replace function public.release_resident_seat(p_session_id uuid)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_seat text;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if c.role <> 'resident' then raise exception 'Active Resident account required'; end if;
+  update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'self'
+  where a.session_id = p_session_id and a.user_id = c.user_id and a.released_at is null
+  returning a.seat_code into v_seat;
+  if v_seat is null then raise exception 'You do not have a seat'; end if;
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, 'release', v_seat, '{}'::jsonb);
+end;
+$$;
+revoke all on function public.release_resident_seat(uuid) from public, anon;
+grant execute on function public.release_resident_seat(uuid) to authenticated;
+
+-- The extra seating area: still in the room, no numbered seat. The entry time is unchanged (it is the QR check-in).
+create or replace function public.use_reserve_area(p_session_id uuid)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_seat text;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if c.role <> 'resident' then raise exception 'Active Resident account required'; end if;
+  if not exists (select 1 from public.resident_round_attendance a where a.session_id = p_session_id and a.user_id = c.user_id) then
+    raise exception 'Scan the room QR before choosing a seat';
+  end if;
+  if exists (select 1 from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = c.user_id) then
+    raise exception 'Already in the reserve area';
+  end if;
+  update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'reserve'
+  where a.session_id = p_session_id and a.user_id = c.user_id and a.released_at is null
+  returning a.seat_code into v_seat;
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = c.user_id;
+  insert into public.resident_seat_status(session_id, user_id, status) values (p_session_id, c.user_id, 'reserve');
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, 'reserve', v_seat,
+    case when v_seat is null then '{}'::jsonb else jsonb_build_object('from', v_seat) end);
+end;
+$$;
+revoke all on function public.use_reserve_area(uuid) from public, anon;
+grant execute on function public.use_reserve_area(uuid) to authenticated;
+
+-- Urgent duty (surgery, emergency, on call): no patient data, no QR scan needed, reportable until 48 h after the session.
+create or replace function public.report_urgent_duty(p_session_id uuid, p_reason text, p_note text default null)
+returns uuid language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_note text := nullif(btrim(coalesce(p_note, '')), '');
+  v_seat text;
+  v_id uuid;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'report');
+  if c.role <> 'resident' then raise exception 'Active Resident account required'; end if;
+  if p_reason is null or p_reason not in ('ผ่าตัด', 'ผู้ป่วยฉุกเฉิน', 'อยู่เวร', 'อื่น ๆ') then raise exception 'Reason is not valid'; end if;
+  if char_length(coalesce(v_note, '')) > 160 then raise exception 'Note is too long'; end if;
+  if not private.resident_seat_text_ok(v_note) then raise exception 'Remove numbers that could identify a patient'; end if;
+  begin
+    insert into public.resident_seat_requests(session_id, user_id, kind, reason, note)
+    values (p_session_id, c.user_id, 'urgent', p_reason, v_note) returning id into v_id;
+  exception when unique_violation then
+    raise exception 'You already reported urgent duty for this session';
+  end;
+  update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'urgent'
+  where a.session_id = p_session_id and a.user_id = c.user_id and a.released_at is null
+  returning a.seat_code into v_seat;
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = c.user_id;
+  delete from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = c.user_id;
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, 'urgent', v_seat, jsonb_build_object('request_id', v_id, 'reason', p_reason));
+  return v_id;
+end;
+$$;
+revoke all on function public.report_urgent_duty(uuid, text, text) from public, anon;
+grant execute on function public.report_urgent_duty(uuid, text, text) to authenticated;
+
+create or replace function public.request_seat_correction(p_session_id uuid, p_note text)
+returns uuid language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_note text := btrim(coalesce(p_note, ''));
+  v_id uuid;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'report');
+  if c.role not in ('resident', 'staff') then raise exception 'Active Resident or Staff account required'; end if;
+  if v_note = '' then raise exception 'Describe what should be corrected'; end if;
+  if char_length(v_note) > 200 then raise exception 'Note is too long'; end if;
+  if not private.resident_seat_text_ok(v_note) then raise exception 'Remove numbers that could identify a patient'; end if;
+  begin
+    insert into public.resident_seat_requests(session_id, user_id, kind, note) values (p_session_id, c.user_id, 'correction', v_note) returning id into v_id;
+  exception when unique_violation then
+    raise exception 'You already have a correction request waiting';
+  end;
+  perform private.resident_seat_log(p_session_id, c.user_id, c.user_id, 'correction', null, jsonb_build_object('request_id', v_id));
+  return v_id;
+end;
+$$;
+revoke all on function public.request_seat_correction(uuid, text) from public, anon;
+grant execute on function public.request_seat_correction(uuid, text) to authenticated;

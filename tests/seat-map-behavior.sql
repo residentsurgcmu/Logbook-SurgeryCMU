@@ -96,5 +96,88 @@ select t.expect_error($q$select * from private.resident_seat_context(t.sid('futu
 select set_config('request.jwt.claim.sub', gen_random_uuid()::text, true);
 select t.expect_error($q$select * from private.resident_seat_context(t.sid('live'), 'live')$q$, 'Active account required', 'unknown user is refused');
 
+-- B2: hold and confirm
+select t.as_user('r4');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C1')$q$, t.sid('live')), 'Scan the room QR', 'a Resident who never scanned cannot hold a seat');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'X9')$q$, t.sid('live')), 'Seat does not exist', 'unknown seat code is refused');
+select t.ok((select public.hold_resident_seat(t.sid('live'), 'C1')) between clock_timestamp() + interval '55 seconds' and clock_timestamp() + interval '61 seconds', 'a hold lasts 60 seconds');
+select t.as_user('r2');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C1')$q$, t.sid('live')), 'Seat is not available', 'a seat someone else holds is refused');
+select t.as_user('r1');
+select public.hold_resident_seat(t.sid('live'), 'C2');
+select t.ok((select count(*) from public.resident_seat_holds where user_id = t.uid('r1')) = 1 and exists (select 1 from public.resident_seat_holds where user_id = t.uid('r1') and seat_code = 'C2'), 'a new hold replaces my previous hold');
+select t.as_user('r2');
+select public.hold_resident_seat(t.sid('live'), 'C1');
+select public.confirm_resident_seat(t.sid('live'), 'C1');
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r2') and seat_code = 'C1' and released_at is null)
+            and not exists (select 1 from public.resident_seat_holds where user_id = t.uid('r2')), 'confirm assigns the seat and drops the hold');
+select t.ok(exists (select 1 from public.resident_seat_events where subject_id = t.uid('r2') and kind = 'confirm' and seat_code = 'C1'), 'confirm is logged against the person');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.confirm_resident_seat(%L, 'C1')$q$, t.sid('live')), 'hold expired', 'confirming a seat I never held is refused');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C1')$q$, t.sid('live')), 'Seat is not available', 'an occupied seat cannot be held');
+update public.resident_seat_holds set expires_at = clock_timestamp() - interval '1 second' where user_id = t.uid('r1');
+select t.expect_error(format($q$select public.confirm_resident_seat(%L, 'C2')$q$, t.sid('live')), 'hold expired', 'an expired hold cannot be confirmed');
+select t.ok(not exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r1')), 'a failed confirm leaves no seat behind');
+
+-- B2: move, release, reserve
+select public.hold_resident_seat(t.sid('live'), 'C3');
+select public.confirm_resident_seat(t.sid('live'), 'C3');
+select public.hold_resident_seat(t.sid('live'), 'L1');
+select public.confirm_resident_seat(t.sid('live'), 'L1');
+select t.ok((select count(*) from public.resident_seat_assignments where user_id = t.uid('r1') and released_at is null) = 1
+            and exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r1') and seat_code = 'C3' and release_reason = 'moved')
+            and exists (select 1 from public.resident_seat_events where subject_id = t.uid('r1') and kind = 'move' and seat_code = 'L1' and detail->>'from' = 'C3'), 'moving keeps exactly one seat and logs where from');
+select public.release_resident_seat(t.sid('live'));
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r1') and seat_code = 'L1' and release_reason = 'self'), 'release records the reason');
+select t.expect_error(format($q$select public.release_resident_seat(%L)$q$, t.sid('live')), 'do not have a seat', 'releasing with no seat is refused');
+select public.use_reserve_area(t.sid('live'));
+select t.ok(exists (select 1 from public.resident_seat_status where user_id = t.uid('r1') and status = 'reserve'), 'reserve area status is recorded');
+select t.expect_error(format($q$select public.use_reserve_area(%L)$q$, t.sid('live')), 'Already in the reserve area', 'reserve area twice is refused');
+select public.hold_resident_seat(t.sid('live'), 'L1');
+select public.confirm_resident_seat(t.sid('live'), 'L1');
+select t.ok(not exists (select 1 from public.resident_seat_status where user_id = t.uid('r1')), 'taking a seat leaves the reserve area');
+select public.use_reserve_area(t.sid('live'));
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r1') and seat_code = 'L1' and release_reason = 'reserve'), 'the reserve area gives the seat back');
+select t.as_user('r4');
+select t.expect_error(format($q$select public.use_reserve_area(%L)$q$, t.sid('live')), 'Scan the room QR', 'reserve area needs a scan too');
+
+-- B2: urgent duty
+select t.as_user('r3');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'ท่องเที่ยว', null)$q$, t.sid('live')), 'Reason is not valid', 'urgent duty reason must be from the list');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'ผ่าตัด', 'HN 12 34 56')$q$, t.sid('live')), 'identify a patient', 'an HN-like note is rejected by the database');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'ผ่าตัด', '๑๒๓๔๕๖')$q$, t.sid('live')), 'identify a patient', 'Thai digits are rejected too');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'ผ่าตัด', %L)$q$, t.sid('live'), repeat('ก', 161)), 'too long', 'a 161-character note is refused');
+select public.hold_resident_seat(t.sid('live'), 'R5');
+select public.confirm_resident_seat(t.sid('live'), 'R5');
+select public.report_urgent_duty(t.sid('live'), 'ผ่าตัด', 'ห้องผ่าตัด 3');
+select t.ok(exists (select 1 from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent' and state = 'pending')
+            and exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r3') and seat_code = 'R5' and release_reason = 'urgent'), 'urgent duty is recorded as pending and frees the seat');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'อยู่เวร', null)$q$, t.sid('live')), 'already reported urgent', 'one pending urgent report per session');
+select t.as_user('r4');
+select t.ok((select public.report_urgent_duty(t.sid('live'), 'อยู่เวร', null)) is not null, 'urgent duty does not require a QR scan');
+select t.ok((select public.report_urgent_duty(t.sid('ended'), 'ผ่าตัด', null)) is not null, 'urgent duty can be reported within 48 h after the session ended');
+select t.expect_error(format($q$select public.report_urgent_duty(%L, 'ผ่าตัด', null)$q$, t.sid('future')), 'Seat map is closed', 'urgent duty cannot be reported before the session starts');
+
+-- B2: correction requests
+select t.as_user('r3');
+select t.ok((select public.request_seat_correction(t.sid('live'), 'ลืมกดเข้าห้อง')) is not null, 'a Resident can ask for a correction');
+select t.expect_error(format($q$select public.request_seat_correction(%L, 'อีกครั้ง')$q$, t.sid('live')), 'correction request waiting', 'one pending correction per session');
+select t.as_user('s1');
+select t.ok((select public.request_seat_correction(t.sid('live'), 'ย้ายที่ไม่ตรง')) is not null, 'Staff can ask for a correction');
+select t.expect_error(format($q$select public.request_seat_correction(%L, 'เลข 1234567')$q$, t.sid('live')), 'identify a patient', 'corrections pass the HN guard');
+select t.expect_error(format($q$select public.request_seat_correction(%L, %L)$q$, t.sid('ended'), repeat('ก', 201)), 'too long', 'a 201-character correction is refused');
+select t.as_user('adm');
+select t.expect_error(format($q$select public.request_seat_correction(%L, 'x')$q$, t.sid('live')), 'Resident or Staff account required', 'Admin does not file corrections');
+
+-- B2: roles, windows and the database guarantees
+select t.as_user('s1');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('live')), 'Active Resident account required', 'Staff do not pick seats');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('ended')), 'Seat map is closed', 'no seat changes after the session ended');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('noconfig')), 'not open for this session', 'a session without a seat map is untouched');
+select t.expect_error(format($q$insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by) values (%L, %L, 'C1', clock_timestamp(), %L)$q$, t.sid('live'), t.uid('r5'), t.uid('r5')), 'duplicate key', 'the database refuses two people on one seat even if a function were wrong');
+select t.expect_error(format($q$insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by) values (%L, %L, 'C7', clock_timestamp(), %L)$q$, t.sid('live'), t.uid('r2'), t.uid('r2')), 'duplicate key', 'the database refuses one person on two seats');
+
 -- <<< later tasks append their blocks above this line >>>
 rollback;

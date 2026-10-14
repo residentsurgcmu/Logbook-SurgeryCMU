@@ -30,3 +30,21 @@ test("the HN guard rejects Latin and Thai digit runs of six or more", () => {
   assert.match(sql, /\[0-9๐-๙\]\{6,\}/);
   assert.match(sql, /regexp_replace\(p_text, '\[\[:space:\]\.-\]', '', 'g'\)/);
 });
+
+test("every public seat function is security definer, closed to anon and open to signed-in users", () => {
+  const names = [...sql.matchAll(/create or replace function public\.(\w+)\(([^)]*)\)/g)];
+  assert.ok(names.length >= 6, "at least the six Resident functions exist");
+  for (const [, name, args] of names) {
+    const types = args.split(",").map((part) => part.trim().split(/\s+/)[1]).filter(Boolean).join(", ");
+    const signature = `public\\.${name}\\(${types.replace(/[()]/g, "\\$&")}\\)`;
+    const body = sql.slice(sql.indexOf(`create or replace function public.${name}(`));
+    assert.match(body.slice(0, body.indexOf("$$;") + 3), /security definer set search_path = public, private, auth/, `${name} search_path`);
+    assert.match(sql, new RegExp(`revoke all on function ${signature} from public, anon;`), `${name} revoked`);
+    assert.match(sql, new RegExp(`grant execute on function ${signature} to authenticated;`), `${name} granted`);
+  }
+});
+
+test("holds last 60 seconds and writes are serialised per seat", () => {
+  assert.match(sql, /interval '60 seconds'/);
+  assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\(p_session_id::text \|\| ':' \|\| p_seat_code, 0\)\)/);
+});
