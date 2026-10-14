@@ -102,7 +102,7 @@ export function PersonalCard({ map, busy, onRelease, onReserve, onUrgent, onCorr
     <div className="seatmap-actions">
       {phase === "seated" && <button type="button" className="secondary-button" disabled={busy} onClick={onRelease}>คืนที่นั่ง</button>}
       {me.role === "resident" && ["seated", "pick"].includes(phase) && <button type="button" className="secondary-button" disabled={busy} onClick={onReserve}>ใช้พื้นที่นั่งเสริม</button>}
-      {me.role === "resident" && !["ended", "not-open-yet"].includes(phase) && <button type="button" className="secondary-button" onClick={onUrgent}>แจ้งภารกิจจำเป็น</button>}
+      {me.role === "resident" && phase !== "not-open-yet" && <button type="button" className="secondary-button" onClick={onUrgent}>แจ้งภารกิจจำเป็น</button>}
       {me.role === "staff" && phase === "staff" && <button type="button" className="secondary-button" disabled={busy} onClick={onCertify}>รับรองผังที่นั่ง</button>}
       {me.role !== "admin" && <button type="button" className="link-button" onClick={onCorrection}>ขอแก้ไขข้อมูลการเข้าร่วม</button>}
     </div>
@@ -114,7 +114,9 @@ export function PersonalCard({ map, busy, onRelease, onReserve, onUrgent, onCorr
 export function PeopleTab({ map, query, onQuery, status, onStatus }) {
   const ended = map.session.ended;
   const options = Object.keys(STATUS_LABELS).filter((key) => map.me.role !== "resident" || !["absent", "urgent"].includes(key));
-  const people = filterPeople(map.people, query, status);
+  // the server already withholds absent and urgent people from Residents; this is a second guard
+  const visible = map.me.role === "resident" ? map.people.filter((person) => !["absent", "urgent"].includes(person.status)) : map.people;
+  const people = filterPeople(visible, query, status);
   return <section className="seatmap-people">
     <p className="seatmap-hint">Resident ในห้อง {map.counts.residents_in_room} / {map.counts.residents_total} · ที่นั่งที่มีผู้ใช้ {map.counts.seats_taken} / {map.counts.seats_total}</p>
     <div className="seatmap-filters">

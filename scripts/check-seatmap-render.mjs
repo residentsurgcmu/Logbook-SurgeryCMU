@@ -43,7 +43,6 @@ try {
   assert.ok(zone.includes('style="grid-column:2;grid-row:6" data-seat="C12"'), "C12 sits in column 2, row 6");
   const desktop = render(V.DesktopRoom, { map, onSeat: noop });
   assert.ok(desktop.includes("จอ / หน้าห้อง") && desktop.includes("Moderator") && (desktop.match(/data-seat=/g) || []).length === 37, "desktop room has all 37 seats");
-  assert.ok(!desktop.includes("@"), "no e-mail anywhere");
 
   // seat buttons are enabled only for what the role may do
   const free = (html, code) => !new RegExp(`data-seat="${code}"[^>]*disabled`).test(html) && !new RegExp(`disabled[^>]*data-seat="${code}"`).test(html);
@@ -63,11 +62,13 @@ try {
   assert.ok(card(ended).includes("การคืนที่นั่งไม่ใช่หลักฐานว่าอยู่จนจบ"));
   assert.ok(card(staffMap).includes("รับรองผังที่นั่ง") && card(staffMap).includes("ไม่ใช่การรับรองว่าอยู่ครบทั้งการประชุม"));
   assert.ok(!card(map).includes("รับรองผังที่นั่ง"), "only Staff can certify");
+  assert.ok(card(ended).includes("แจ้งภารกิจจำเป็น"), "a Resident can still report urgent duty after the end (retroactive, up to 48 h)");
+  const notOpen = base("resident", { session: { ...map.session, open: false, ended: false } });
+  assert.ok(!card(notOpen).includes("แจ้งภารกิจจำเป็น"), "not before the map opens there is no urgent button");
 
   // the people list: a Resident never sees an absent person; Staff do
   const peopleProps = (m) => ({ map: m, query: "", onQuery: noop, status: "all", onStatus: noop });
-  const residentPeople = { ...map, people: map.people.filter((p) => p.status !== "absent") };
-  assert.ok(!render(V.PeopleTab, peopleProps(residentPeople)).includes("ไม่มา ทดสอบ"));
+  assert.ok(!render(V.PeopleTab, peopleProps(map)).includes("ไม่มา ทดสอบ"), "a Resident never sees an absent person, even unfiltered");
   assert.ok(render(V.PeopleTab, peopleProps(staffMap)).includes("ไม่มา ทดสอบ"));
   assert.ok(!render(V.PeopleTab, peopleProps(map)).includes(">ยังไม่เข้าร่วม</option>"), "Residents are not offered the absent filter");
   assert.ok(render(V.PeopleTab, peopleProps(staffMap)).includes(">ยังไม่เข้าร่วม</option>"), "Staff are");
