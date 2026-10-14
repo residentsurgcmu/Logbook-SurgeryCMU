@@ -173,3 +173,13 @@ test("2D files are untouched by the 3D work", async () => {
   const api = await read("src/seatMapApi.js");
   assert.doesNotMatch(api, /3D|three/i);
 });
+
+test("the 3D stage never forces the page wider than a phone (no aspect-ratio with a min-height; width is the container's)", async () => {
+  const css = await read("src/seatMap.css");
+  const rule = css.match(/\.seatmap3d-stage \{([^}]*)\}/)?.[1] || "";
+  assert.ok(rule, "stage rule exists");
+  assert.doesNotMatch(rule, /aspect-ratio/, "aspect-ratio + min-height widened the box to 429 px on a 320 px phone");
+  assert.match(rule, /width: 100%/);
+  assert.match(rule, /height: clamp\(/);
+  assert.match(css, /\.seatmap3d \{[^}]*min-width: 0/);
+});

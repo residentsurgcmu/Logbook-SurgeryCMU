@@ -139,8 +139,8 @@ export default function SeatMap3D({ map, paused = false, onUnavailable }) {
           labelCanvas.height = 128;
           const texture = new THREE.CanvasTexture(labelCanvas);
           const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false }));
-          sprite.scale.set(1.1, 0.55, 1);
-          sprite.position.set(p.x, SEAT_H + 0.55, p.z);
+          sprite.scale.set(0.8, 0.4, 1);
+          sprite.position.set(p.x, SEAT_H + 0.4, p.z);
           sprite.renderOrder = 2;
           seatGroup.add(mesh, sprite);
           entry = { mesh, sprite, canvas: labelCanvas, texture, labelKey: "" };
