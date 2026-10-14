@@ -179,5 +179,76 @@ select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t
 select t.expect_error(format($q$insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by) values (%L, %L, 'C1', clock_timestamp(), %L)$q$, t.sid('live'), t.uid('r5'), t.uid('r5')), 'duplicate key', 'the database refuses two people on one seat even if a function were wrong');
 select t.expect_error(format($q$insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by) values (%L, %L, 'C7', clock_timestamp(), %L)$q$, t.sid('live'), t.uid('r2'), t.uid('r2')), 'duplicate key', 'the database refuses one person on two seats');
 
+-- B3: Staff and Admin seating
+select t.as_user('s2');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'C5')$q$, t.sid('live'), t.uid('r3')), 'Staff who checked in', 'Staff who never scanned cannot seat anyone');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'C5')$q$, t.sid('live'), t.uid('r3')), 'Staff who checked in', 'a Resident cannot seat anyone');
+select t.as_user('s1');
+select public.staff_set_resident_seat(t.sid('live'), t.uid('r3'), 'R6');
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r3') and seat_code = 'R6' and released_at is null and assigned_by = t.uid('s1'))
+            and exists (select 1 from public.resident_seat_events where kind = 'staff_set' and actor_id = t.uid('s1') and subject_id = t.uid('r3') and seat_code = 'R6'), 'Staff seat a Resident and the Staff name is recorded');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'C5')$q$, t.sid('live'), t.uid('r4')), 'has not scanned', 'Staff cannot seat a Resident who never scanned (QR stays the evidence)');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'C1')$q$, t.sid('live'), t.uid('r1')), 'Seat is not available', 'Staff cannot take an occupied seat');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'X9')$q$, t.sid('live'), t.uid('r1')), 'Seat does not exist', 'Staff seat codes are checked too');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'L2')$q$, t.sid('live'), t.uid('s2')), 'Resident not found', 'only Residents can be seated');
+select public.staff_set_resident_seat(t.sid('live'), t.uid('r1'), 'L2');
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r1') and seat_code = 'L2' and released_at is null)
+            and not exists (select 1 from public.resident_seat_status where user_id = t.uid('r1')), 'seating a Resident from the reserve area clears the reserve status');
+select public.staff_release_resident_seat(t.sid('live'), t.uid('r3'));
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r3') and seat_code = 'R6' and release_reason = 'staff'), 'Staff release records the reason');
+select t.expect_error(format($q$select public.staff_release_resident_seat(%L, %L)$q$, t.sid('live'), t.uid('r3')), 'has no seat', 'releasing nobody is refused');
+
+-- B3: certification (optional extra)
+select public.certify_seat_map(t.sid('live'));
+select t.ok(exists (select 1 from public.resident_seat_events where kind = 'certify' and actor_id = t.uid('s1') and (detail->>'edits')::int = 3 and (detail->>'seated')::int = 2), 'certification records the time, the Staff edits so far (3) and seats taken (2)');
+select t.as_user('s2');
+select t.expect_error(format($q$select public.certify_seat_map(%L)$q$, t.sid('live')), 'Check in with the room QR first', 'Staff who never scanned cannot certify');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.certify_seat_map(%L)$q$, t.sid('live')), 'Active Staff account required', 'a Resident cannot certify');
+select t.as_user('adm');
+select t.expect_error(format($q$select public.certify_seat_map(%L)$q$, t.sid('live')), 'Active Staff account required', 'Admin does not certify');
+select public.staff_set_resident_seat(t.sid('live'), t.uid('r3'), 'R7');
+select t.ok(exists (select 1 from public.resident_seat_assignments where user_id = t.uid('r3') and seat_code = 'R7' and assigned_by = t.uid('adm')), 'Admin can seat a Resident who scanned, without scanning themselves');
+select t.expect_error(format($q$select public.staff_set_resident_seat(%L, %L, 'R8')$q$, t.sid('ended'), t.uid('r3')), 'Seat map is closed', 'no staff seating after the session ended');
+
+-- B3: Admin configuration
+select t.mk_session('fresh', interval '12 hours', interval '13 hours', interval '15 minutes', false);
+select t.expect_error(format($q$select * from public.admin_configure_seat_session(%L, null, clock_timestamp())$q$, t.sid('fresh')), 'inside the session window', 'on-time outside the session window is refused');
+select * from public.admin_configure_seat_session(t.sid('fresh'));
+select t.ok(exists (select 1 from public.resident_round_seat_config c join public.resident_round_sessions s on s.id = c.session_id
+                    where c.session_id = t.sid('fresh') and c.on_time_at between s.starts_at and s.ends_at
+                      and c.layout_id = (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (37 ที่)')), 'defaults: the existing layout and an on-time time inside the window');
+select t.ok(exists (select 1 from public.resident_seat_events where kind = 'configure' and session_id = t.sid('fresh')), 'configuration is logged');
+select * from public.admin_configure_seat_session(t.sid('live'), null, (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')));
+select t.ok((select on_time_at from public.resident_round_seat_config where session_id = t.sid('live')) = (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')), 'Admin can change the on-time time');
+insert into public.resident_room_layouts(name) values ('ห้องสำรอง');
+insert into public.resident_room_seats(layout_id, seat_code, zone, row_no, col_no) select id, 'M1', 'M', 1, 1 from public.resident_room_layouts where name = 'ห้องสำรอง';
+select t.expect_error(format($q$select * from public.admin_configure_seat_session(%L, (select id from public.resident_room_layouts where name = 'ห้องสำรอง'), null)$q$, t.sid('live')), 'cannot change after seating', 'the layout cannot change once people are seated');
+select * from public.admin_configure_seat_session(t.sid('future'), (select id from public.resident_room_layouts where name = 'ห้องสำรอง'), null);
+select t.ok((select layout_id from public.resident_round_seat_config where session_id = t.sid('future')) = (select id from public.resident_room_layouts where name = 'ห้องสำรอง'), 'the layout can change while nobody is seated');
+select t.as_user('s1');
+select t.expect_error(format($q$select * from public.admin_configure_seat_session(%L)$q$, t.sid('fresh')), 'Active Admin account required', 'Staff cannot configure a seat map');
+select t.as_user('r1');
+select t.expect_error(format($q$select * from public.admin_configure_seat_session(%L)$q$, t.sid('fresh')), 'Active Admin account required', 'a Resident cannot configure a seat map');
+select t.expect_error($q$select * from public.admin_list_seat_configs()$q$, 'Active Admin account required', 'only Admin lists seat configurations');
+select t.as_user('adm');
+select t.ok((select count(*) from public.admin_list_seat_configs()) >= 4, 'Admin lists the configured sessions');
+select t.ok((select seated from public.admin_list_seat_configs() where session_id = t.sid('live')) = 3, 'Admin sees how many are seated');
+
+-- B3: request review (Staff decide, not Admin)
+select t.as_user('adm');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'approved')$q$, (select id from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent')), 'Active Staff account required', 'Admin does not decide requests');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'approved')$q$, (select id from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent')), 'Active Staff account required', 'a Resident cannot decide requests');
+select t.as_user('s2');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'maybe')$q$, (select id from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent')), 'must be approved or rejected', 'a decision must be approved or rejected');
+select public.review_seat_request((select id from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent'), 'approved');
+select t.ok(exists (select 1 from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent' and state = 'approved' and reviewed_by = t.uid('s2') and reviewed_at is not null)
+            and exists (select 1 from public.resident_seat_events where kind = 'review' and actor_id = t.uid('s2') and subject_id = t.uid('r3')), 'Staff approve an urgent report without needing to be in the room, and the review is logged');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'rejected')$q$, (select id from public.resident_seat_requests where user_id = t.uid('r3') and kind = 'urgent')), 'already reviewed', 'a request is reviewed once');
+select t.as_user('s1');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'approved')$q$, (select id from public.resident_seat_requests where user_id = t.uid('s1') and kind = 'correction')), 'cannot review your own request', 'Staff cannot decide their own request');
+
 -- <<< later tasks append their blocks above this line >>>
 rollback;

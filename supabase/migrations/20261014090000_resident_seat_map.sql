@@ -404,3 +404,196 @@ end;
 $$;
 revoke all on function public.request_seat_correction(uuid, text) from public, anon;
 grant execute on function public.request_seat_correction(uuid, text) to authenticated;
+
+-- ---------- Staff and Admin functions ----------
+
+-- Staff who checked in (and Admin) seat or move a Resident who ALREADY scanned the room QR. No swaps: an occupied seat is refused.
+create or replace function public.staff_set_resident_seat(p_session_id uuid, p_resident_id uuid, p_seat_code text)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_old text;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if not (select private.resident_can_manage_seat_map(p_session_id)) then raise exception 'Staff who checked in, or Admin, required'; end if;
+  if not exists (
+    select 1 from public.resident_user_roles r join public.resident_profiles p on p.user_id = r.user_id
+    where r.user_id = p_resident_id and r.role = 'resident' and r.active and p.active
+  ) then raise exception 'Resident not found'; end if;
+  if not exists (select 1 from public.resident_round_attendance a where a.session_id = p_session_id and a.user_id = p_resident_id) then
+    raise exception 'This Resident has not scanned the room QR. Ask them to send a correction request';
+  end if;
+  if not exists (select 1 from public.resident_room_seats s where s.layout_id = c.layout_id and s.seat_code = p_seat_code) then
+    raise exception 'Seat does not exist';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_session_id::text || ':' || p_seat_code, 0));
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.expires_at <= c.now_ts;
+  if exists (select 1 from public.resident_seat_assignments a where a.session_id = p_session_id and a.seat_code = p_seat_code and a.released_at is null)
+     or exists (select 1 from public.resident_seat_holds h where h.session_id = p_session_id and h.seat_code = p_seat_code and h.user_id <> p_resident_id) then
+    raise exception 'Seat is not available';
+  end if;
+  begin
+    update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'staff'
+    where a.session_id = p_session_id and a.user_id = p_resident_id and a.released_at is null
+    returning a.seat_code into v_old;
+    insert into public.resident_seat_assignments(session_id, user_id, seat_code, seated_at, assigned_by)
+    values (p_session_id, p_resident_id, p_seat_code, c.now_ts, c.user_id);
+  exception when unique_violation then
+    raise exception 'Seat is not available';
+  end;
+  delete from public.resident_seat_holds h where h.session_id = p_session_id and h.user_id = p_resident_id;
+  delete from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = p_resident_id;
+  perform private.resident_seat_log(p_session_id, c.user_id, p_resident_id, 'staff_set', p_seat_code,
+    case when v_old is null then '{}'::jsonb else jsonb_build_object('from', v_old) end);
+end;
+$$;
+revoke all on function public.staff_set_resident_seat(uuid, uuid, text) from public, anon;
+grant execute on function public.staff_set_resident_seat(uuid, uuid, text) to authenticated;
+
+create or replace function public.staff_release_resident_seat(p_session_id uuid, p_resident_id uuid)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_seat text;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if not (select private.resident_can_manage_seat_map(p_session_id)) then raise exception 'Staff who checked in, or Admin, required'; end if;
+  update public.resident_seat_assignments a set released_at = c.now_ts, release_reason = 'staff'
+  where a.session_id = p_session_id and a.user_id = p_resident_id and a.released_at is null
+  returning a.seat_code into v_seat;
+  if v_seat is null then raise exception 'This Resident has no seat'; end if;
+  perform private.resident_seat_log(p_session_id, c.user_id, p_resident_id, 'staff_release', v_seat, '{}'::jsonb);
+end;
+$$;
+revoke all on function public.staff_release_resident_seat(uuid, uuid) from public, anon;
+grant execute on function public.staff_release_resident_seat(uuid, uuid) to authenticated;
+
+-- Optional: a Staff member in the room says "the map matches what I see now". It is NOT a statement that anyone stayed to the end.
+create or replace function public.certify_seat_map(p_session_id uuid)
+returns timestamptz language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  c record;
+  v_edits integer;
+  v_seated integer;
+begin
+  select * into c from private.resident_seat_context(p_session_id, 'live');
+  if c.role <> 'staff' then raise exception 'Active Staff account required'; end if;
+  if not exists (select 1 from public.resident_round_attendance a where a.session_id = p_session_id and a.user_id = c.user_id) then
+    raise exception 'Check in with the room QR first';
+  end if;
+  select count(*)::int into v_edits from public.resident_seat_events e where e.session_id = p_session_id and e.kind in ('staff_set', 'staff_release');
+  select count(*)::int into v_seated from public.resident_seat_assignments a where a.session_id = p_session_id and a.released_at is null;
+  perform private.resident_seat_log(p_session_id, c.user_id, null, 'certify', null, jsonb_build_object('edits', v_edits, 'seated', v_seated));
+  return c.now_ts;
+end;
+$$;
+revoke all on function public.certify_seat_map(uuid) from public, anon;
+grant execute on function public.certify_seat_map(uuid) to authenticated;
+
+-- Turn the seat map on for one session. Defaults copy the layout and the on-time CLOCK time of the closest earlier configured
+-- session (or starts_at + 15 minutes if that time falls outside this window). Re-running keeps the current layout and time unless given.
+create or replace function public.admin_configure_seat_session(p_session_id uuid, p_layout_id uuid default null, p_on_time_at timestamptz default null)
+returns table (session_id uuid, layout_id uuid, on_time_at timestamptz)
+language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  v_uid uuid := (select auth.uid());
+  v_s record;
+  v_prev record;
+  v_exist record;
+  v_layout uuid;
+  v_on timestamptz;
+begin
+  if not (select private.resident_can_configure_seat_map()) then raise exception 'Active Admin account required'; end if;
+  select s.id, s.starts_at, s.ends_at into v_s
+  from public.resident_round_sessions s where s.id = p_session_id and s.cancelled_at is null and s.closed_at is null;
+  if v_s.id is null then raise exception 'Session not found, cancelled or closed'; end if;
+  select cfg.layout_id, cfg.on_time_at into v_prev
+  from public.resident_round_seat_config cfg join public.resident_round_sessions s2 on s2.id = cfg.session_id
+  where cfg.session_id <> p_session_id and s2.starts_at < v_s.starts_at
+  order by s2.starts_at desc limit 1;
+  select cfg.layout_id, cfg.on_time_at into v_exist from public.resident_round_seat_config cfg where cfg.session_id = p_session_id;
+  v_layout := coalesce(p_layout_id, v_exist.layout_id, v_prev.layout_id,
+                       (select l.id from public.resident_room_layouts l where l.active order by l.name limit 1));
+  if v_layout is null or not exists (select 1 from public.resident_room_layouts l where l.id = v_layout and l.active) then
+    raise exception 'Layout not found';
+  end if;
+  if p_on_time_at is not null then
+    if p_on_time_at < v_s.starts_at or p_on_time_at > v_s.ends_at then raise exception 'On-time must be inside the session window'; end if;
+    v_on := p_on_time_at;
+  elsif v_exist.on_time_at is not null then
+    v_on := v_exist.on_time_at;
+  else
+    v_on := case when v_prev.on_time_at is null then null else
+      ((v_s.starts_at at time zone 'Asia/Bangkok')::date + (v_prev.on_time_at at time zone 'Asia/Bangkok')::time) at time zone 'Asia/Bangkok' end;
+    if v_on is null or v_on < v_s.starts_at or v_on > v_s.ends_at then v_on := least(v_s.starts_at + interval '15 minutes', v_s.ends_at); end if;
+  end if;
+  if v_exist.layout_id is not null then
+    if v_exist.layout_id <> v_layout and (
+         exists (select 1 from public.resident_seat_assignments a where a.session_id = p_session_id)
+         or exists (select 1 from public.resident_seat_holds h where h.session_id = p_session_id)) then
+      raise exception 'Layout cannot change after seating started';
+    end if;
+    update public.resident_round_seat_config cfg set layout_id = v_layout, on_time_at = v_on where cfg.session_id = p_session_id;
+  else
+    insert into public.resident_round_seat_config(session_id, layout_id, on_time_at, created_by) values (p_session_id, v_layout, v_on, v_uid);
+  end if;
+  perform private.resident_seat_log(p_session_id, v_uid, null, 'configure', null, jsonb_build_object('layout_id', v_layout, 'on_time_at', v_on));
+  return query select p_session_id, v_layout, v_on;
+end;
+$$;
+revoke all on function public.admin_configure_seat_session(uuid, uuid, timestamptz) from public, anon;
+grant execute on function public.admin_configure_seat_session(uuid, uuid, timestamptz) to authenticated;
+
+-- Who decides urgent-duty reports and correction requests: an active Staff account, not Admin (decision D7, 2026-10-14).
+-- A named capability, so it can move to another role later without rewriting the function.
+create or replace function private.resident_can_review_seat_requests()
+returns boolean language sql stable security definer set search_path = public, private, auth as $$
+  select private.resident_role_is('staff')
+$$;
+revoke all on function private.resident_can_review_seat_requests() from public, anon;
+grant execute on function private.resident_can_review_seat_requests() to authenticated;
+
+create or replace function public.review_seat_request(p_request_id uuid, p_decision text)
+returns void language plpgsql security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+declare
+  v_uid uuid := (select auth.uid());
+  v_r record;
+  v_owner uuid;
+begin
+  if not (select private.resident_can_review_seat_requests()) then raise exception 'Active Staff account required'; end if;
+  if p_decision is null or p_decision not in ('approved', 'rejected') then raise exception 'Decision must be approved or rejected'; end if;
+  select r.user_id into v_owner from public.resident_seat_requests r where r.id = p_request_id and r.state = 'pending';
+  if v_owner = v_uid then raise exception 'You cannot review your own request'; end if;
+  update public.resident_seat_requests r set state = p_decision, reviewed_by = v_uid, reviewed_at = clock_timestamp()
+  where r.id = p_request_id and r.state = 'pending'
+  returning r.session_id, r.user_id, r.kind into v_r;
+  if v_r.session_id is null then raise exception 'Request not found or already reviewed'; end if;
+  perform private.resident_seat_log(v_r.session_id, v_uid, v_r.user_id, 'review', null,
+    jsonb_build_object('request_id', p_request_id, 'decision', p_decision, 'kind', v_r.kind));
+end;
+$$;
+revoke all on function public.review_seat_request(uuid, text) from public, anon;
+grant execute on function public.review_seat_request(uuid, text) to authenticated;
+
+create or replace function public.admin_list_seat_configs()
+returns table (session_id uuid, layout_id uuid, layout_name text, on_time_at timestamptz, seated integer, pending_requests integer)
+language plpgsql stable security definer set search_path = public, private, auth as $$
+#variable_conflict use_column
+begin
+  if not (select private.resident_can_configure_seat_map()) then raise exception 'Active Admin account required'; end if;
+  return query
+  select cfg.session_id, cfg.layout_id, l.name, cfg.on_time_at,
+         (select count(*)::int from public.resident_seat_assignments a where a.session_id = cfg.session_id and a.released_at is null),
+         (select count(*)::int from public.resident_seat_requests q where q.session_id = cfg.session_id and q.state = 'pending')
+  from public.resident_round_seat_config cfg
+  join public.resident_room_layouts l on l.id = cfg.layout_id
+  order by cfg.created_at desc, cfg.session_id;
+end;
+$$;
+revoke all on function public.admin_list_seat_configs() from public, anon;
+grant execute on function public.admin_list_seat_configs() to authenticated;
