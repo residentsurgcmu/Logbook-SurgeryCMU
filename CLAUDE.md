@@ -105,6 +105,7 @@ See `README.md` for features, local run and secrets.
   the rules and the Admin pages. The release SQL files are wrappers around the migrations and are kept outside git; copies are with the project owner.
   `npm test` (267 tests) still does not run SQL: the behaviour suite `tests/resident-attempt-rules-behavior.sql` (101 checks) was run on a throwaway local
   PostgreSQL 16 with a small Supabase stand-in, and each release file was also run on the staging project before production.
+- 2026-10-14 (branch `feat/seat-map-3d`, **not pushed**): seat map 3D view phase 1 (view only, all roles, lazy `three` chunk, no migration, room size = constants in `src/seatMap3d.js`). Read `docs/handoff.md` (3D section). Also: the seat-map SQL was NOT on production at the first deploy and was applied afterwards (verified).
 
 ## Still open (owner: Chagkrit unless stated)
 - Done: sign-up disabled; real e-mail delivery confirmed on 2026-10-11 (invite, password reset, assessor notice).
