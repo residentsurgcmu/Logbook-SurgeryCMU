@@ -1,8 +1,8 @@
 -- Seat map for the MM & Grand Round meeting (release piece S1-DB). Additive only: nothing existing is changed.
 --   * resident_room_layouts / resident_room_seats: the room as DATA (zone, row, column). Seed = the 37-seat Friday room.
 --   * resident_round_seat_config: turns the seat map on for ONE session (layout + the "on time" clock time).
---     A session without a row has no seat map and behaves exactly as before. Room opens at the session's starts_at,
---     seats are released at its ends_at (or earlier if an Admin closes the round).
+--     A session without a row has no seat map and behaves exactly as before. Room opens at the session's starts_at;
+--     after its ends_at (or earlier if an Admin closes the round) the map reads as ended and the rows stay as the record.
 --   * resident_seat_assignments / holds / status / requests / events: who sits where, 60 s holds, reserve area,
 --     urgent-duty + correction requests, and an append-only log keyed to the PERSON (the seat is recorded as it was then).
 --   * Every write goes through a SECURITY DEFINER function below; no table can be written directly.
@@ -171,7 +171,8 @@ revoke all on function private.resident_seat_session(uuid) from public, anon, au
 -- One entry point for every seat function: who is calling, which session, and is the phase open.
 --   'live'   = from starts_at to the effective end (ends_at, or earlier if an Admin closed the round)
 --   'report' = from starts_at to ends_at + 48 h (urgent-duty reports and correction requests)
---   'read'   = anyone from starts_at - 1 h to ends_at + 48 h; an Admin at any time
+--   'read'   = anyone from starts_at - 1 h to ends_at + 48 h; Staff until ends_at + 7 days (so a late request can still be
+--              decided); an Admin at any time
 create or replace function private.resident_seat_context(p_session_id uuid, p_phase text)
 returns table (user_id uuid, role public.resident_system_role, layout_id uuid, starts_at timestamptz, ends_at timestamptz,
                effective_end timestamptz, report_until timestamptz, on_time_at timestamptz, now_ts timestamptz)
@@ -186,9 +187,14 @@ begin
   if v_a.user_id is null then raise exception 'Active account required'; end if;
   select * into v_s from private.resident_seat_session(p_session_id);
   if v_s.session_id is null then raise exception 'Seat map is not open for this session'; end if;
+  if p_phase is null or p_phase not in ('live', 'report', 'read') then raise exception 'Unknown seat map phase'; end if;
   if p_phase = 'live' and (v_now < v_s.starts_at or v_now > v_s.effective_end) then raise exception 'Seat map is closed'; end if;
   if p_phase = 'report' and (v_now < v_s.starts_at or v_now > v_s.report_until) then raise exception 'Seat map is closed'; end if;
-  if p_phase = 'read' and v_a.role <> 'admin' and (v_now < v_s.starts_at - interval '1 hour' or v_now > v_s.report_until) then raise exception 'Seat map is closed'; end if;
+  if p_phase = 'read' and v_a.role <> 'admin'
+     and (v_now < v_s.starts_at - interval '1 hour'
+          or v_now > case when v_a.role = 'staff' then v_s.ends_at + interval '7 days' else v_s.report_until end) then
+    raise exception 'Seat map is closed';
+  end if;
   return query select v_a.user_id, v_a.role, v_s.layout_id, v_s.starts_at, v_s.ends_at, v_s.effective_end, v_s.report_until, v_s.on_time_at, v_now;
 end;
 $$;
@@ -215,14 +221,14 @@ grant execute on function private.resident_can_manage_seat_map(uuid) to authenti
 
 create or replace function private.resident_can_configure_seat_map()
 returns boolean language sql stable security definer set search_path = public, private, auth as $$
-  select private.resident_role_is('admin')
+  select exists (select 1 from private.resident_seat_actor() a where a.role = 'admin')
 $$;
 revoke all on function private.resident_can_configure_seat_map() from public, anon;
 grant execute on function private.resident_can_configure_seat_map() to authenticated;
 
 create or replace function private.resident_can_view_seat_report()
 returns boolean language sql stable security definer set search_path = public, private, auth as $$
-  select private.resident_role_is('admin')
+  select exists (select 1 from private.resident_seat_actor() a where a.role = 'admin')
 $$;
 revoke all on function private.resident_can_view_seat_report() from public, anon;
 grant execute on function private.resident_can_view_seat_report() to authenticated;
@@ -552,7 +558,7 @@ grant execute on function public.admin_configure_seat_session(uuid, uuid, timest
 -- A named capability, so it can move to another role later without rewriting the function.
 create or replace function private.resident_can_review_seat_requests()
 returns boolean language sql stable security definer set search_path = public, private, auth as $$
-  select private.resident_role_is('staff')
+  select exists (select 1 from private.resident_seat_actor() a where a.role = 'staff')
 $$;
 revoke all on function private.resident_can_review_seat_requests() from public, anon;
 grant execute on function private.resident_can_review_seat_requests() to authenticated;
@@ -601,18 +607,22 @@ grant execute on function public.admin_list_seat_configs() to authenticated;
 -- ---------- Read functions ----------
 
 -- Residents cannot read resident_round_sessions (Admin-only RLS), so the sessions that have a seat map come from here.
+-- Listed from 1 h before the start to 48 h after the end; Staff keep seeing a session for 7 days so late requests can be decided.
 create or replace function public.list_resident_seat_sessions()
 returns table (session_id uuid, meeting_date date, starts_at timestamptz, ends_at timestamptz, effective_end timestamptz, on_time_at timestamptz)
 language plpgsql stable security definer set search_path = public, private, auth as $$
 #variable_conflict use_column
+declare
+  v_role public.resident_system_role;
 begin
-  if not exists (select 1 from private.resident_seat_actor()) then raise exception 'Active account required'; end if;
+  select a.role into v_role from private.resident_seat_actor() a;
+  if v_role is null then raise exception 'Active account required'; end if;
   return query
   select s.id, s.meeting_date, s.starts_at, s.ends_at, least(s.ends_at, coalesce(s.closed_at, s.ends_at)), c.on_time_at
   from public.resident_round_sessions s
   join public.resident_round_seat_config c on c.session_id = s.id
   where s.cancelled_at is null
-    and clock_timestamp() between s.starts_at - interval '1 hour' and s.ends_at + interval '48 hours'
+    and clock_timestamp() between s.starts_at - interval '1 hour' and s.ends_at + case when v_role = 'staff' then interval '7 days' else interval '48 hours' end
   order by s.starts_at, s.id;
 end;
 $$;
@@ -620,7 +630,8 @@ revoke all on function public.list_resident_seat_sessions() from public, anon;
 grant execute on function public.list_resident_seat_sessions() to authenticated;
 
 -- The whole picture for one session in one call. Names are visible to every signed-in user (decision B); absent people,
--- urgent-duty status and other people's entry times are visible only to Staff and Admin; a hold shows as a flag, never as a person.
+-- urgent-duty status, other people's entry times and an occupant's seat time are visible only to Staff and Admin (the occupant
+-- sees their own); a hold shows as a flag, never as a person.
 create or replace function public.get_resident_seat_map(p_session_id uuid)
 returns jsonb language plpgsql security definer set search_path = public, private, auth as $$
 #variable_conflict use_column
@@ -645,15 +656,16 @@ begin
   select q.state into v_urgent from public.resident_seat_requests q
     where q.session_id = p_session_id and q.user_id = c.user_id and q.kind = 'urgent' and q.state <> 'rejected' order by q.created_at desc limit 1;
   v_reserve := exists (select 1 from public.resident_seat_status s where s.session_id = p_session_id and s.user_id = c.user_id);
-  v_status := case when v_seat is not null then 'seat' when v_reserve then 'reserve'
+  v_status := case when v_seat is not null then 'seat' when v_reserve then 'reserve' when v_urgent is not null then 'urgent'
                    when v_att is not null and c.role = 'staff' then 'staff' when v_att is not null then 'room'
-                   when v_urgent is not null then 'urgent' else 'absent' end;
+                   else 'absent' end;
 
   select coalesce(jsonb_agg(jsonb_build_object(
       'seat_code', s.seat_code, 'zone', s.zone, 'row_no', s.row_no, 'col_no', s.col_no,
       'held', (h.seat_code is not null),
       'occupant', case when a.user_id is null then null else jsonb_build_object(
-          'user_id', a.user_id, 'name', p.full_name, 'pgy', p.pgy, 'role', r.role, 'seated_at', a.seated_at) end
+          'user_id', a.user_id, 'name', p.full_name, 'pgy', p.pgy, 'role', r.role,
+          'seated_at', case when v_priv or a.user_id = c.user_id then a.seated_at end) end
     ) order by s.zone, s.row_no, s.col_no), '[]'::jsonb)
   into v_seats
   from public.resident_room_seats s
@@ -678,9 +690,9 @@ begin
     select b.*, case
         when b.seat_code is not null then 'seat'
         when b.reserve then 'reserve'
+        when b.urgent_state is not null then 'urgent'
         when b.checked_in_at is not null and b.role = 'staff' then 'staff'
         when b.checked_in_at is not null then 'room'
-        when b.urgent_state is not null then 'urgent'
         else 'absent' end as status
     from base b
   )

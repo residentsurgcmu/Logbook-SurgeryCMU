@@ -355,5 +355,58 @@ begin
   raise notice 'PASS no seat function is open to anon and all are open to signed-in users';
 end $$;
 
+-- FINAL-REVIEW FIXES: seat time privacy, urgent precedence, Staff late-request window, helper hardening
+-- (a) an occupant's seat time is visible only to Staff, Admin and the occupant
+select t.as_user('r1');
+select t.ok((select e->'occupant'->>'seated_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'C1') is null
+            and (select e->'occupant'->>'name' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'C1') = 'Test r2', 'a Resident sees who sits at C1 but not when they sat down');
+select t.ok((select e->'occupant'->>'seated_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'L2') is not null, 'a Resident sees the seat time of their own seat');
+select t.as_user('s1');
+select t.ok((select e->'occupant'->>'seated_at' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'C1') is not null, 'Staff see the seat time of an occupant');
+
+-- (b) a Resident who scanned, took a seat and then reported urgent duty shows as urgent (not as in the room)
+insert into t.users(name) values ('r6');
+insert into auth.users(id, email) select id, name || '@example.test' from t.users where name = 'r6';
+insert into public.resident_profiles(user_id, full_name, email, pgy, active) select id, 'Test r6', 'r6@example.test', 2, true from t.users where name = 'r6';
+insert into public.resident_user_roles(user_id, role, active) select id, 'resident'::public.resident_system_role, true from t.users where name = 'r6';
+insert into public.resident_round_attendance(session_id, user_id, role_at_check_in, checked_in_at) values (t.sid('live'), t.uid('r6'), 'resident', clock_timestamp() - interval '5 minutes');
+select t.as_user('r6');
+select public.hold_resident_seat(t.sid('live'), 'R10');
+select public.confirm_resident_seat(t.sid('live'), 'R10');
+select public.report_urgent_duty(t.sid('live'), 'อยู่เวร', null);
+select t.ok(public.get_resident_seat_map(t.sid('live'))->'me'->>'status' = 'urgent', 'a Resident who scanned and then reported urgent duty sees status urgent for themself');
+select t.as_user('s1');
+select t.ok((select p->>'status' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r6')::text) = 'urgent', 'Staff see a scanned Resident with urgent duty as urgent');
+select t.as_user('adm');
+select t.ok((select p->>'status' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r6')::text) = 'urgent', 'Admin sees a scanned Resident with urgent duty as urgent');
+select t.as_user('r1');
+select t.ok(not exists (select 1 from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r6')::text), 'another Resident does not see r6 listed at all');
+
+-- (c) Staff can still decide a late request: Staff read a session for 7 days, other roles for 48 h, Admin always
+select t.mk_session('old', interval '-100 hours', interval '-98 hours', interval '15 minutes');
+insert into public.resident_seat_requests(session_id, user_id, kind, reason) values (t.sid('old'), t.uid('r1'), 'urgent', 'อยู่เวร');
+select t.as_user('s1');
+select t.ok(exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('old')), 'Staff still list a session that ended 98 hours ago');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 37, 'Staff can read the map of a session that ended 98 hours ago');
+select t.ok((select count(*) from public.list_seat_requests(t.sid('old'))) = 1, 'Staff list the request of that older session');
+select public.review_seat_request((select id from public.resident_seat_requests where session_id = t.sid('old') and user_id = t.uid('r1') and kind = 'urgent'), 'approved');
+select t.ok(exists (select 1 from public.resident_seat_requests where session_id = t.sid('old') and user_id = t.uid('r1') and state = 'approved' and reviewed_by = t.uid('s1')), 'Staff decided the late request');
+select t.as_user('r1');
+select t.ok(not exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('old')), 'a Resident does not list a session that ended 98 hours ago');
+select t.expect_error(format($q$select public.get_resident_seat_map(%L)$q$, t.sid('old')), 'Seat map is closed', 'a Resident cannot read a session that ended 98 hours ago');
+select t.as_user('adm');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 37, 'Admin can read a session that ended 98 hours ago');
+
+-- (d) fold-ins
+select t.as_user('s1');
+select t.expect_error(format($q$select * from private.resident_seat_context(%L, 'write')$q$, t.sid('live')), 'Unknown seat map phase', 'an unknown phase name is refused, not treated as open');
+update public.resident_profiles set active = false where user_id = t.uid('s2');
+select t.as_user('s2');
+select t.expect_error(format($q$select public.review_seat_request(%L, 'approved')$q$, (select id from public.resident_seat_requests where session_id = t.sid('live') and user_id = t.uid('r4') and kind = 'urgent')), 'Active Staff account required', 'Staff whose profile is inactive cannot decide a request');
+update public.resident_profiles set active = true where user_id = t.uid('s2');
+select t.as_user('r1');
+select t.ok((select p->>'on_time' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r2')::text) is null
+            and (select p->>'on_time' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r1')::text) is not null, 'a Resident sees on-time only for themself, never for other people');
+
 -- <<< later tasks append their blocks above this line >>>
 rollback;
