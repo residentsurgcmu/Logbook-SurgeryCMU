@@ -320,5 +320,40 @@ select t.as_user('adm');
 select t.ok((select count(*) from public.list_seat_requests(t.sid('live'))) = 4, 'Admin may read the request list');
 select t.expect_denied_as('anon', format('select * from public.list_seat_requests(%L)', t.sid('live')), 'anon cannot list requests');
 
+-- B5: direct access is closed, whatever the functions do
+select t.expect_denied_as('anon', 'select * from public.resident_seat_assignments', 'anon cannot read assignments');
+select t.expect_denied_as('authenticated', 'select * from public.resident_seat_assignments', 'signed-in users cannot read assignments directly');
+select t.expect_denied_as('authenticated', 'select * from public.resident_seat_events', 'signed-in users cannot read the event log directly');
+select t.expect_denied_as('authenticated', 'select * from public.resident_seat_requests', 'signed-in users cannot read requests directly');
+select t.expect_denied_as('authenticated', format($q$insert into public.resident_seat_events(session_id, actor_id, kind) values (%L, %L, 'hold')$q$, t.sid('live'), t.uid('r1')), 'signed-in users cannot write the log directly');
+select t.expect_denied_as('authenticated', format($q$update public.resident_seat_assignments set seat_code = 'M1' where session_id = %L$q$, t.sid('live')), 'signed-in users cannot edit assignments directly');
+select t.expect_denied_as('authenticated', format($q$delete from public.resident_seat_holds where session_id = %L$q$, t.sid('live')), 'signed-in users cannot delete holds directly');
+select t.expect_denied_as('authenticated', 'select private.resident_seat_context(null, ''live'')', 'internal helpers are not callable from outside');
+create function t.expect_allowed_as(p_role text, p_sql text, p_label text) returns void language plpgsql as $$
+declare v_msg text;
+begin
+  execute format('set local role %I', p_role);
+  begin execute p_sql; exception when others then get stacked diagnostics v_msg = message_text; end;
+  execute 'reset role';
+  if v_msg is not null then raise exception 'FAIL % : % (%)', p_label, v_msg, p_role; end if;
+  raise notice 'PASS %', p_label;
+end $$;
+select t.expect_allowed_as('authenticated', 'select count(*) from public.resident_room_layouts', 'signed-in users can read layouts directly');
+select t.expect_allowed_as('authenticated', 'select count(*) from public.resident_room_seats', 'signed-in users can read seats directly');
+select t.expect_denied_as('anon', 'select count(*) from public.resident_room_seats', 'anon cannot read seats');
+
+-- B5: every public function refuses anon; nobody but the owner runs the internals
+do $$
+declare v_f regprocedure;
+begin
+  for v_f in select p.oid::regprocedure from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname ~ '^(hold_resident_seat|confirm_resident_seat|release_resident_seat|use_reserve_area|report_urgent_duty|request_seat_correction|staff_set_resident_seat|staff_release_resident_seat|certify_seat_map|admin_configure_seat_session|review_seat_request|list_seat_requests|admin_list_seat_configs|list_resident_seat_sessions|get_resident_seat_map|get_my_seat_events|admin_seat_report)$'
+  loop
+    if has_function_privilege('anon', v_f, 'execute') then raise exception 'FAIL anon can run %', v_f; end if;
+    if not has_function_privilege('authenticated', v_f, 'execute') then raise exception 'FAIL authenticated cannot run %', v_f; end if;
+  end loop;
+  raise notice 'PASS no seat function is open to anon and all are open to signed-in users';
+end $$;
+
 -- <<< later tasks append their blocks above this line >>>
 rollback;
