@@ -103,6 +103,23 @@ export function parseRoundToken(pathname) {
   return String(pathname || "").match(/^\/attendance\/([0-9a-f-]{36})\/?$/i)?.[1] || "";
 }
 
+const ROUND_TOKEN_UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
+// A scanned QR or a pasted link: accepts /attendance/<uuid> (with or without host, query or hash) or a bare uuid.
+export function parseRoundTokenInput(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const bare = text.match(new RegExp(`^(${ROUND_TOKEN_UUID})$`, "i"));
+  if (bare) return bare[1].toLowerCase();
+  const link = text.match(new RegExp(`^(?:https?://[^/?#\\s]+)?/attendance/(${ROUND_TOKEN_UUID})/?(?:[?#].*)?$`, "i"));
+  return link ? link[1].toLowerCase() : "";
+}
+
+// Facebook / LINE / Instagram in-app browsers usually refuse camera access.
+export function isInAppBrowser(userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent) {
+  return /FBAN|FBAV|FB_IAB|Line\/|Instagram/i.test(String(userAgent || ""));
+}
+
 export function roundCheckInErrorMessage(error) {
   const message = String(error?.message || "");
   if (/expired or is invalid/i.test(message)) return "QR หมดอายุหรือไม่ถูกต้อง กรุณาสแกน QR ที่แสดงอยู่ตอนนี้อีกครั้ง";
