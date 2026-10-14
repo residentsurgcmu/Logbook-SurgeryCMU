@@ -110,3 +110,48 @@ test("the module is pure: no React, no three.js, no network", async () => {
   const source = await readFile(new URL("../src/seatMap3d.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /from "react"|from "three|supabase|fetch\(/);
 });
+
+const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+
+test("three is pinned exactly and only reached through the lazy gate", async () => {
+  const pkg = JSON.parse(await read("package.json"));
+  assert.match(pkg.dependencies.three, /^\d+\.\d+\.\d+$/, "exact version, no ^ or ~");
+  const gate = await read("src/features/SeatMap3DGate.jsx");
+  assert.match(gate, /lazy\(\(\) => import\("\.\/SeatMap3D"\)\)/);
+  assert.doesNotMatch(gate, /from "three/);
+  for (const file of ["src/features/SeatMap.jsx", "src/features/SeatMap3DGate.jsx", "src/seatMap3d.js", "src/seatMap.js"]) {
+    const source = await read(file);
+    assert.doesNotMatch(source, /from "three|from "\.\/SeatMap3D"/, `${file} must not import the scene statically`);
+  }
+});
+
+test("the gate falls back to 2D when the chunk fails or WebGL is missing", async () => {
+  const gate = await read("src/features/SeatMap3DGate.jsx");
+  assert.match(gate, /getDerivedStateFromError/);
+  assert.match(gate, /componentDidCatch/);
+  assert.match(gate, /<Suspense/);
+  const scene = await read("src/features/SeatMap3D.jsx");
+  assert.match(scene, /try \{[\s\S]*new THREE\.WebGLRenderer[\s\S]*\} catch[\s\S]*onUnavailable\(\)/);
+});
+
+test("the scene is built once, draws on demand, and cleans up after itself", async () => {
+  const scene = await read("src/features/SeatMap3D.jsx");
+  assert.equal(scene.match(/new THREE\.WebGLRenderer/g).length, 1, "renderer created once, not per data refresh");
+  assert.match(scene, /requestAnimationFrame/);
+  assert.doesNotMatch(scene, /setAnimationLoop/, "no continuous loop");
+  assert.match(scene, /renderer\.dispose\(\)/);
+  assert.match(scene, /cancelAnimationFrame/);
+  assert.match(scene, /ResizeObserver/);
+  assert.match(scene, /disconnect\(\)/);
+  assert.match(scene, /controls\.dispose\(\)/);
+  assert.doesNotMatch(scene, /forceContextLoss/, "a lost context cannot be re-acquired on the same canvas (StrictMode)");
+  assert.match(scene, /Math\.min\(window\.devicePixelRatio \|\| 1, 2\)/);
+  assert.match(scene, /prefers-reduced-motion/);
+  assert.match(scene, /aria-hidden="true"/);
+});
+
+test("the 3D code reads nothing a Resident does not already get from the 2D map", async () => {
+  const scene = await read("src/features/SeatMap3D.jsx");
+  assert.doesNotMatch(scene, /\.people|checked_in_at|on_time|\.counts|seatMapApi|supabase/);
+  assert.match(scene, /seatAriaLabel\(/);
+});

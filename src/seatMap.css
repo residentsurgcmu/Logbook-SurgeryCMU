@@ -80,3 +80,13 @@
   .seatmap-seat { min-height: 60px; }
   .seatmap-zone-button small { display: none; }
 }
+
+/* 3D view (phase 1, view only) */
+.seatmap-viewswitch, .seatmap3d-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.seatmap-viewswitch button, .seatmap3d-presets button { min-height: var(--touch-min, 44px); padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); font: inherit; }
+.seatmap-viewswitch button[aria-pressed="true"], .seatmap3d-presets button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 700; }
+.seatmap-viewswitch button:focus-visible, .seatmap3d-presets button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.seatmap3d { display: grid; gap: 8px; }
+.seatmap3d-stage { position: relative; aspect-ratio: 4 / 3; min-height: 320px; max-height: 70vh; border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; background: var(--canvas); }
+.seatmap3d-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.seatmap3d-tip { position: absolute; max-width: 240px; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--text); color: #fff; font-size: 1rem; pointer-events: none; }
