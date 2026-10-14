@@ -63,3 +63,15 @@ test("the seat map pieces avoid forbidden wording and never present on-time as a
   const views = await read("src/features/SeatMapViews.jsx");
   assert.match(views, /ข้อมูลประกอบ ไม่ใช่คะแนนหรือเกณฑ์ลงโทษ/);
 });
+
+test("refresh() never clears action errors: load failures and action failures have separate state", async () => {
+  const panel = await read("src/features/SeatMap.jsx");
+  const start = panel.indexOf("const refresh = useCallback(");
+  assert.ok(start >= 0, "refresh is defined");
+  const end = panel.indexOf("}, []);", start);
+  const refreshSource = panel.slice(start, end);
+  assert.match(refreshSource, /setLoadError\(/);
+  assert.doesNotMatch(refreshSource, /setError\(/, "refresh must never touch the action error");
+  assert.match(panel, /const \[loadError, setLoadError\] = useState\(""\)/);
+  assert.match(panel, /const \[error, setError\] = useState\(""\)/);
+});

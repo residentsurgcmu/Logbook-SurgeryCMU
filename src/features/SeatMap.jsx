@@ -18,6 +18,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
   const [map, setMap] = useState(null);
   const [offsetMs, setOffsetMs] = useState(0);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
       setSessions(list);
       setSessionId((previous) => (previous && list.some((item) => item.session_id === previous) ? previous : pickDefaultSession(list, Date.now())));
     } catch (nextError) {
-      if (mounted.current) { setSessions([]); setError(seatErrorMessage(nextError)); }
+      if (mounted.current) { setSessions([]); setLoadError(seatErrorMessage(nextError)); }
     }
   }, []);
 
@@ -55,9 +56,9 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
       if (next.me.role === "staff") {
         try { const rows = await listSeatRequests(id); if (mounted.current && mine === ticket.current) setRequests(rows); } catch { /* the queue is secondary: keep the map */ }
       }
-      setError("");
+      setLoadError("");
     } catch (nextError) {
-      if (mounted.current && mine === ticket.current) setError(seatErrorMessage(nextError));
+      if (mounted.current && mine === ticket.current) setLoadError(seatErrorMessage(nextError));
     }
   }, []);
 
@@ -112,7 +113,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
     } finally { if (mounted.current) setBusy(false); }
   }
 
-  if (sessions === null || !sessions.length) return error && sessions ? <p className="form-error" role="alert">{error}</p> : null;
+  if (sessions === null || !sessions.length) return loadError && sessions ? <p className="form-error" role="alert">{loadError}</p> : null;
   const session = sessions.find((item) => item.session_id === sessionId) || sessions[0];
   const pendingRequests = requests.filter((request) => request.state === "pending" && request.user_id !== map?.me?.user_id).length;
   const tabs = map && canReviewRequests(map) ? [...TABS, ["requests", pendingRequests ? `คำขอรอตรวจ (${pendingRequests})` : "คำขอ"]] : TABS;
@@ -125,6 +126,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
         : <span>{thaiDate(session.meeting_date)} · {bangkokHm(session.starts_at)}–{bangkokHm(session.ends_at)} น.</span>}
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
+    {loadError && <p className="form-error" role="alert">{loadError}</p>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {!map ? <p role="status">กำลังโหลดผังที่นั่ง…</p> : <>
       {map.session.ended && <p className="seatmap-ended" role="note">การประชุมนี้จบแล้ว · {ENDED_NOTE}</p>}
