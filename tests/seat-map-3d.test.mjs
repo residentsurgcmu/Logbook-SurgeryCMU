@@ -155,3 +155,21 @@ test("the 3D code reads nothing a Resident does not already get from the 2D map"
   assert.doesNotMatch(scene, /\.people|checked_in_at|on_time|\.counts|seatMapApi|supabase/);
   assert.match(scene, /seatAriaLabel\(/);
 });
+
+test("the seat-map tab has a 2D | 3D switch, 2D by default, with the fixed fallback message", async () => {
+  const panel = await read("src/features/SeatMap.jsx");
+  assert.match(panel, /import SeatMap3DGate from "\.\/SeatMap3DGate"/);
+  assert.match(panel, /useState\("2d"\)/);
+  assert.match(panel, /ผัง 2D/);
+  assert.match(panel, /ผัง 3D/);
+  assert.match(panel, /แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน/);
+  assert.match(panel, /<SeatMap3DGate map=\{map\} paused=\{Boolean\(dialog\)\}/);
+  assert.match(panel, /<DesktopRoom map=\{map\} onSeat=\{onSeat\} \/>/, "2D is still rendered");
+});
+
+test("2D files are untouched by the 3D work", async () => {
+  const views = await read("src/features/SeatMapViews.jsx");
+  assert.doesNotMatch(views, /3D|three/i);
+  const api = await read("src/seatMapApi.js");
+  assert.doesNotMatch(api, /3D|three/i);
+});

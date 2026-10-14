@@ -7,6 +7,7 @@ import {
   listSeatRequests, reportUrgentDuty, requestSeatCorrection, reviewSeatRequest, staffReleaseSeat, staffSetSeat,
 } from "../seatMapApi";
 import { CorrectionDialog, DesktopRoom, HistoryTab, HoldDialog, ManageDialog, MiniRoom, PeopleTab, PersonalCard, RequestList, UrgentDialog, ZoneGrid } from "./SeatMapViews";
+import SeatMap3DGate from "./SeatMap3DGate";
 
 const thaiDate = (iso) => new Intl.DateTimeFormat("th-TH", { dateStyle: "full", timeZone: "Asia/Bangkok" }).format(new Date(iso));
 const TABS = [["map", "ผังที่นั่ง"], ["people", "ผู้เข้าร่วม"], ["history", "ประวัติของฉัน"]];
@@ -24,6 +25,8 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
   const [dialogError, setDialogError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("map");
+  const [view, setView] = useState("2d");
+  const [note3d, setNote3d] = useState("");
   const [zone, setZone] = useState("L");
   const [dialog, setDialog] = useState(null);
   const [history, setHistory] = useState(null);
@@ -141,11 +144,20 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
         {tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}
       </div>
       {tab === "map" && <>
-        <div className="seatmap-mobile-view">
-          <MiniRoom map={map} activeZone={zone} onZone={setZone} />
-          <div className="seatmap-zone-detail"><h3>{zoneName} <span className="muted">· {canManageSeats(map) ? "แตะที่นั่งเพื่อจัดที่" : "เลือกที่นั่ง"}</span></h3><ZoneGrid zone={zone} map={map} onSeat={onSeat} /></div>
+        <div className="seatmap-viewswitch" role="group" aria-label="รูปแบบผัง">
+          <button type="button" aria-pressed={view === "2d"} onClick={() => setView("2d")}>ผัง 2D</button>
+          <button type="button" aria-pressed={view === "3d"} onClick={() => { setNote3d(""); setView("3d"); }}>ผัง 3D</button>
         </div>
-        <div className="seatmap-desktop-view"><DesktopRoom map={map} onSeat={onSeat} /></div>
+        {note3d && <p className="seatmap-hint" role="note">{note3d}</p>}
+        {view === "3d"
+          ? <SeatMap3DGate map={map} paused={Boolean(dialog)} onFallback={() => { setView("2d"); setNote3d("แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน"); }} />
+          : <>
+            <div className="seatmap-mobile-view">
+              <MiniRoom map={map} activeZone={zone} onZone={setZone} />
+              <div className="seatmap-zone-detail"><h3>{zoneName} <span className="muted">· {canManageSeats(map) ? "แตะที่นั่งเพื่อจัดที่" : "เลือกที่นั่ง"}</span></h3><ZoneGrid zone={zone} map={map} onSeat={onSeat} /></div>
+            </div>
+            <div className="seatmap-desktop-view"><DesktopRoom map={map} onSeat={onSeat} /></div>
+          </>}
       </>}
       {tab === "people" && <PeopleTab map={map} query={query} onQuery={setQuery} status={status} onStatus={setStatus} />}
       {tab === "history" && <HistoryTab events={history} />}
