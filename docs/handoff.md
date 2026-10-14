@@ -5,7 +5,7 @@ No names or e-mail addresses on purpose (the repository is public).
 
 ## State
 - **Deployed.** PR #14 merged to `main` as merge commit `54916c1`; Vercel deployment succeeded.
-- **Database first, as required:** the owner ran the seat-map SQL on staging and on production (result `seat-map structure OK`) before the merge.
+- **Correction (2026-10-14, evening):** the earlier note that the seat-map SQL had been run on production before the merge was WRONG (only staging had it). After the deploy the Admin page failed with "relation resident_room_layouts does not exist". `production/11-seat-map.sql` was then applied to production (`seat-map structure OK`, committed; 1 layout, 37 seats, 0 seat configs; the six round functions unchanged by md5; existing 10 sessions / 4 attendance rows untouched). Lesson: check the production catalogue (read-only) before merging, not only the owner's report.
 - **Not yet done:** real iPhone / Android click-through (camera needs https), update of the owner's wipe file, PDPA message to the supervising professor (see "Open").
 
 ## What it does
