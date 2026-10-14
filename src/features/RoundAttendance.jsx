@@ -379,6 +379,8 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed })
         }
         return;
       }
+      // Without a token the page is back to history: allow the same QR to be scanned again.
+      submittedToken.current = "";
       try {
         const records = await loadOwnRoundAttendance();
         if (mounted.current) setHistory(records);
