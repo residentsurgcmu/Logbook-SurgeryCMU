@@ -150,7 +150,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
         </div>
         {note3d && <p className="seatmap-hint" role="note">{note3d}</p>}
         {view === "3d"
-          ? <SeatMap3DGate map={map} paused={Boolean(dialog)} onFallback={() => { setView("2d"); setNote3d("แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน"); }} />
+          ? <SeatMap3DGate map={map} paused={Boolean(dialog)} onFallback={(reason) => { setView("2d"); setNote3d(reason === "load" ? "โหลดผัง 3D ไม่สำเร็จ (เครือข่ายหรือมีการอัปเดตเว็บ) · ลองกดผัง 3D อีกครั้งหรือรีเฟรชหน้า · ใช้ผัง 2D ไปก่อน" : "แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน"); }} />
           : <>
             <div className="seatmap-mobile-view">
               <MiniRoom map={map} activeZone={zone} onZone={setZone} />

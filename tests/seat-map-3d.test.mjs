@@ -117,7 +117,7 @@ test("three is pinned exactly and only reached through the lazy gate", async () 
   const pkg = JSON.parse(await read("package.json"));
   assert.match(pkg.dependencies.three, /^\d+\.\d+\.\d+$/, "exact version, no ^ or ~");
   const gate = await read("src/features/SeatMap3DGate.jsx");
-  assert.match(gate, /lazy\(\(\) => import\("\.\/SeatMap3D"\)\)/);
+  assert.match(gate, /lazy\(\(\) => import\("\.\/SeatMap3D"\)/);
   assert.doesNotMatch(gate, /from "three/);
   for (const file of ["src/features/SeatMap.jsx", "src/features/SeatMap3DGate.jsx", "src/seatMap3d.js", "src/seatMap.js"]) {
     const source = await read(file);
@@ -182,4 +182,26 @@ test("the 3D stage never forces the page wider than a phone (no aspect-ratio wit
   assert.match(rule, /width: 100%/);
   assert.match(rule, /height: clamp\(/);
   assert.match(css, /\.seatmap3d \{[^}]*min-width: 0/);
+});
+
+test("final review #1: everything the scene creates is registered for teardown before anything else can throw, and old browsers get 3D or a clean fallback", async () => {
+  const scene = await read("src/features/SeatMap3D.jsx");
+  const at = (needle) => { const i = scene.indexOf(needle); assert.ok(i >= 0, `${needle} is present`); return i; };
+  assert.ok(at("undo.push(() => renderer.dispose())") < at("new ResizeObserver"), "renderer teardown is registered before the observer exists");
+  assert.ok(at("undo.push(() => renderer.dispose())") < at("syncSeats(mapRef.current)"));
+  assert.ok(at("undo.push(() => controls.dispose())") < at("syncSeats(mapRef.current)"));
+  assert.match(scene, /\} catch \{\s*teardown\(\);\s*onUnavailable\(\);\s*return undefined;\s*\}\s*\}, \[\]\)/, "a throw after the renderer exists tears everything down and falls back");
+  assert.match(scene, /typeof ctx\.roundRect === "function"/, "Safari < 16 has no roundRect");
+});
+
+test("final review #2: a failed chunk load is told apart from an unusable device and can be retried", async () => {
+  const gate = await read("src/features/SeatMap3DGate.jsx");
+  assert.match(gate, /class SceneLoadError extends Error/);
+  assert.match(gate, /\.catch\(\(error\) => \{ throw new SceneLoadError\(error\); \}\)/);
+  assert.match(gate, /error instanceof SceneLoadError \? "load" : "device"/);
+  assert.match(gate, /Scene = loadScene\(\)/, "a rejected lazy component is replaced so the next switch tries again");
+  const panel = await read("src/features/SeatMap.jsx");
+  assert.match(panel, /โหลดผัง 3D ไม่สำเร็จ/);
+  assert.match(panel, /แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน/);
+  assert.match(panel, /reason === "load"/);
 });
