@@ -24,6 +24,7 @@ Success =
 | D3 | **B**: every logged-in user sees names on the map and the participant list. (Notes §7 had said "mini-map shows no names"; the mini-map still shows none, the zone detail and list do.) | Sense |
 | D4 | **A**: a user must scan the room QR (existing `check_in_resident_round`) before choosing a seat. Optional Staff "certify map" is an extra, not a requirement. | Sense |
 | D5 | Architecture approach 1: extend the existing round tables, writes only through SECURITY DEFINER functions, polling not Realtime. | Sense |
+| D7 | **Staff, not Admin, approve or reject** urgent-duty reports and correction requests (any active Staff account, in the room or not; nobody decides their own request). Admin keeps the on-screen report and sees the requests read-only. | Sense, 2026-10-14 (after seeing the mockup) |
 | D6 | Defaults adopted unchanged: "on time" = checked in before the configured time (default 09:00), no seat needed; urgent-duty reports up to 48 h after the session; report and full history visible to Admin only. | Claude default, Sense accepted |
 
 Not decided / defaults Claude set (Sense to confirm): see §11.
@@ -109,11 +110,12 @@ Common rules: caller must be an active account (`resident_user_roles.active` and
 | `staff_set_resident_seat(session, resident, seat)` / `staff_release_resident_seat(session, resident)` | Staff who checked in, and Admin | Only for a Resident who **already has an attendance row**; a Resident who never scanned must file a correction. Staff name recorded. |
 | `certify_seat_map(session)` | Staff who checked in | Optional; records time and number of edits so far. States nothing about staying to the end. |
 | `admin_configure_seat_session(session, layout, on_time_at)` | Admin | Default = previous session's layout and the same clock time; refuses when someone is seated. |
-| `admin_review_seat_request(id, decision)` | Admin | Approve / reject; logged. |
+| `review_seat_request(id, decision)` | Staff — any active Staff account, in the room or not (requests can arrive up to 48 h after the session) | Approve / reject; a Staff member cannot decide their own request; logged. **Admin does not decide** (D7). |
+| `list_seat_requests(session)` | Staff (to decide), Admin (read-only) | The session's requests with who decided and when. Residents cannot call it. |
 | `admin_list_seat_configs()` | Admin | Configured sessions with layout, on-time time, seated count and pending requests (the Admin panel's list). |
 | `admin_seat_report(session)` | `private.resident_can_view_seat_report()` (today: Admin) | Counts: in room before `on_time_at`, in room after, reserve, urgent (by state), corrections, certifications; full event log. |
 
-Named capability helpers (notes §10): `private.resident_can_manage_seat_map(session)` (Staff who checked in, or Admin), `private.resident_can_configure_seat_map()` (Admin) and `private.resident_can_view_seat_report()` (Admin; also guards request review). Moving any of them to a course director later changes one function.
+Named capability helpers (notes §10): `private.resident_can_manage_seat_map(session)` (Staff who checked in, or Admin), `private.resident_can_configure_seat_map()` (Admin) and `private.resident_can_view_seat_report()` (Admin; the report is read-only) and `private.resident_can_review_seat_requests()` (Staff; decides requests). Moving any of them to a course director later changes one function.
 
 Concurrency: advisory lock per (session, seat) plus the partial unique indexes as the final guard. The slower tap gets "ที่นั่งไม่พร้อม กรุณาเลือกอีกครั้ง".
 
@@ -129,9 +131,9 @@ Placed inside the existing page "เช็คชื่อประชุม", be
 
 **Tabs:** ผังที่นั่ง · ผู้เข้าร่วม (search by name or code, filter by status) · ประวัติของฉัน (Admin: ประวัติทั้งหมด) · รายงาน (Admin only).
 
-**Staff:** "ฉันอยู่ในห้องแล้ว" through the QR as today; tapping a seat lets them seat or move a Resident who has checked in; optional "รับรองผังที่นั่ง" with the text "ไม่ใช่การรับรองว่าอยู่ครบทั้งการประชุม". No report.
+**Staff:** "ฉันอยู่ในห้องแล้ว" through the QR as today; tapping a seat lets them seat or move a Resident who has checked in; optional "รับรองผังที่นั่ง" with the text "ไม่ใช่การรับรองว่าอยู่ครบทั้งการประชุม". A tab "คำขอ" lists the pending requests with "อนุมัติ" / "ไม่อนุมัติ" (D7); their own request shows "ให้อาจารย์ท่านอื่นตรวจ". No report.
 
-**Admin:** inside "MM & Grand Round", per session: "เปิดผังที่นั่ง" (layout and on-time time, defaults copied from the previous session), the request queue, the on-screen report.
+**Admin:** inside "MM & Grand Round", per session: "เปิดผังที่นั่ง" (layout and on-time time, defaults copied from the previous session), the on-screen report with the requests read-only (Staff decide them, D7).
 
 **QR scan button in the app (piece S0, no database):** reuse `html5-qrcode` and `parseRoundToken`. Messaging builds in the in-app-browser case (Facebook/LINE block the camera): tell the user to open in Safari/Chrome and keep a paste-link field; iPhone permission denial gets re-enable instructions.
 
