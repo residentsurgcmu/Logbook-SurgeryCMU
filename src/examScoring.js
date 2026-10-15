@@ -34,6 +34,15 @@ export function fullScoreError(value) {
   return "";
 }
 
+// A typed score against the saved one, by value ("70" equals "70.00"); blank equals blank.
+export function scoresDiffer(typed, saved) {
+  if (blank(typed) && blank(saved)) return false;
+  if (blank(typed) || blank(saved)) return true;
+  const a = Number(typed);
+  const b = Number(saved);
+  return Number.isFinite(a) && Number.isFinite(b) ? cents(a) !== cents(b) : String(typed).trim() !== String(saved).trim();
+}
+
 export const resultKey = (residentId, partId) => `${residentId}:${partId || "mcq"}`;
 export const mplMapKey = (partId, pgy) => `${partId || "mcq"}:${pgy}`;
 

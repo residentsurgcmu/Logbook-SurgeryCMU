@@ -1,7 +1,7 @@
 -- Behaviour test for the exam MPL RPCs. ONE transaction, always ROLLBACK, so no
 -- exam data is kept. Needs one active Admin and three active Residents.
--- Run on STAGING after both migrations:
--- npx --yes supabase db query --linked --file tests/resident-exam-mpl-rollback.sql
+-- Run on STAGING after both migrations, from the repo folder (see CLAUDE.md):
+-- supabase db query --linked --project-ref <staging-ref> --file tests/resident-exam-mpl-rollback.sql
 begin;
 
 create function public.zz_act_as(p_user uuid) returns void language plpgsql as $$
@@ -64,6 +64,8 @@ begin
     jsonb_build_object('residentId', v_r1, 'partId', v_part, 'score', '60'),
     jsonb_build_object('residentId', v_r2, 'partId', v_part, 'score', '60'),
     jsonb_build_object('residentId', v_r3, 'partId', v_part, 'score', '99')));
+  -- the save flag stays on for the rest of this one transaction (a real RPC call is its own transaction); close it
+  perform set_config('app.exam_mpl_save', '', true);
   select outcome, outcome_source into v_outcome, v_source from public.resident_exam_results where event_id = v_event and resident_id = v_r1;
   if v_outcome <> 'pass' or v_source <> 'computed' then raise exception 'equal to MPL must pass, got %', v_outcome; end if;
   select outcome into v_outcome from public.resident_exam_results where event_id = v_event and resident_id = v_r2;
@@ -119,6 +121,25 @@ begin
   if v_mpl is distinct from 60 then raise exception 'published MPL must stay the PGY-at-exam value, got %', v_mpl; end if;
   if (select pgy_at_exam from public.list_resident_exam_records() where event_id = v_event) is distinct from 1
     then raise exception 'pgy_at_exam must stay 1 after promotion'; end if;
+  perform public.zz_reset();
+
+  -- delete a Draft: refused for a non-Admin and for a published exam; allowed for an Admin on a Draft,
+  -- and the parts, participants, results and MPL snapshot go with it
+  perform set_config('app.exam_mpl_save', '', true);
+  perform public.zz_act_as(v_r1);
+  if public.zz_fails(format($q$select public.delete_resident_exam_event(%L)$q$, v_event)) is not true
+    then raise exception 'a Resident must not delete an exam'; end if;
+  perform public.zz_act_as(v_admin);
+  if public.zz_fails(format($q$select public.delete_resident_exam_event(%L)$q$, v_event)) is not true
+    then raise exception 'a published exam must not be deleted'; end if;
+  perform public.set_resident_exam_publication(v_event, false);
+  perform public.delete_resident_exam_event(v_event);
+  if (select count(*) from public.resident_exam_events where id = v_event) <> 0
+    or (select count(*) from public.resident_exam_parts where event_id = v_event) <> 0
+    or (select count(*) from public.resident_exam_participants where event_id = v_event) <> 0
+    or (select count(*) from public.resident_exam_results where event_id = v_event) <> 0
+    or (select count(*) from public.resident_exam_mpl where event_id = v_event) <> 0
+    then raise exception 'deleting a Draft must remove the event and everything under it'; end if;
   perform public.zz_reset();
   raise notice 'exam MPL behaviour: all checks passed';
 end;

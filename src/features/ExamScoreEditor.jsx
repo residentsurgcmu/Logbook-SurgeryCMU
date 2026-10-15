@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   examOutcome, missingMplCount, mplError, mplFor, mplMapKey, mplRowsToState, outcomeLabel,
-  PGY_LEVELS, resultKey, stateToMplRows,
+  PGY_LEVELS, resultKey, scoresDiffer, stateToMplRows,
 } from "../examScoring";
-import { listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
+import { deleteResidentExamDraft, listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
+import ExamExportButton from "./ExamExportButton";
 import { MplInputs } from "./ExamMplFields";
 
 const thaiDate = (value) =>
   new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T12:00:00+07:00`));
 
-export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
+export default function ExamScoreEditor({ event, onRefresh, onDeleted, scoreError }) {
   const partList = useMemo(
     () => (event.type === "mcq" ? [{ id: null, name: "MCQ", maxScore: event.maxScore }] : event.parts),
     [event],
@@ -46,6 +47,7 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
   }, [event.id, event.status, reload]);
 
   const disabled = event.status !== "draft" || Boolean(busy);
+  const unsaved = mplDirty || expectedCells.some(({ resident, part }) => scoresDiffer(scores[resultKey(resident.id, part.id)], event.results.get(resultKey(resident.id, part.id))?.score));
   const setScore = (key, value) => setScores((current) => ({ ...current, [key]: value }));
   const setPartMpl = (partId, values) => {
     setMplState((current) => {
@@ -126,6 +128,18 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
     } finally { setBusy(""); }
   }
 
+  async function removeDraft() {
+    if (!window.confirm(`ลบ Draft "${event.title}" วันที่ ${thaiDate(event.date)} (${event.participants.length} คน)? คะแนนและเกณฑ์ MPL ของรายการนี้จะหายถาวร`)) return;
+    setBusy("delete"); setError(""); setMessage("");
+    try {
+      await deleteResidentExamDraft(event.id);
+      await onDeleted?.({ title: event.title });
+    } catch (nextError) {
+      setError(nextError.message || "ลบ Draft ไม่สำเร็จ");
+      setBusy("");
+    }
+  }
+
   return (
     <section className="resident-panel exam-editor">
       <div className="section-heading">
@@ -184,6 +198,8 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
         {event.status === "draft"
           ? <><button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={save}>{busy === "save" ? "กำลังบันทึก…" : "บันทึก Draft"}</button><button type="button" className="primary-button" disabled={Boolean(busy)} onClick={publish}>{busy === "publish" ? "กำลังเผยแพร่…" : "เผยแพร่ผลสอบ"}</button></>
           : <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={returnToDraft}>{busy === "draft" ? "กำลังดำเนินการ…" : "นำกลับ Draft เพื่อแก้ไข"}</button>}
+        <ExamExportButton event={event} disabled={Boolean(busy) || unsaved} hint={unsaved ? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""} />
+        {event.status === "draft" && <button type="button" className="danger-button" disabled={Boolean(busy)} onClick={removeDraft}>{busy === "delete" ? "กำลังลบ…" : "ลบ Draft นี้"}</button>}
       </div>
     </section>
   );

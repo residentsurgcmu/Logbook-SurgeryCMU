@@ -31,8 +31,11 @@ See `README.md` for features, local run and secrets.
   4. One command per `!` line; never paste several `!` lines in one message. An error is never "applied": after each
      migration run a read-only check (e.g. `select proname, pronargs from pg_proc where proname in (…)`), and only push
      the frontend after the check shows the new objects. `notify pgrst, 'reload schema';` afterwards for new functions.
-- Production writes (migrations, function deploys) are blocked for Claude by the auto-mode
-  classifier. The user runs them with the `!` prefix; Claude verifies read-only.
+- **Production writes (2026-10-16, owner's decision): Claude MAY run a migration or function deploy itself**, but
+  only the exact file or function the owner named in this session, one at a time, with the four CLI rules above,
+  a read-only check before and after (reported in full), and never `db push`. Stop and report on the first error.
+  The auto-mode classifier is a separate permission layer and may still block it ("Production Deploy"); that is not
+  something to work around: tell the owner, who then runs it with the `!` prefix or adds a permission rule.
 - Deploy edge functions with `--no-verify-jwt` (there is no `supabase/config.toml`):
   `supabase functions deploy <name> --project-ref dyiiivcyoatgmkmvgcnt --no-verify-jwt`.
 - **Order matters:** migrations → `resident-assessment-notifier` → `auth-send-email-gmail`
