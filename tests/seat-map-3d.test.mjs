@@ -5,9 +5,9 @@ import { seatAriaLabel, seatCell } from "../src/seatMap.js";
 import { CAMERA_PRESETS, ROOM_3D, seatPosition, seatSummary, seatVisual, summaryText } from "../src/seatMap3d.js";
 
 const seat = (seat_code, zone, row_no, col_no, extra = {}) => ({ seat_code, zone, row_no, col_no, held: false, occupant: null, ...extra });
-// The 37 seats exactly as the migration seeds them.
+// The 38 seats: the 37 seeded by the first migration plus the second moderator seat (M2) added by the follow-up migration.
 const seeded = () => {
-  const list = [seat("M1", "M", 1, 1)];
+  const list = [seat("M1", "M", 1, 1), seat("M2", "M", 1, 2)];
   for (let n = 1; n <= 12; n += 1) {
     list.push(seat(`L${n}`, "L", Math.floor((n - 1) / 3) + 1, ((n - 1) % 3) + 1));
     list.push(seat(`C${n}`, "C", Math.floor((n + 1) / 2), n % 2 === 1 ? 1 : 2));
@@ -21,7 +21,7 @@ const mapOf = (seats, meHold = null) => ({
   seats,
 });
 
-test("the 37 seeded seats get 37 distinct positions inside the room", () => {
+test("the 38 seats get 38 distinct positions inside the room", () => {
   const seen = new Set();
   for (const s of seeded()) {
     const p = seatPosition(s);
@@ -30,7 +30,7 @@ test("the 37 seeded seats get 37 distinct positions inside the room", () => {
     assert.ok(p.z >= -2 && p.z <= ROOM_3D.depth, `${s.seat_code} z inside the room`);
     seen.add(`${p.x.toFixed(3)},${p.z.toFixed(3)}`);
   }
-  assert.equal(seen.size, 37);
+  assert.equal(seen.size, 38);
 });
 
 test("left is left and right is right as seen from the back of the room; the moderator is at the front", () => {
@@ -45,7 +45,7 @@ test("left is left and right is right as seen from the back of the room; the mod
 });
 
 test("a seat outside the known room has no position instead of throwing", () => {
-  for (const odd of [seat("X1", "X", 1, 1), seat("L99", "L", 99, 1), seat("L1", "L", 1, 9), seat("C1", "C", 1, 3), seat("M2", "M", 2, 1), seat("L0", "L", 0, 1), seat("L1", "L", 1.5, 1), seat("L1", "L", undefined, 1)]) {
+  for (const odd of [seat("X1", "X", 1, 1), seat("L99", "L", 99, 1), seat("L1", "L", 1, 9), seat("C1", "C", 1, 3), seat("M2", "M", 2, 1), seat("M3", "M", 1, 3), seat("L0", "L", 0, 1), seat("L1", "L", 1.5, 1), seat("L1", "L", undefined, 1)]) {
     assert.equal(seatPosition(odd), null, JSON.stringify(odd));
   }
 });
@@ -204,4 +204,14 @@ test("final review #2: a failed chunk load is told apart from an unusable device
   assert.match(panel, /โหลดผัง 3D ไม่สำเร็จ/);
   assert.match(panel, /แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน/);
   assert.match(panel, /reason === "load"/);
+});
+
+test("two moderator seats sit side by side at the front, centred on the room, M1 on the left", () => {
+  const m1 = seatPosition(seat("M1", "M", 1, 1));
+  const m2 = seatPosition(seat("M2", "M", 1, 2));
+  assert.ok(m1 && m2, "both moderator seats have a position");
+  assert.equal(m1.z, m2.z, "same row, same distance from the screen");
+  assert.ok(m1.x < m2.x, "M1 is left of M2 as seen from the back of the room");
+  assert.ok(Math.abs((m1.x + m2.x) / 2 - ROOM_3D.moderator.x) < 1e-9, "the pair is centred on the room");
+  assert.ok(m2.x - m1.x >= ROOM_3D.seat, "the two seats do not overlap");
 });

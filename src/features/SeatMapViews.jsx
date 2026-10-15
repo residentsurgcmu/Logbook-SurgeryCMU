@@ -48,12 +48,15 @@ function MiniSeat({ seat, map }) {
   return <span className={`seatmap-mini seatmap-mini-${cell.state}`} style={{ gridColumn: seat.col_no, gridRow: seat.row_no }} aria-hidden="true">{cell.symbol}</span>;
 }
 
+// "M1–M2" for two moderator seats, "M1" for one (a layout without the second seat).
+const moderatorCodes = (seats) => (seats.length > 1 ? `${seats[0].seat_code}–${seats[seats.length - 1].seat_code}` : seats[0]?.seat_code || "M1");
+
 // The phone overview: one picture of the whole room, no names. Tap a zone to open it.
 export function MiniRoom({ map, activeZone, onZone }) {
   const groups = seatsByZone(map.seats);
   const free = (zone) => groups[zone].filter((seat) => !seat.occupant).length;
   return <div className="seatmap-mini-room">
-    <button type="button" className="seatmap-mini-moderator" aria-pressed={activeZone === "M"} onClick={() => onZone("M")}>M1 · {MODERATOR_ZONE.name}</button>
+    <button type="button" className="seatmap-mini-moderator" aria-pressed={activeZone === "M"} onClick={() => onZone("M")}>{moderatorCodes(groups.M)} · {MODERATOR_ZONE.name}</button>
     <div className="seatmap-mini-zones">
       {ZONE_INFO.map(({ zone, name, hint }) => <button key={zone} type="button" className="seatmap-zone-button" aria-pressed={activeZone === zone}
         aria-label={`เปิด${name} ว่าง ${free(zone)} ที่`} onClick={() => onZone(zone)}>

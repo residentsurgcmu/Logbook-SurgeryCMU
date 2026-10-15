@@ -10,7 +10,7 @@ export const ZONE_INFO = [
   { zone: "C", name: "โต๊ะกลาง", hint: "แนะนำ PGY 4" },
   { zone: "R", name: "โซนขวา", hint: "แนะนำ PGY 3" },
 ];
-export const MODERATOR_ZONE = { zone: "M", name: "Moderator", hint: "ที่นั่ง 1 ที่" };
+export const MODERATOR_ZONE = { zone: "M", name: "Moderator", hint: "ที่นั่ง 1–2 ที่ (ไม่ต้องเต็ม)" };
 export const STATUS_LABELS = {
   seat: "นั่งที่นั่งแล้ว",
   reserve: "ที่นั่งเสริม",

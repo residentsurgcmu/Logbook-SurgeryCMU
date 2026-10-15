@@ -51,7 +51,7 @@ begin
   values ((v_start at time zone 'Asia/Bangkok')::date, v_start, v_end, clock_timestamp(), t.uid('adm')) returning id into v_id;
   if p_config then
     insert into public.resident_round_seat_config(session_id, layout_id, on_time_at, created_by)
-    values (v_id, (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (37 ที่)'), v_start + p_on_time, t.uid('adm'));
+    values (v_id, (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (38 ที่)'), v_start + p_on_time, t.uid('adm'));
   end if;
   insert into t.sess(name, id) values (p_name, v_id);
 end $$;
@@ -68,9 +68,9 @@ insert into public.resident_round_attendance(session_id, user_id, role_at_check_
   (t.sid('live'), t.uid('s1'), 'staff', clock_timestamp() - interval '9 minutes');
 
 -- B1: layout seed
-select t.ok((select count(*) from public.resident_room_seats s join public.resident_room_layouts l on l.id = s.layout_id where l.name = 'ห้องประชุมวันศุกร์ (37 ที่)') = 37, 'seed layout has 37 seats');
+select t.ok((select count(*) from public.resident_room_seats s join public.resident_room_layouts l on l.id = s.layout_id where l.name = 'ห้องประชุมวันศุกร์ (38 ที่)') = 38, 'seed layout has 38 seats (second moderator seat added by the follow-up migration)');
 select t.ok((select count(*) from public.resident_room_seats where zone = 'L') = 12 and (select count(*) from public.resident_room_seats where zone = 'C') = 12
-            and (select count(*) from public.resident_room_seats where zone = 'R') = 12 and (select count(*) from public.resident_room_seats where zone = 'M') = 1, 'zones: M1, 12 left, 12 centre, 12 right');
+            and (select count(*) from public.resident_room_seats where zone = 'R') = 12 and (select count(*) from public.resident_room_seats where zone = 'M') = 2, 'zones: M1+M2, 12 left, 12 centre, 12 right');
 select t.ok((select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C1') = '1,1'
             and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C2') = '1,2'
             and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C11') = '6,1'
@@ -218,7 +218,7 @@ select t.expect_error(format($q$select * from public.admin_configure_seat_sessio
 select * from public.admin_configure_seat_session(t.sid('fresh'));
 select t.ok(exists (select 1 from public.resident_round_seat_config c join public.resident_round_sessions s on s.id = c.session_id
                     where c.session_id = t.sid('fresh') and c.on_time_at between s.starts_at and s.ends_at
-                      and c.layout_id = (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (37 ที่)')), 'defaults: the existing layout and an on-time time inside the window');
+                      and c.layout_id = (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (38 ที่)')), 'defaults: the existing layout and an on-time time inside the window');
 select t.ok(exists (select 1 from public.resident_seat_events where kind = 'configure' and session_id = t.sid('fresh')), 'configuration is logged');
 select * from public.admin_configure_seat_session(t.sid('live'), null, (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')));
 select t.ok((select on_time_at from public.resident_round_seat_config where session_id = t.sid('live')) = (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')), 'Admin can change the on-time time');
@@ -258,7 +258,7 @@ select t.ok((select count(*) from public.list_resident_seat_sessions()) = 2
 select t.expect_denied_as('anon', 'select * from public.list_resident_seat_sessions()', 'anon cannot list seat sessions');
 
 -- B4: the map as a Resident
-select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('live'))->'seats') = 37, 'the map lists all 37 seats');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('live'))->'seats') = 38, 'the map lists all 38 seats');
 select t.ok(public.get_resident_seat_map(t.sid('live'))->'me'->>'seat' = 'L2' and public.get_resident_seat_map(t.sid('live'))->'me'->>'status' = 'seat'
             and (public.get_resident_seat_map(t.sid('live'))->'me'->>'in_room')::boolean, 'my own seat and status are right');
 select t.ok((select e->'occupant'->>'name' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') e where e->>'seat_code' = 'C1') = 'Test r2', 'names are visible on the map (decision B)');
@@ -387,7 +387,7 @@ select t.mk_session('old', interval '-100 hours', interval '-98 hours', interval
 insert into public.resident_seat_requests(session_id, user_id, kind, reason) values (t.sid('old'), t.uid('r1'), 'urgent', 'อยู่เวร');
 select t.as_user('s1');
 select t.ok(exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('old')), 'Staff still list a session that ended 98 hours ago');
-select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 37, 'Staff can read the map of a session that ended 98 hours ago');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 38, 'Staff can read the map of a session that ended 98 hours ago');
 select t.ok((select count(*) from public.list_seat_requests(t.sid('old'))) = 1, 'Staff list the request of that older session');
 select public.review_seat_request((select id from public.resident_seat_requests where session_id = t.sid('old') and user_id = t.uid('r1') and kind = 'urgent'), 'approved');
 select t.ok(exists (select 1 from public.resident_seat_requests where session_id = t.sid('old') and user_id = t.uid('r1') and state = 'approved' and reviewed_by = t.uid('s1')), 'Staff decided the late request');
@@ -395,7 +395,7 @@ select t.as_user('r1');
 select t.ok(not exists (select 1 from public.list_resident_seat_sessions() where session_id = t.sid('old')), 'a Resident does not list a session that ended 98 hours ago');
 select t.expect_error(format($q$select public.get_resident_seat_map(%L)$q$, t.sid('old')), 'Seat map is closed', 'a Resident cannot read a session that ended 98 hours ago');
 select t.as_user('adm');
-select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 37, 'Admin can read a session that ended 98 hours ago');
+select t.ok(jsonb_array_length(public.get_resident_seat_map(t.sid('old'))->'seats') = 38, 'Admin can read a session that ended 98 hours ago');
 
 -- (d) fold-ins
 select t.as_user('s1');
@@ -407,6 +407,21 @@ update public.resident_profiles set active = true where user_id = t.uid('s2');
 select t.as_user('r1');
 select t.ok((select p->>'on_time' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r2')::text) is null
             and (select p->>'on_time' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'people') p where p->>'user_id' = t.uid('r1')::text) is not null, 'a Resident sees on-time only for themself, never for other people');
+
+-- Two moderator seats (follow-up migration): either may stay empty, both may be used, a seat is still one person
+select t.as_user('r1');
+select public.hold_resident_seat(t.sid('live'), 'M2');
+select public.confirm_resident_seat(t.sid('live'), 'M2');
+select t.ok((select s->'occupant'->>'user_id' is null from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') s where s->>'seat_code' = 'M1')
+            and (select s->'occupant'->>'user_id' from jsonb_array_elements(public.get_resident_seat_map(t.sid('live'))->'seats') s where s->>'seat_code' = 'M2') = t.uid('r1')::text,
+            'M2 can be taken while M1 stays empty (the moderator seats need not both be filled)');
+select t.as_user('r2');
+select public.hold_resident_seat(t.sid('live'), 'M1');
+select public.confirm_resident_seat(t.sid('live'), 'M1');
+select t.ok((select count(*) from public.resident_seat_assignments where session_id = t.sid('live') and seat_code in ('M1', 'M2') and released_at is null) = 2,
+            'both moderator seats can be occupied at once by two different people');
+select t.as_user('r1');
+select t.expect_error(format($q$select public.hold_resident_seat(%L, 'M1')$q$, t.sid('live')), '', 'a taken moderator seat cannot be picked by someone else');
 
 -- <<< later tasks append their blocks above this line >>>
 rollback;

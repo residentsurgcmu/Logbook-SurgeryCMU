@@ -47,7 +47,8 @@
 /* desktop room */
 .seatmap-desktop-view { display: none; }
 .seatmap-screen { padding: 8px; border-radius: var(--radius-md); background: var(--canvas); border: 1px solid var(--line); text-align: center; font-weight: 700; }
-.seatmap-moderator { display: grid; gap: 4px; justify-items: center; margin: 10px auto; max-width: 140px; }
+.seatmap-moderator { display: grid; gap: 4px; justify-items: center; margin: 10px auto; width: 100%; max-width: 290px; }
+.seatmap-moderator .seatmap-grid { width: 100%; }
 .seatmap-room { display: grid; grid-template-columns: 3fr 2fr 3fr; gap: 16px; align-items: start; }
 .seatmap-zone-title { display: grid; margin-bottom: 6px; }
 .seatmap-zone-title small { color: var(--text-muted); }
