@@ -37,9 +37,9 @@ test("both editors offer 'ลบ Draft นี้' only while the exam is a Draft
     assert.match(src, /async function removeDraft\(\)/, name);
     assert.match(src, /window\.confirm\(`ลบ Draft "\$\{event\.title\}"/, name);
     assert.match(src, /event\.status === "draft" && <button type="button" className="danger-button"[^>]*onClick=\{removeDraft\}/, name);
-    assert.match(src, /await onDeleted\?\.\(\)/, name);
+    assert.match(src, /await onDeleted\?\.\(\{ title: event\.title \}\)/, name);
   }
-  assert.match(page, /const afterDelete = async \(\) => \{ setSelectedId\(""\); await onRefresh\(\); \};/);
+  assert.match(page, /const afterDelete = async \(deleted\) => \{ setSelectedId\(""\); setNotice\(`ลบ Draft "\$\{deleted\.title\}" แล้ว`\); await onRefresh\(\); \};/);
   assert.equal((page.match(/onDeleted=\{afterDelete\}/g) || []).length, 2);
 });
 
@@ -66,4 +66,11 @@ test("Export is switched off while the editor has unsaved changes or is busy, an
   assert.match(editor, /<ExamExportButton event=\{event\} disabled=\{Boolean\(busy\) \|\| unsaved\} hint=\{unsaved \? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""\} \/>/);
   assert.match(page, /const unsaved = expectedCells\.some\(\(\{ resident, part \}\) => \{/);
   assert.match(page, /<ExamExportButton event=\{event\} disabled=\{Boolean\(busy\) \|\| unsaved\} hint=\{unsaved \? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""\} \/>/);
+});
+
+test("after a delete the page keeps showing 'ลบ Draft ... แล้ว' (the editor is gone by then) until the Admin moves on", () => {
+  assert.match(page, /const \[notice, setNotice\] = useState\(""\)/);
+  assert.match(page, /\{notice && <p className="form-success" role="status">\{notice\}<\/p>\}/);
+  assert.match(page, /onChange=\{\(event\) => \{ setNotice\(""\); setSelectedId\(event\.target\.value\); \}\}/);
+  assert.match(page, /onCreated=\{async \(eventId\) => \{ setNotice\(""\); setSelectedId\(eventId\); await onRefresh\(\); \}\}/);
 });

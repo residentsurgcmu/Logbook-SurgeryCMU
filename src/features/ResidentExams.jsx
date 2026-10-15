@@ -380,7 +380,7 @@ function ExamEditor({ event, onRefresh, onDeleted }) {
     setMessage("");
     try {
       await deleteResidentExamDraft(event.id);
-      await onDeleted?.();
+      await onDeleted?.({ title: event.title });
     } catch (nextError) {
       setError(nextError.message || "ลบ Draft ไม่สำเร็จ");
       setBusy("");
@@ -461,6 +461,7 @@ export default function ResidentExams({ workspace, onRefresh }) {
   const events = useMemo(() => groupExamRecords(workspace.examRecords), [workspace.examRecords]);
   const [selectedId, setSelectedId] = useState("");
   const [view, setView] = useState("exams");
+  const [notice, setNotice] = useState("");
   const [standards, setStandards] = useState([]);
   const [standardsError, setStandardsError] = useState("");
   const admin = workspace.user.role === "admin";
@@ -474,7 +475,7 @@ export default function ResidentExams({ workspace, onRefresh }) {
       .catch((nextError) => alive && setStandardsError(nextError.message || "โหลดเกณฑ์ MPL ไม่สำเร็จ"));
     return () => { alive = false; };
   }, [admin]);
-  const afterDelete = async () => { setSelectedId(""); await onRefresh(); };
+  const afterDelete = async (deleted) => { setSelectedId(""); setNotice(`ลบ Draft "${deleted.title}" แล้ว`); await onRefresh(); };
   if (!admin) return <ExamResults events={events} user={workspace.user} />;
   return <div className="exam-layout">
     <div className="button-row exam-view-switch" role="tablist">
@@ -483,8 +484,9 @@ export default function ResidentExams({ workspace, onRefresh }) {
     </div>
     {standardsError && <p className="form-error" role="alert">{standardsError}</p>}
     {view === "standards" ? <ExamStandards standards={standards} onSaved={setStandards} /> : <>
-      <NewExamForm residents={residents} standards={standards} onCreated={async (eventId) => { setSelectedId(eventId); await onRefresh(); }} />
-      <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.participants.length} คน · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
+      <NewExamForm residents={residents} standards={standards} onCreated={async (eventId) => { setNotice(""); setSelectedId(eventId); await onRefresh(); }} />
+      <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => { setNotice(""); setSelectedId(event.target.value); }}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.participants.length} คน · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
+      {notice && <p className="form-success" role="status">{notice}</p>}
       {selected && (selected.scoringMode === "mpl" ? <ExamScoreEditor key={selected.id} event={selected} onRefresh={onRefresh} onDeleted={afterDelete} scoreError={examScoreError} /> : <ExamEditor key={selected.id} event={selected} onRefresh={onRefresh} onDeleted={afterDelete} />)}
     </>}
   </div>;

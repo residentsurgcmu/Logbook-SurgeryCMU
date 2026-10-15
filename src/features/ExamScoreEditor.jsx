@@ -133,7 +133,7 @@ export default function ExamScoreEditor({ event, onRefresh, onDeleted, scoreErro
     setBusy("delete"); setError(""); setMessage("");
     try {
       await deleteResidentExamDraft(event.id);
-      await onDeleted?.();
+      await onDeleted?.({ title: event.title });
     } catch (nextError) {
       setError(nextError.message || "ลบ Draft ไม่สำเร็จ");
       setBusy("");
