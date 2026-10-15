@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  scoresDiffer,
   examOutcome, mplError, fullScoreError, resultKey, mplMapKey, mplRowsToState, stateToMplRows,
   mplFor, missingMplCount, groupExamRecords, participantOutcome, outcomeLabel, PGY_LEVELS,
 } from "../src/examScoring.js";
@@ -114,4 +115,15 @@ test("residentChoices keeps each Resident once, with the PGY from the newest exa
   const choices = residentChoices(events);
   assert.deepEqual(choices.map((c) => c.id), ["r1", "r2", "r3"]);
   assert.equal(choices.find((c) => c.id === "r1").pgy, 3);
+});
+
+test("scoresDiffer compares a typed score with the saved one by value, blanks equal blanks", () => {
+  assert.equal(scoresDiffer("", null), false);
+  assert.equal(scoresDiffer("  ", undefined), false);
+  assert.equal(scoresDiffer("70", "70.00"), false);
+  assert.equal(scoresDiffer("70.5", 70.5), false);
+  assert.equal(scoresDiffer("70", "71"), true);
+  assert.equal(scoresDiffer("0", null), true);
+  assert.equal(scoresDiffer("", "0"), true);
+  assert.equal(scoresDiffer("abc", "70"), true);
 });

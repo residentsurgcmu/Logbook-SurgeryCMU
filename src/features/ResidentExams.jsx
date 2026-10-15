@@ -6,7 +6,7 @@ import {
   saveResidentExamResults,
   setResidentExamPublication,
 } from "../residentApi";
-import { fullScoreError, groupExamRecords, mplError, outcomeLabel, participantOutcome, PGY_LEVELS, residentChoices, resultKey } from "../examScoring";
+import { fullScoreError, groupExamRecords, mplError, outcomeLabel, participantOutcome, PGY_LEVELS, residentChoices, resultKey, scoresDiffer } from "../examScoring";
 import ExamExportButton from "./ExamExportButton";
 import { MplInputs } from "./ExamMplFields";
 import ExamScoreEditor from "./ExamScoreEditor";
@@ -387,6 +387,13 @@ function ExamEditor({ event, onRefresh, onDeleted }) {
     }
   }
   const disabled = event.status !== "draft" || Boolean(busy);
+  const unsaved = expectedCells.some(({ resident, part }) => {
+    const key = resultKey(resident.id, part?.id);
+    const saved = event.results.get(key);
+    const typed = cells[key];
+    if (!typed) return false;
+    return (event.type === "mcq" && scoresDiffer(typed.score, saved?.score)) || (typed.outcome || "") !== (saved?.outcome || "");
+  });
   return (
     <section className="resident-panel exam-editor">
       <div className="section-heading">
@@ -423,7 +430,7 @@ function ExamEditor({ event, onRefresh, onDeleted }) {
       {message && <p className="form-success" role="status">{message}</p>}
       <div className="button-row">
         {event.status === "draft" ? <><button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={save}>{busy === "save" ? "กำลังบันทึก…" : "บันทึก Draft"}</button><button type="button" className="primary-button" disabled={Boolean(busy)} onClick={publish}>{busy === "publish" ? "กำลังเผยแพร่…" : "เผยแพร่ผลสอบ"}</button></> : <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={returnToDraft}>{busy === "draft" ? "กำลังดำเนินการ…" : "นำกลับ Draft เพื่อแก้ไข"}</button>}
-        <ExamExportButton event={event} />
+        <ExamExportButton event={event} disabled={Boolean(busy) || unsaved} hint={unsaved ? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""} />
         {event.status === "draft" && <button type="button" className="danger-button" disabled={Boolean(busy)} onClick={removeDraft}>{busy === "delete" ? "กำลังลบ…" : "ลบ Draft นี้"}</button>}
       </div>
     </section>

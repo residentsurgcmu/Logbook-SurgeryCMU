@@ -18,8 +18,8 @@ test("Excel export is built in the browser and loads exceljs only when the butto
 test("both editors give the Admin an Excel button for the exam on screen", async () => {
   assert.match(page, /import ExamExportButton from "\.\/ExamExportButton"/);
   assert.match(editor, /import ExamExportButton from "\.\/ExamExportButton"/);
-  assert.match(page, /<ExamExportButton event=\{event\} \/>/);
-  assert.match(editor, /<ExamExportButton event=\{event\} \/>/);
+  assert.match(page, /<ExamExportButton event=\{event\} /);
+  assert.match(editor, /<ExamExportButton event=\{event\} /);
   const button = await read("../src/features/ExamExportButton.jsx");
   assert.match(button, /exportExamExcel\(event\)/);
   assert.match(button, /ส่งออก Excel/);
@@ -55,4 +55,15 @@ test("the behaviour script closes the save flag again, so its 'legacy save is bl
   const script = await read("./resident-exam-mpl-rollback.sql");
   const resets = script.match(/perform set_config\('app\.exam_mpl_save', '', true\);/g) || [];
   assert.ok(resets.length >= 2, "reset the flag after the first score save and before the delete checks");
+});
+
+test("Export is switched off while the editor has unsaved changes or is busy, and says why", async () => {
+  const button = await read("../src/features/ExamExportButton.jsx");
+  assert.match(button, /export default function ExamExportButton\(\{ event, disabled = false, hint = "" \}\)/);
+  assert.match(button, /disabled=\{busy \|\| disabled\}/);
+  assert.match(button, /\{hint && <p className="muted-empty">\{hint\}<\/p>\}/);
+  assert.match(editor, /const unsaved = mplDirty \|\| expectedCells\.some\(\(\{ resident, part \}\) => scoresDiffer\(scores\[resultKey\(resident\.id, part\.id\)\], event\.results\.get\(resultKey\(resident\.id, part\.id\)\)\?\.score\)\)/);
+  assert.match(editor, /<ExamExportButton event=\{event\} disabled=\{Boolean\(busy\) \|\| unsaved\} hint=\{unsaved \? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""\} \/>/);
+  assert.match(page, /const unsaved = expectedCells\.some\(\(\{ resident, part \}\) => \{/);
+  assert.match(page, /<ExamExportButton event=\{event\} disabled=\{Boolean\(busy\) \|\| unsaved\} hint=\{unsaved \? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""\} \/>/);
 });

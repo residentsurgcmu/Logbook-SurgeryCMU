@@ -6,8 +6,10 @@ const OVERALL = { pass: "ผ่านทุก part", fail: "ไม่ผ่า�
 const NO_MPL = "ยังไม่ตั้งเกณฑ์";
 const number = (value) => (value === null || value === undefined || value === "" ? "" : Number(value));
 
+// The first 8 hex digits of the exam id keep two exams of the same day and type apart.
 export function examExportFileName(event) {
-  return `ExamResults-${event.date}-${event.type}.xlsx`;
+  const shortId = String(event.id || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 8);
+  return `ExamResults-${event.date}-${event.type}${shortId ? `-${shortId}` : ""}.xlsx`;
 }
 
 function styleSheet(sheet) {
@@ -57,6 +59,17 @@ export function buildExamWorkbook(ExcelJS, event) {
     }));
     sheets.push(standards);
   }
+  const info = workbook.addWorksheet("ข้อมูลรายการ");
+  info.columns = [{ width: 18 }, { width: 46 }];
+  info.addRows([
+    ["ชื่อข้อสอบ", event.title],
+    ["ประเภท", event.type === "mcq" ? "MCQ" : "X-ray & Anatomy"],
+    ["วันที่สอบ", event.date],
+    ["สถานะ", event.status === "published" ? "เผยแพร่แล้ว" : "Draft"],
+    ["โหมดคะแนน", computed ? "MPL (คำนวณผ่าน/ไม่ผ่านอัตโนมัติ)" : "กรอกผลเอง"],
+    ["จำนวนผู้สอบ", event.participants.length],
+  ]);
+  info.getColumn(1).font = { bold: true };
   sheets.forEach(styleSheet);
   return workbook;
 }

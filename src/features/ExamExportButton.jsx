@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { DownloadIcon } from "../components/Icons";
 import { exportExamExcel } from "../examExcelExport";
 
-export default function ExamExportButton({ event }) {
+export default function ExamExportButton({ event, disabled = false, hint = "" }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function run() {
@@ -18,7 +18,8 @@ export default function ExamExportButton({ event }) {
   }
   return (
     <>
-      <button type="button" className="secondary-button icon-button" disabled={busy} onClick={run}><DownloadIcon />{busy ? "กำลังสร้าง Excel…" : "ส่งออก Excel"}</button>
+      <button type="button" className="secondary-button icon-button" disabled={busy || disabled} onClick={run}><DownloadIcon />{busy ? "กำลังสร้าง Excel…" : "ส่งออก Excel"}</button>
+      {hint && <p className="muted-empty">{hint}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
     </>
   );

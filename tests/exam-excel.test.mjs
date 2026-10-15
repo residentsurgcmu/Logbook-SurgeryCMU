@@ -49,5 +49,14 @@ test("values that look like formulas stay text, and the file name carries the ex
   const [evil] = groupExamRecords([row({ resident_name: "=1+1" })]);
   const cell = buildExamWorkbook(ExcelJS, evil).getWorksheet("ผลสอบ").getCell("A2");
   assert.equal(cell.type, ExcelJS.ValueType.String);
-  assert.equal(examExportFileName(mplEvent), "ExamResults-2026-10-15-xray_anatomy.xlsx");
+  assert.equal(examExportFileName(mplEvent), "ExamResults-2026-10-15-xray_anatomy-e1.xlsx");
+  assert.equal(examExportFileName({ ...mplEvent, id: "ab12CD34-ef56-7890-abcd-ef1234567890" }), "ExamResults-2026-10-15-xray_anatomy-ab12cd34.xlsx");
+});
+
+test("an information sheet says which exam the file is, so two exams of the same day are told apart", () => {
+  const rows = sheetRows(buildExamWorkbook(ExcelJS, mplEvent).getWorksheet("ข้อมูลรายการ"));
+  assert.deepEqual(rows, [["ชื่อข้อสอบ", "X-ray & Anatomy"], ["ประเภท", "X-ray & Anatomy"], ["วันที่สอบ", "2026-10-15"], ["สถานะ", "เผยแพร่แล้ว"], ["โหมดคะแนน", "MPL (คำนวณผ่าน/ไม่ผ่านอัตโนมัติ)"], ["จำนวนผู้สอบ", 2]]);
+  const [evil] = groupExamRecords([row({ title: "=HYPERLINK(\"x\")" })]);
+  assert.equal(buildExamWorkbook(ExcelJS, evil).getWorksheet("ข้อมูลรายการ").getCell("B1").type, ExcelJS.ValueType.String);
+  assert.equal(buildExamWorkbook(ExcelJS, mplEvent).worksheets[0].name, "ผลสอบ");
 });

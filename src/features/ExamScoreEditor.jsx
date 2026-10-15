@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   examOutcome, missingMplCount, mplError, mplFor, mplMapKey, mplRowsToState, outcomeLabel,
-  PGY_LEVELS, resultKey, stateToMplRows,
+  PGY_LEVELS, resultKey, scoresDiffer, stateToMplRows,
 } from "../examScoring";
 import { deleteResidentExamDraft, listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
 import ExamExportButton from "./ExamExportButton";
@@ -47,6 +47,7 @@ export default function ExamScoreEditor({ event, onRefresh, onDeleted, scoreErro
   }, [event.id, event.status, reload]);
 
   const disabled = event.status !== "draft" || Boolean(busy);
+  const unsaved = mplDirty || expectedCells.some(({ resident, part }) => scoresDiffer(scores[resultKey(resident.id, part.id)], event.results.get(resultKey(resident.id, part.id))?.score));
   const setScore = (key, value) => setScores((current) => ({ ...current, [key]: value }));
   const setPartMpl = (partId, values) => {
     setMplState((current) => {
@@ -197,7 +198,7 @@ export default function ExamScoreEditor({ event, onRefresh, onDeleted, scoreErro
         {event.status === "draft"
           ? <><button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={save}>{busy === "save" ? "กำลังบันทึก…" : "บันทึก Draft"}</button><button type="button" className="primary-button" disabled={Boolean(busy)} onClick={publish}>{busy === "publish" ? "กำลังเผยแพร่…" : "เผยแพร่ผลสอบ"}</button></>
           : <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={returnToDraft}>{busy === "draft" ? "กำลังดำเนินการ…" : "นำกลับ Draft เพื่อแก้ไข"}</button>}
-        <ExamExportButton event={event} />
+        <ExamExportButton event={event} disabled={Boolean(busy) || unsaved} hint={unsaved ? "มีข้อมูลที่ยังไม่บันทึก กดบันทึก Draft ก่อนส่งออก Excel" : ""} />
         {event.status === "draft" && <button type="button" className="danger-button" disabled={Boolean(busy)} onClick={removeDraft}>{busy === "delete" ? "กำลังลบ…" : "ลบ Draft นี้"}</button>}
       </div>
     </section>
