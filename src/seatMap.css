@@ -33,10 +33,10 @@
 .seatmap-mini-moderator { min-height: var(--touch-min, 44px); border: 2px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); font: inherit; font-weight: 700; }
 .seatmap-mini-moderator[aria-pressed="true"], .seatmap-zone-button[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
 .seatmap-mini-zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.seatmap-zone-button { display: grid; gap: 4px; justify-items: center; min-width: 0; padding: 8px 4px; border: 2px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); font: inherit; }
+.seatmap-zone-button { display: grid; align-content: start; gap: 4px; justify-items: center; min-width: 0; padding: 8px 4px; border: 2px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface); font: inherit; }
 .seatmap-zone-name { font-weight: 700; }
 .seatmap-zone-button small { color: var(--text-muted); font-size: .8125rem; text-align: center; }
-.seatmap-mini-grid { display: grid; gap: 3px; width: 100%; }
+.seatmap-mini-grid { display: grid; align-content: start; gap: 3px; width: 100%; min-width: 0; }
 .seatmap-mini { display: grid; place-items: center; aspect-ratio: 1; min-height: 20px; border: 1.5px solid var(--line-strong); border-radius: 4px; font-size: .75rem; line-height: 1; background: var(--surface); }
 .seatmap-mini-taken { background: var(--canvas); }
 .seatmap-mini-held, .seatmap-mini-myhold { border-style: dashed; background: var(--warning-soft); }

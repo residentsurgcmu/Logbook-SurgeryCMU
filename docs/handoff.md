@@ -38,6 +38,8 @@ Real devices (camera, layout at 390 / 320 / 1280 px, Facebook/LINE in-app hint);
 ## Rollback
 `~/Downloads/seat-map-release/production/11b-ROLLBACK-seat-map.sql` (edit the confirm line to `YES` if seat events exist). Reverting the front end alone is safe: sessions without a seat config never showed the panel.
 
+- **iPhone bug found by the owner (2026-10-15), fixed on branch `fix/seatmap-mini-overflow`:** the 2D phone mini map (zone buttons) overflowed its frame. Cause: zone buttons stretch to the tallest zone, the seat grid stretched its rows, and `aspect-ratio: 1` turned tall rows into wide columns (side zones overflowed, page 442 px wide on a 390 px screen). Fix: `align-content: start` on the zone button and grid, `minmax(0, 1fr)` columns. Reproduced and re-checked in headless Chrome at 390/320 px (0 cells outside their zone, no sideways scroll). Lesson: my earlier phone checks covered only the 3D view, not the 2D mini map.
+
 ## Rulings made during the build (change if wrong)
 1. Work in a fresh clone on local branches cut from the docs commit (one extra docs commit).
 2. UI branch built on top of the scan and database branches; shipped as ONE PR.
