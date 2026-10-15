@@ -1,8 +1,9 @@
 -- Admin deletes an exam that is still a Draft. Published exams must be returned to
 -- Draft first. Parts, participants, results and the MPL snapshot go with the event
 -- through their existing ON DELETE CASCADE foreign keys. The results guard trigger
--- refuses deletes on an MPL exam unless app.exam_mpl_save is on, so the flag is set
--- for this transaction only (same device as save_resident_exam_scores).
+-- refuses a direct delete on an MPL exam unless app.exam_mpl_save is on. During the
+-- cascade the parent row is already gone so the guard passes anyway; the transaction-
+-- local flag is kept as a defence in case the guard's lookup ever changes.
 begin;
 
 create or replace function public.delete_resident_exam_event(p_event_id uuid)

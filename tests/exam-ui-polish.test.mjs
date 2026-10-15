@@ -46,3 +46,13 @@ test("both editors offer 'ลบ Draft นี้' only while the exam is a Draft
 test("the exam picker tells equal drafts apart by the number of Residents", () => {
   assert.match(page, /\$\{event\.participants\.length\} คน/);
 });
+
+test("the legacy editor is keyed by exam, so a finished delete cannot leave the next manual exam disabled", () => {
+  assert.match(page, /<ExamEditor key=\{selected\.id\} event=\{selected\}/);
+});
+
+test("the behaviour script closes the save flag again, so its 'legacy save is blocked' and delete checks really run", async () => {
+  const script = await read("./resident-exam-mpl-rollback.sql");
+  const resets = script.match(/perform set_config\('app\.exam_mpl_save', '', true\);/g) || [];
+  assert.ok(resets.length >= 2, "reset the flag after the first score save and before the delete checks");
+});

@@ -64,6 +64,8 @@ begin
     jsonb_build_object('residentId', v_r1, 'partId', v_part, 'score', '60'),
     jsonb_build_object('residentId', v_r2, 'partId', v_part, 'score', '60'),
     jsonb_build_object('residentId', v_r3, 'partId', v_part, 'score', '99')));
+  -- the save flag stays on for the rest of this one transaction (a real RPC call is its own transaction); close it
+  perform set_config('app.exam_mpl_save', '', true);
   select outcome, outcome_source into v_outcome, v_source from public.resident_exam_results where event_id = v_event and resident_id = v_r1;
   if v_outcome <> 'pass' or v_source <> 'computed' then raise exception 'equal to MPL must pass, got %', v_outcome; end if;
   select outcome into v_outcome from public.resident_exam_results where event_id = v_event and resident_id = v_r2;
@@ -123,6 +125,7 @@ begin
 
   -- delete a Draft: refused for a non-Admin and for a published exam; allowed for an Admin on a Draft,
   -- and the parts, participants, results and MPL snapshot go with it
+  perform set_config('app.exam_mpl_save', '', true);
   perform public.zz_act_as(v_r1);
   if public.zz_fails(format($q$select public.delete_resident_exam_event(%L)$q$, v_event)) is not true
     then raise exception 'a Resident must not delete an exam'; end if;

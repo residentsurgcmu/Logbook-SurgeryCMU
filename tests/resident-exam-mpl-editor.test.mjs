@@ -32,7 +32,7 @@ test("publishing warns (but does not block) when cells have no MPL and requires 
 test("the exam page chooses the editor by scoring mode and keeps the legacy editor for manual exams", async () => {
   const src = await read("../src/features/ResidentExams.jsx");
   assert.match(src, /import ExamScoreEditor from "\.\/ExamScoreEditor"/);
-  assert.match(src, /selected\.scoringMode === "mpl" \? <ExamScoreEditor key=\{selected\.id\} event=\{selected\} onRefresh=\{onRefresh\} onDeleted=\{afterDelete\} scoreError=\{examScoreError\} \/> : <ExamEditor event=\{selected\} onRefresh=\{onRefresh\} onDeleted=\{afterDelete\} \/>/);
+  assert.match(src, /selected\.scoringMode === "mpl" \? <ExamScoreEditor key=\{selected\.id\} event=\{selected\} onRefresh=\{onRefresh\} onDeleted=\{afterDelete\} scoreError=\{examScoreError\} \/> : <ExamEditor key=\{selected\.id\} event=\{selected\} onRefresh=\{onRefresh\} onDeleted=\{afterDelete\} \/>/);
 });
 
 test("typed scores survive a background reload: the reset effect depends on the exam id and status, not on the results Map", async () => {

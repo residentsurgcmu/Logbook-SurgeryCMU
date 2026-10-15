@@ -11,7 +11,7 @@ function download(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// `event` is one grouped exam (groupExamRecords): the file matches what is on screen.
+// `event` is one grouped exam (groupExamRecords): the file holds the saved data (typed but unsaved scores or MPL are not included).
 export async function exportExamExcel(event) {
   const { default: ExcelJS } = await import("exceljs");
   const data = await buildExamWorkbook(ExcelJS, event).xlsx.writeBuffer();
