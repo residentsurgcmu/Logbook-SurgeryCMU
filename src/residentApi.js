@@ -575,6 +575,66 @@ export async function setResidentExamPublication(eventId, publish) {
   fail(error);
 }
 
+export async function listExamStandards() {
+  const { data, error } = await supabase
+    .from("resident_exam_standards")
+    .select("id,exam_type,part_name,max_score,resident_exam_standard_mpl(pgy,mpl)")
+    .order("exam_type", { ascending: true })
+    .order("part_name", { ascending: true });
+  fail(error);
+  return (data || []).map((row) => ({
+    id: row.id,
+    examType: row.exam_type,
+    partName: row.part_name,
+    maxScore: String(row.max_score),
+    mpl: Object.fromEntries((row.resident_exam_standard_mpl || []).map((item) => [item.pgy, String(item.mpl)])),
+  }));
+}
+
+export async function saveExamStandards(rows) {
+  const { error } = await supabase.rpc("save_resident_exam_standards", { p_standards: rows });
+  fail(error);
+}
+
+export async function listExamMpl(eventId) {
+  const { data, error } = await supabase
+    .from("resident_exam_mpl")
+    .select("part_id,pgy,mpl")
+    .eq("event_id", eventId);
+  fail(error);
+  return data || [];
+}
+
+export async function updateExamMpl(eventId, rows) {
+  const { error } = await supabase.rpc("update_resident_exam_mpl", {
+    p_event_id: eventId,
+    p_mpl: rows,
+  });
+  fail(error);
+}
+
+export async function createResidentExamMpl(form) {
+  const { data, error } = await supabase.rpc("create_resident_exam_event_mpl", {
+    p_exam_type: form.type,
+    p_exam_date: form.date,
+    p_title: form.title.trim(),
+    p_max_score: form.type === "mcq" ? Number(form.maxScore) : null,
+    p_parts: form.parts,
+    p_participant_ids: form.participantIds,
+  });
+  fail(error);
+  return data;
+}
+
+export async function saveResidentExamScores(eventId, results, mplRows = null) {
+  const { error } = await supabase.rpc("save_resident_exam_scores", {
+    p_event_id: eventId,
+    p_results: results,
+    p_mpl: mplRows,
+  });
+  fail(error);
+}
+
 export async function saveAssignment(staffId, residentId) {
   const { error } = await supabase
     .from("resident_evaluator_assignments")
