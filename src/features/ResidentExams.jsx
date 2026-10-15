@@ -4,6 +4,7 @@ import {
   saveResidentExamResults,
   setResidentExamPublication,
 } from "../residentApi";
+import { groupExamRecords, outcomeLabel, resultKey } from "../examScoring";
 
 const thaiDate = (value) =>
   new Intl.DateTimeFormat("th-TH", {
@@ -26,61 +27,8 @@ const today = () =>
     day: "2-digit",
     timeZone: "Asia/Bangkok",
   }).format(new Date());
-const outcomeLabel = (outcome) =>
-  outcome === "pass" ? "ผ่าน" : outcome === "remediation" ? "ต้องซ่อม" : "—";
 const eventTypeLabel = (type) =>
   type === "xray_anatomy" ? "X-ray & Anatomy" : "MCQ";
-const resultKey = (residentId, partId) => `${residentId}:${partId || "mcq"}`;
-
-function groupExamRecords(records) {
-  const events = new Map();
-  for (const row of records || []) {
-    if (!events.has(row.event_id)) {
-      events.set(row.event_id, {
-        id: row.event_id,
-        type: row.exam_type,
-        date: row.exam_date,
-        title: row.title,
-        maxScore: row.max_score,
-        status: row.status,
-        participants: new Map(),
-        parts: new Map(),
-        results: new Map(),
-      });
-    }
-    const event = events.get(row.event_id);
-    if (!event.participants.has(row.participant_id)) {
-      event.participants.set(row.participant_id, {
-        id: row.participant_id,
-        name: row.resident_name,
-        pgy: row.resident_pgy,
-      });
-    }
-    if (row.part_id && !event.parts.has(row.part_id)) {
-      event.parts.set(row.part_id, {
-        id: row.part_id,
-        name: row.part_name,
-        sortOrder: row.part_sort_order,
-      });
-    }
-    if (row.outcome) {
-      event.results.set(resultKey(row.participant_id, row.part_id), {
-        score: row.score,
-        outcome: row.outcome,
-        updatedAt: row.result_updated_at,
-      });
-    }
-  }
-  return [...events.values()]
-    .map((event) => ({
-      ...event,
-      participants: [...event.participants.values()].sort((a, b) =>
-        a.name.localeCompare(b.name, "th"),
-      ),
-      parts: [...event.parts.values()].sort((a, b) => a.sortOrder - b.sortOrder),
-    }))
-    .sort((a, b) => `${b.date}:${b.id}`.localeCompare(`${a.date}:${a.id}`));
-}
 
 function EventResultTable({ event, participants = event.participants }) {
   if (!participants.length) return null;
