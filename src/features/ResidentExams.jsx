@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  createResidentExam,
+  createResidentExamMpl,
+  listExamStandards,
   saveResidentExamResults,
   setResidentExamPublication,
 } from "../residentApi";
-import { groupExamRecords, outcomeLabel, resultKey } from "../examScoring";
+import { fullScoreError, groupExamRecords, mplError, outcomeLabel, PGY_LEVELS, resultKey } from "../examScoring";
+import { MplInputs } from "./ExamMplFields";
+import ExamStandards from "./ExamStandards";
 
 const thaiDate = (value) =>
   new Intl.DateTimeFormat("th-TH", {
@@ -83,15 +86,30 @@ function EventResultTable({ event, participants = event.participants }) {
   );
 }
 
-function NewExamForm({ residents, onCreated }) {
+function NewExamForm({ residents, standards, onCreated }) {
   const [type, setType] = useState("xray_anatomy");
   const [date, setDate] = useState(today());
   const [title, setTitle] = useState("X-ray & Anatomy");
   const [maxScore, setMaxScore] = useState("");
-  const [parts, setParts] = useState([""]);
+  const blankPart = () => ({ name: "", maxScore: "", mpl: {} });
+  const [parts, setParts] = useState([blankPart()]);
+  const [mcqMpl, setMcqMpl] = useState({});
   const [participantIds, setParticipantIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Copy the central standards into this exam (editable for this exam only).
+  useEffect(() => {
+    if (type === "mcq") {
+      const standard = standards.find((item) => item.examType === "mcq");
+      setMaxScore(standard?.maxScore ?? "");
+      setMcqMpl({ ...(standard?.mpl || {}) });
+    } else {
+      const copied = standards
+        .filter((item) => item.examType === "xray_anatomy")
+        .map((item) => ({ name: item.partName, maxScore: item.maxScore, mpl: { ...item.mpl } }));
+      setParts(copied.length ? copied : [blankPart()]);
+    }
+  }, [type, standards]);
   const residentIds = useMemo(() => residents.map((resident) => resident.id), [residents]);
   // Pre-select everyone once. Refilling an empty selection on every workspace
   // refresh undid "ยกเลิกทั้งหมด" and silently created the exam for all.
@@ -113,29 +131,42 @@ function NewExamForm({ residents, onCreated }) {
   };
   async function submit(event) {
     event.preventDefault();
-    const cleanedParts = parts.map((part) => part.trim());
+    const cleanedParts = parts.map((part) => ({ ...part, name: part.name.trim() }));
     if (!participantIds.length) return setError("กรุณาเลือก Resident ที่เข้าสอบอย่างน้อย 1 คน");
     if (!title.trim()) return setError("กรุณาระบุชื่อข้อสอบ");
-    if (type === "mcq" && (!maxScore || Number(maxScore) <= 0))
-      return setError("กรุณาระบุคะแนนเต็ม MCQ ที่มากกว่า 0");
-    if (type === "xray_anatomy" && (!cleanedParts.length || cleanedParts.some((part) => !part)))
-      return setError("กรุณาระบุ part X-ray & Anatomy ทุกช่อง");
-    if (new Set(cleanedParts.map((part) => part.toLowerCase())).size !== cleanedParts.length)
-      return setError("ชื่อ part X-ray & Anatomy ห้ามซ้ำกัน");
+    if (type === "mcq") {
+      const maxProblem = fullScoreError(maxScore);
+      if (maxProblem) return setError(maxProblem);
+      for (const pgy of PGY_LEVELS) {
+        const problem = mplError(mcqMpl[pgy], maxScore);
+        if (problem) return setError(`MCQ PGY ${pgy}: ${problem}`);
+      }
+    } else {
+      if (!cleanedParts.length || cleanedParts.some((part) => !part.name))
+        return setError("กรุณาระบุ part X-ray & Anatomy ทุกช่อง");
+      if (new Set(cleanedParts.map((part) => part.name.toLowerCase())).size !== cleanedParts.length)
+        return setError("ชื่อ part X-ray & Anatomy ห้ามซ้ำกัน");
+      for (const part of cleanedParts) {
+        const maxProblem = fullScoreError(part.maxScore);
+        if (maxProblem) return setError(`${part.name}: ${maxProblem}`);
+        for (const pgy of PGY_LEVELS) {
+          const problem = mplError(part.mpl[pgy], part.maxScore);
+          if (problem) return setError(`${part.name} PGY ${pgy}: ${problem}`);
+        }
+      }
+    }
     setBusy(true);
     setError("");
     try {
-      const eventId = await createResidentExam({
+      const eventId = await createResidentExamMpl({
         type,
         date,
         title,
         maxScore,
-        partNames: type === "xray_anatomy" ? cleanedParts : [],
+        parts: type === "mcq" ? [{ name: "MCQ", mpl: mcqMpl }] : cleanedParts,
         participantIds,
       });
       await onCreated(eventId);
-      setParts([""]);
-      setMaxScore("");
     } catch (nextError) {
       setError(nextError.message || "สร้างรายการสอบไม่สำเร็จ");
     } finally {
@@ -165,20 +196,26 @@ function NewExamForm({ residents, onCreated }) {
           <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength="160" required />
         </label>
         {type === "mcq" ? (
-          <label>
-            คะแนนเต็ม
-            <input type="number" inputMode="decimal" min="0.01" step="0.01" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} required />
-          </label>
+          <div className="wide exam-parts">
+            <label>
+              คะแนนเต็ม
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} required />
+            </label>
+            <strong>MPL ตามชั้นปี (เฉพาะรอบนี้)</strong>
+            <MplInputs values={mcqMpl} maxScore={maxScore} label="MCQ" onChange={setMcqMpl} />
+          </div>
         ) : (
           <div className="wide exam-parts">
-            <strong>Part X-ray &amp; Anatomy</strong>
+            <strong>Part X-ray &amp; Anatomy (คะแนนเต็ม และ MPL ตามชั้นปี)</strong>
             {parts.map((part, index) => (
-              <div key={index} className="exam-part-row">
-                <input aria-label={`Part ${index + 1}`} value={part} maxLength="120" placeholder="เช่น Upper GI, Breast" onChange={(event) => setParts((current) => current.map((item, position) => position === index ? event.target.value : item))} />
+              <div key={index} className="exam-part-row exam-part-row-mpl">
+                <input aria-label={`Part ${index + 1}`} value={part.name} maxLength="120" placeholder="เช่น Upper GI, Breast" onChange={(event) => setParts((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} />
+                <input aria-label={`คะแนนเต็ม Part ${index + 1}`} type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="คะแนนเต็ม" value={part.maxScore} onChange={(event) => setParts((current) => current.map((item, position) => position === index ? { ...item, maxScore: event.target.value } : item))} />
+                <MplInputs values={part.mpl} maxScore={part.maxScore} label={part.name || `Part ${index + 1}`} onChange={(mpl) => setParts((current) => current.map((item, position) => position === index ? { ...item, mpl } : item))} />
                 {parts.length > 1 && <button type="button" className="text-button" onClick={() => setParts((current) => current.filter((_, position) => position !== index))}>ลบ</button>}
               </div>
             ))}
-            <button type="button" className="secondary-button" onClick={() => setParts((current) => [...current, ""])}>เพิ่ม part</button>
+            <button type="button" className="secondary-button" onClick={() => setParts((current) => [...current, blankPart()])}>เพิ่ม part</button>
           </div>
         )}
         <fieldset className="wide exam-participants">
@@ -367,13 +404,31 @@ function ExamResults({ events, user }) {
 export default function ResidentExams({ workspace, onRefresh }) {
   const events = useMemo(() => groupExamRecords(workspace.examRecords), [workspace.examRecords]);
   const [selectedId, setSelectedId] = useState("");
+  const [view, setView] = useState("exams");
+  const [standards, setStandards] = useState([]);
+  const [standardsError, setStandardsError] = useState("");
   const admin = workspace.user.role === "admin";
   const residents = useMemo(() => workspace.profiles.filter((profile) => profile.pgy), [workspace.profiles]);
   const selected = events.find((event) => event.id === selectedId) || events[0];
+  useEffect(() => {
+    if (!admin) return undefined;
+    let alive = true;
+    listExamStandards()
+      .then((list) => alive && setStandards(list))
+      .catch((nextError) => alive && setStandardsError(nextError.message || "โหลดเกณฑ์ MPL ไม่สำเร็จ"));
+    return () => { alive = false; };
+  }, [admin]);
   if (!admin) return <ExamResults events={events} user={workspace.user} />;
   return <div className="exam-layout">
-    <NewExamForm residents={residents} onCreated={async (eventId) => { setSelectedId(eventId); await onRefresh(); }} />
-    <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
-    {selected && <ExamEditor event={selected} onRefresh={onRefresh} />}
+    <div className="button-row exam-view-switch" role="tablist">
+      <button type="button" role="tab" aria-selected={view === "exams"} className={view === "exams" ? "primary-button" : "secondary-button"} onClick={() => setView("exams")}>รายการสอบ</button>
+      <button type="button" role="tab" aria-selected={view === "standards"} className={view === "standards" ? "primary-button" : "secondary-button"} onClick={() => setView("standards")}>เกณฑ์ MPL</button>
+    </div>
+    {standardsError && <p className="form-error" role="alert">{standardsError}</p>}
+    {view === "standards" ? <ExamStandards standards={standards} onSaved={setStandards} /> : <>
+      <NewExamForm residents={residents} standards={standards} onCreated={async (eventId) => { setSelectedId(eventId); await onRefresh(); }} />
+      <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
+      {selected && <ExamEditor event={selected} onRefresh={onRefresh} />}
+    </>}
   </div>;
 }
