@@ -58,7 +58,7 @@ export function MiniRoom({ map, activeZone, onZone }) {
       {ZONE_INFO.map(({ zone, name, hint }) => <button key={zone} type="button" className="seatmap-zone-button" aria-pressed={activeZone === zone}
         aria-label={`เปิด${name} ว่าง ${free(zone)} ที่`} onClick={() => onZone(zone)}>
         <span className="seatmap-zone-name">{name}</span><small>{hint}</small>
-        <span className="seatmap-mini-grid" style={{ gridTemplateColumns: `repeat(${zoneColumns(groups[zone])}, 1fr)` }}>
+        <span className="seatmap-mini-grid" style={{ gridTemplateColumns: `repeat(${zoneColumns(groups[zone])}, minmax(0, 1fr))` }}>
           {groups[zone].map((seat) => <MiniSeat key={seat.seat_code} seat={seat} map={map} />)}
         </span>
       </button>)}

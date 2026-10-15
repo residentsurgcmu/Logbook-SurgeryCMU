@@ -184,3 +184,14 @@ test("the history describes what happened in plain Thai", () => {
   assert.equal(eventText({ kind: "review", seat_code: null, detail: { decision: "rejected" } }), "อาจารย์ไม่อนุมัติคำขอของคุณ");
   assert.equal(eventText({ kind: "weird" }), "—");
 });
+
+test("phone mini map: stretched zone buttons must not blow the square seats past their zone (iPhone overflow)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../src/seatMap.css", import.meta.url), "utf8");
+  const views = await readFile(new URL("../src/features/SeatMapViews.jsx", import.meta.url), "utf8");
+  const zone = css.match(/\.seatmap-zone-button \{([^}]*)\}/)?.[1] || "";
+  const grid = css.match(/\.seatmap-mini-grid \{([^}]*)\}/)?.[1] || "";
+  assert.match(zone, /align-content: start/, "a zone button stretched to the tallest sibling keeps its content at the top");
+  assert.match(grid, /align-content: start/, "grid rows must not stretch: aspect-ratio would turn tall rows into wide columns");
+  assert.match(views, /repeat\(\$\{zoneColumns\(groups\[zone\]\)\}, minmax\(0, 1fr\)\)/, "mini grid columns can shrink below their content");
+});
