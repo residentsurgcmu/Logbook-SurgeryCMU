@@ -5,7 +5,7 @@ import {
   saveResidentExamResults,
   setResidentExamPublication,
 } from "../residentApi";
-import { fullScoreError, groupExamRecords, mplError, outcomeLabel, PGY_LEVELS, resultKey } from "../examScoring";
+import { fullScoreError, groupExamRecords, mplError, outcomeLabel, participantOutcome, PGY_LEVELS, resultKey } from "../examScoring";
 import { MplInputs } from "./ExamMplFields";
 import ExamScoreEditor from "./ExamScoreEditor";
 import ExamStandards from "./ExamStandards";
@@ -34,8 +34,21 @@ const today = () =>
 const eventTypeLabel = (type) =>
   type === "xray_anatomy" ? "X-ray & Anatomy" : "MCQ";
 
+function MplCell({ result, mpl, max }) {
+  if (!result) return "—";
+  return (
+    <>
+      <strong>{result.score}</strong>{max != null ? ` / ${max}` : ""}
+      <br />
+      <small>{mpl != null ? `MPL ${mpl}` : "ยังไม่ตั้งเกณฑ์"}</small>
+      <span className={`exam-outcome ${result.outcome || "none"}`}>{outcomeLabel(result.outcome, result.outcomeSource)}</span>
+    </>
+  );
+}
+
 function EventResultTable({ event, participants = event.participants }) {
   if (!participants.length) return null;
+  const computed = event.scoringMode === "mpl";
   return (
     <div className="resident-table-wrap">
       <table className="exam-result-table">
@@ -44,10 +57,12 @@ function EventResultTable({ event, participants = event.participants }) {
             <th>Resident</th>
             <th>PGY</th>
             {event.type === "mcq" ? (
-              <>
-                <th>คะแนน</th>
-                <th>ผล</th>
-              </>
+              computed ? <th>คะแนน / ผล</th> : (
+                <>
+                  <th>คะแนน</th>
+                  <th>ผล</th>
+                </>
+              )
             ) : (
               event.parts.map((part) => <th key={part.id}>{part.name}</th>)
             )}
@@ -55,28 +70,37 @@ function EventResultTable({ event, participants = event.participants }) {
         </thead>
         <tbody>
           {participants.map((participant) => {
-            const mcqResult = event.results.get(resultKey(participant.id, null));
+            const mcqKey = resultKey(participant.id, null);
+            const mcqResult = event.results.get(mcqKey);
             return (
               <tr key={participant.id}>
                 <td>{participant.name}</td>
                 <td>{participant.pgy ? `PGY ${participant.pgy}` : "—"}</td>
                 {event.type === "mcq" ? (
-                  <>
-                    <td>
-                      {mcqResult?.score ?? "—"}
-                      {event.maxScore != null ? ` / ${event.maxScore}` : ""}
-                    </td>
-                    <td>{outcomeLabel(mcqResult?.outcome)}</td>
-                  </>
+                  computed ? (
+                    <td><MplCell result={mcqResult} mpl={event.mpls.get(mcqKey)} max={event.maxScore} /></td>
+                  ) : (
+                    <>
+                      <td>
+                        {mcqResult?.score ?? "—"}
+                        {event.maxScore != null ? ` / ${event.maxScore}` : ""}
+                      </td>
+                      <td>{outcomeLabel(mcqResult?.outcome)}</td>
+                    </>
+                  )
                 ) : (
-                  event.parts.map((part) => (
-                    <td key={part.id}>
-                      {outcomeLabel(
-                        event.results.get(resultKey(participant.id, part.id))
-                          ?.outcome,
-                      )}
-                    </td>
-                  ))
+                  event.parts.map((part) => {
+                    const key = resultKey(participant.id, part.id);
+                    return computed ? (
+                      <td key={part.id}><MplCell result={event.results.get(key)} mpl={event.mpls.get(key)} max={part.maxScore} /></td>
+                    ) : (
+                      <td key={part.id}>
+                        {outcomeLabel(
+                          event.results.get(resultKey(participant.id, part.id))?.outcome,
+                        )}
+                      </td>
+                    );
+                  })
                 )}
               </tr>
             );
@@ -384,6 +408,7 @@ function ExamEditor({ event, onRefresh }) {
 function ExamResults({ events, user }) {
   const [pgy, setPgy] = useState("");
   const [residentId, setResidentId] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState("");
   const residents = useMemo(() => {
     const choices = new Map();
     events.forEach((event) => event.participants.forEach((participant) => choices.set(participant.id, participant)));
@@ -392,11 +417,13 @@ function ExamResults({ events, user }) {
   const visibleEvents = events.map((event) => ({
     ...event,
     participants: event.participants.filter((participant) =>
-      (!pgy || Number(participant.pgy) === Number(pgy)) && (!residentId || participant.id === residentId),
+      (!pgy || Number(participant.pgy) === Number(pgy))
+      && (!residentId || participant.id === residentId)
+      && (!outcomeFilter || participantOutcome(event, participant) === outcomeFilter),
     ),
   })).filter((event) => event.participants.length);
   return <>
-    {user.role === "staff" && <section className="resident-panel exam-filters"><h2>ตัวกรองผลสอบ</h2><div className="round-filter-grid"><label>ชั้นปี (PGY)<select value={pgy} onChange={(event) => setPgy(event.target.value)}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select></label><label>Resident<select value={residentId} onChange={(event) => setResidentId(event.target.value)}><option value="">Resident ทุกคน</option>{residents.filter((resident) => !pgy || Number(resident.pgy) === Number(pgy)).map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label></div></section>}
+    {user.role === "staff" && <section className="resident-panel exam-filters"><h2>ตัวกรองผลสอบ</h2><div className="round-filter-grid"><label>ชั้นปี (PGY)<select value={pgy} onChange={(event) => setPgy(event.target.value)}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select></label><label>Resident<select value={residentId} onChange={(event) => setResidentId(event.target.value)}><option value="">Resident ทุกคน</option>{residents.filter((resident) => !pgy || Number(resident.pgy) === Number(pgy)).map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label><label>ผล<select value={outcomeFilter} onChange={(event) => setOutcomeFilter(event.target.value)}><option value="">ทั้งหมด</option><option value="pass">ผ่านทุก part</option><option value="fail">ไม่ผ่านอย่างน้อย 1 part</option></select></label></div></section>}
     {visibleEvents.map((event) => <section className="resident-panel exam-published-result" key={event.id}><div className="section-heading"><h2>{event.title}</h2><p>{eventTypeLabel(event.type)} · {thaiDate(event.date)}</p></div><EventResultTable event={event} /></section>)}
     {!visibleEvents.length && <section className="resident-panel empty"><h2>ยังไม่มีผลสอบที่เผยแพร่</h2><p>ผลสอบจะแสดงเมื่อ Admin เผยแพร่ครบทั้งชุดแล้ว</p></section>}
   </>;
