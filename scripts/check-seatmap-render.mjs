@@ -14,6 +14,7 @@ try {
   const seats = [];
   const add = (code, zone, row, col, extra = {}) => seats.push({ seat_code: code, zone, row_no: row, col_no: col, held: false, occupant: null, ...extra });
   add("M1", "M", 1, 1);
+  add("M2", "M", 1, 2);
   for (let n = 1; n <= 12; n += 1) add(`L${n}`, "L", Math.ceil(n / 3), ((n - 1) % 3) + 1);
   for (let n = 1; n <= 12; n += 1) add(`C${n}`, "C", Math.ceil(n / 2), n % 2 ? 1 : 2);
   for (let n = 1; n <= 12; n += 1) add(`R${n}`, "R", Math.ceil(n / 3), ((n - 1) % 3) + 1);
@@ -28,21 +29,21 @@ try {
       { user_id: "me", name: "ฉัน ทดสอบ", pgy: 2, role: "resident", status: "seat", seat_code: "L2", checked_in_at: "2026-10-16T01:50:00Z", on_time: true },
       { user_id: "gone", name: "ไม่มา ทดสอบ", pgy: 2, role: "resident", status: "absent", seat_code: null, checked_in_at: null, on_time: null },
     ],
-    counts: { seats_total: 37, seats_taken: 2, residents_total: 48, residents_in_room: 2 }, ...overrides,
+    counts: { seats_total: 38, seats_taken: 2, residents_total: 48, residents_in_room: 2 }, ...overrides,
   });
   const noop = () => {};
 
   // the mini-map never shows names; the zone detail and the desktop room do
   const map = base("resident");
   const mini = render(V.MiniRoom, { map, activeZone: "L", onZone: noop });
-  assert.ok(mini.includes("โซนซ้าย") && mini.includes("โต๊ะกลาง") && mini.includes("โซนขวา") && mini.includes("M1"));
+  assert.ok(mini.includes("โซนซ้าย") && mini.includes("โต๊ะกลาง") && mini.includes("โซนขวา") && mini.includes("M1–M2"), "phone overview names both moderator seats");
   assert.ok(!mini.includes("สมชาย") && !mini.includes("ฉัน ทดสอบ"), "mini-map shows no names");
   assert.ok(mini.includes("★") && mini.includes("●") && mini.includes("…"), "symbols, not colour alone");
   const zone = render(V.ZoneGrid, { zone: "C", map, onSeat: noop, showName: true });
   assert.ok(zone.includes("สมชาย ทดสอบ") && zone.includes("grid-template-columns:repeat(2"), "central table is two columns with names");
   assert.ok(zone.includes('style="grid-column:2;grid-row:6" data-seat="C12"'), "C12 sits in column 2, row 6");
   const desktop = render(V.DesktopRoom, { map, onSeat: noop });
-  assert.ok(desktop.includes("จอ / หน้าห้อง") && desktop.includes("Moderator") && (desktop.match(/data-seat=/g) || []).length === 37, "desktop room has all 37 seats");
+  assert.ok(desktop.includes("จอ / หน้าห้อง") && desktop.includes("Moderator") && (desktop.match(/data-seat=/g) || []).length === 38 && desktop.includes('data-seat="M1"') && desktop.includes('data-seat="M2"') && desktop.includes("grid-template-columns:repeat(2"), "desktop room has all 38 seats, two moderator seats side by side");
 
   // seat buttons are enabled only for what the role may do
   const free = (html, code) => !new RegExp(`data-seat="${code}"[^>]*disabled`).test(html) && !new RegExp(`disabled[^>]*data-seat="${code}"`).test(html);

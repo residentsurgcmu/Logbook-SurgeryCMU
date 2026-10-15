@@ -26,8 +26,8 @@ begin
     if not has_function_privilege('authenticated', v_f, 'execute') then raise exception 'authenticated cannot run %', v_f; end if;
     if not (select prosecdef from pg_proc where oid = to_regprocedure(v_f)) then raise exception '% is not SECURITY DEFINER', v_f; end if;
   end loop;
-  if (select count(*) from public.resident_room_seats s join public.resident_room_layouts l on l.id = s.layout_id where l.name = 'ห้องประชุมวันศุกร์ (37 ที่)') <> 37 then
-    raise exception 'The seeded layout does not have 37 seats'; end if;
+  if (select count(*) from public.resident_room_seats s join public.resident_room_layouts l on l.id = s.layout_id where l.name = 'ห้องประชุมวันศุกร์ (38 ที่)') <> 38 then
+    raise exception 'The seeded layout does not have 38 seats (37 + the second moderator seat)'; end if;
   if to_regclass('public.resident_seat_assignments_one_seat_per_user') is null or to_regclass('public.resident_seat_assignments_one_user_per_seat') is null then
     raise exception 'A seat guarantee index is missing'; end if;
   if has_function_privilege('anon', 'private.resident_seat_context(uuid, text)', 'execute') or has_function_privilege('authenticated', 'private.resident_seat_context(uuid, text)', 'execute')

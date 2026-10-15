@@ -28,7 +28,8 @@ export function seatPosition(seat) {
   const { zone, row_no: row, col_no: col } = seat || {};
   if (!Number.isInteger(row) || !Number.isInteger(col) || row < 1 || col < 1) return null;
   const z = (row - 1) * PITCH + SEAT / 2;
-  if (zone === "M") return row === 1 && col === 1 ? { x: ROOM_3D.moderator.x, z: ROOM_3D.moderator.z } : null;
+  // Two moderator seats side by side, centred on the room; M1 left of M2. A layout that only has M1 shows it just left of centre.
+  if (zone === "M") return row === 1 && col <= 2 ? { x: ROOM_3D.moderator.x + (col === 1 ? -1 : 1) * (SEAT / 2 + 0.1), z: ROOM_3D.moderator.z } : null;
   if (zone === "L" || zone === "R") {
     if (col > 3 || row > 4) return null;
     return { x: (zone === "L" ? 0 : R_X) + (col - 1) * PITCH + SEAT / 2, z };

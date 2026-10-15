@@ -48,3 +48,11 @@ test("holds last 60 seconds and writes are serialised per seat", () => {
   assert.match(sql, /interval '60 seconds'/);
   assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\(p_session_id::text \|\| ':' \|\| p_seat_code, 0\)\)/);
 });
+
+test("second moderator migration: adds M2 next to M1, renames the layout, and touches nothing else", async () => {
+  const follow = await readFile(new URL("../supabase/migrations/20261015090000_resident_seat_map_second_moderator.sql", import.meta.url), "utf8");
+  assert.match(follow, /insert into public\.resident_room_seats\(layout_id, seat_code, zone, row_no, col_no\)\s+select l\.id, 'M2', 'M', 1, 2/);
+  assert.match(follow, /on conflict \(layout_id, seat_code\) do nothing/, "re-running it is harmless");
+  assert.match(follow, /update public\.resident_room_layouts\s+set name = 'ห้องประชุมวันศุกร์ \(38 ที่\)'/);
+  assert.doesNotMatch(follow, /create (or replace )?function|drop |delete from|alter table/i, "additive: no function, table or data is dropped or redefined");
+});
