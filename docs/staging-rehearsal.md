@@ -43,6 +43,6 @@ No migrations, schema or files under supabase/ changed in this branch. Supabase 
 ## Exam MPL (migrations 20261015100000 and 20261015110000)
 
 1. Apply `supabase/migrations/20261015100000_exam_mpl_schema.sql`, then `supabase/migrations/20261015110000_exam_mpl_rpcs.sql`, each alone with `supabase db query --linked -f <file>` (never `db push`). Read-only check before and after: `select scoring_mode, count(*) from public.resident_exam_events group by 1;` (all existing rows `manual`) and `select count(*) from public.resident_exam_participants where pgy_at_exam is null;`.
-2. Run `npx --yes supabase db query --linked --file tests/resident-exam-mpl-rollback.sql` (needs one Admin and three Resident accounts; always rolls back). Expect the notice `exam MPL behaviour: all checks passed`.
+2. Run `supabase db query --linked --project-ref <staging-ref> --file tests/resident-exam-mpl-rollback.sql` (from the repo folder, see CLAUDE.md) (needs one Admin and three Resident accounts; always rolls back). Expect the notice `exam MPL behaviour: all checks passed`.
 3. Click-through with test accounts: Admin sets the MPL table, creates an X-ray exam and an MCQ exam, enters scores, sees the live badge, edits an MPL, publishes; Staff sees score / MPL / badge and the pass filter; a Resident sees only their own row; a legacy (manual) exam still opens with the old dropdowns.
 4. Only then merge and let Vercel deploy the frontend.

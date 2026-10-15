@@ -18,6 +18,19 @@ See `README.md` for features, local run and secrets.
   re-run ~39 old migrations, some destructive.
 - Apply a new migration on its own: `supabase db query --linked -f supabase/migrations/<file>.sql`.
   Check the result with a read-only `select` before and after.
+- **Every Supabase CLI command must follow these four rules (2026-10-15: skipping them made two migrations
+  silently never reach production while the frontend went out, and the output was not seen):**
+  1. Use the Homebrew CLI `supabase`, **never `npx --yes supabase`** (npx fetches a newer CLI that cannot read
+     `supabase/.temp/linked-project.json` and fails with `ProjectRefNotLinkedError`).
+  2. Start with `cd ~/Downloads/Logbook-SurgeryCMU-git &&` (the `!` shell opens in `/Users/chagkrit`, not the repo)
+     and always add `--project-ref dyiiivcyoatgmkmvgcnt`:
+     `! cd ~/Downloads/Logbook-SurgeryCMU-git && supabase db query --linked --project-ref dyiiivcyoatgmkmvgcnt -f <file>`.
+  3. Before the first command of a session, check who and where: `pwd`, `git branch --show-current`,
+     `supabase projects list` (the row marked linked must be `dyiiivcyoatgmkmvgcnt`; if it fails, the user runs
+     `! supabase login`), and `gh auth status` (active account must be `residentsurgcmu` before any push).
+  4. One command per `!` line; never paste several `!` lines in one message. An error is never "applied": after each
+     migration run a read-only check (e.g. `select proname, pronargs from pg_proc where proname in (…)`), and only push
+     the frontend after the check shows the new objects. `notify pgrst, 'reload schema';` afterwards for new functions.
 - Production writes (migrations, function deploys) are blocked for Claude by the auto-mode
   classifier. The user runs them with the `!` prefix; Claude verifies read-only.
 - Deploy edge functions with `--no-verify-jwt` (there is no `supabase/config.toml`):
@@ -106,7 +119,7 @@ See `README.md` for features, local run and secrets.
   `npm test` (267 tests) still does not run SQL: the behaviour suite `tests/resident-attempt-rules-behavior.sql` (101 checks) was run on a throwaway local
   PostgreSQL 16 with a small Supabase stand-in, and each release file was also run on the staging project before production.
 - 2026-10-15: seat map 3D view phase 1 (view only, all roles, lazy `three` chunk, no migration, room size = constants in `src/seatMap3d.js`) is **DEPLOYED** (PR #15 + #16). Read `docs/handoff.md` (3D section). **Vercel installs with pnpm and a frozen `pnpm-lock.yaml`: every dependency change must also update it (`npx pnpm@10 install --lockfile-only`), or the deploy fails in seconds.** Also deployed 2026-10-15: PR #17 (2D phone overflow fix) and PR #18 (moderator now has 2 seats M1/M2, either may stay empty; production SQL `12-second-moderator.sql` already applied, layout is now "(38 ที่)"). The seat-map SQL was NOT on production at the first deploy and was applied afterwards (verified).
-- 2026-10-15 (branch feat/exam-mpl, not yet deployed): exam scores + MPL with automatic pass / not pass. Migrations 20261015100000 then 20261015110000 (own queries, never db push); legacy exam RPCs untouched, exams before this are scoring_mode 'manual'; read docs/superpowers/specs/2026-10-15-exam-mpl-design.md and docs/staging-rehearsal.md (Exam MPL).
+- 2026-10-15 (merged to main as 2290f0f, frontend deployed): exam scores + MPL with automatic pass / not pass. Migrations 20261015100000 then 20261015110000 (own queries, never db push); legacy exam RPCs untouched, exams before this are scoring_mode 'manual'; read docs/superpowers/specs/2026-10-15-exam-mpl-design.md and docs/staging-rehearsal.md (Exam MPL). **The migrations were first NOT on production** (the `npx` command failed unseen, frontend went out first, "สร้าง Draft" showed "function not found"); applied afterwards and verified read-only (4 functions in `pg_proc`, schema cache reloaded). Live click-through by the owner still pending. Hence the Supabase CLI rules above.
 
 ## Still open (owner: Chagkrit unless stated)
 - Done: sign-up disabled; real e-mail delivery confirmed on 2026-10-11 (invite, password reset, assessor notice).
