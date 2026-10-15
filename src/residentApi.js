@@ -626,6 +626,11 @@ export async function createResidentExamMpl(form) {
   return data;
 }
 
+export async function deleteResidentExamDraft(eventId) {
+  const { error } = await supabase.rpc("delete_resident_exam_event", { p_event_id: eventId });
+  fail(error);
+}
+
 export async function saveResidentExamScores(eventId, results, mplRows = null) {
   const { error } = await supabase.rpc("save_resident_exam_scores", {
     p_event_id: eventId,

@@ -3,13 +3,14 @@ import {
   examOutcome, missingMplCount, mplError, mplFor, mplMapKey, mplRowsToState, outcomeLabel,
   PGY_LEVELS, resultKey, stateToMplRows,
 } from "../examScoring";
-import { listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
+import { deleteResidentExamDraft, listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
+import ExamExportButton from "./ExamExportButton";
 import { MplInputs } from "./ExamMplFields";
 
 const thaiDate = (value) =>
   new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" }).format(new Date(`${value}T12:00:00+07:00`));
 
-export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
+export default function ExamScoreEditor({ event, onRefresh, onDeleted, scoreError }) {
   const partList = useMemo(
     () => (event.type === "mcq" ? [{ id: null, name: "MCQ", maxScore: event.maxScore }] : event.parts),
     [event],
@@ -126,6 +127,18 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
     } finally { setBusy(""); }
   }
 
+  async function removeDraft() {
+    if (!window.confirm(`ลบ Draft "${event.title}" วันที่ ${thaiDate(event.date)} (${event.participants.length} คน)? คะแนนและเกณฑ์ MPL ของรายการนี้จะหายถาวร`)) return;
+    setBusy("delete"); setError(""); setMessage("");
+    try {
+      await deleteResidentExamDraft(event.id);
+      await onDeleted?.();
+    } catch (nextError) {
+      setError(nextError.message || "ลบ Draft ไม่สำเร็จ");
+      setBusy("");
+    }
+  }
+
   return (
     <section className="resident-panel exam-editor">
       <div className="section-heading">
@@ -184,6 +197,8 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
         {event.status === "draft"
           ? <><button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={save}>{busy === "save" ? "กำลังบันทึก…" : "บันทึก Draft"}</button><button type="button" className="primary-button" disabled={Boolean(busy)} onClick={publish}>{busy === "publish" ? "กำลังเผยแพร่…" : "เผยแพร่ผลสอบ"}</button></>
           : <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={returnToDraft}>{busy === "draft" ? "กำลังดำเนินการ…" : "นำกลับ Draft เพื่อแก้ไข"}</button>}
+        <ExamExportButton event={event} />
+        {event.status === "draft" && <button type="button" className="danger-button" disabled={Boolean(busy)} onClick={removeDraft}>{busy === "delete" ? "กำลังลบ…" : "ลบ Draft นี้"}</button>}
       </div>
     </section>
   );

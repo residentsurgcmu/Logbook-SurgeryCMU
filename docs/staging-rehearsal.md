@@ -46,3 +46,9 @@ No migrations, schema or files under supabase/ changed in this branch. Supabase 
 2. Run `supabase db query --linked --project-ref <staging-ref> --file tests/resident-exam-mpl-rollback.sql` (from the repo folder, see CLAUDE.md) (needs one Admin and three Resident accounts; always rolls back). Expect the notice `exam MPL behaviour: all checks passed`.
 3. Click-through with test accounts: Admin sets the MPL table, creates an X-ray exam and an MCQ exam, enters scores, sees the live badge, edits an MPL, publishes; Staff sees score / MPL / badge and the pass filter; a Resident sees only their own row; a legacy (manual) exam still opens with the old dropdowns.
 4. Only then merge and let Vercel deploy the frontend.
+
+## Exam page polish (migration 20261016090000)
+
+1. Apply `supabase/migrations/20261016090000_exam_delete_draft.sql` alone, from the repo folder: `supabase db query --linked --project-ref <ref> -f supabase/migrations/20261016090000_exam_delete_draft.sql`. Check: `select proname, pronargs from pg_proc where proname = 'delete_resident_exam_event';` (1 row, pronargs 1), then `notify pgrst, 'reload schema';`.
+2. Re-run `tests/resident-exam-mpl-rollback.sql` (now also checks: a Resident cannot delete, a published exam cannot be deleted, an Admin deleting a Draft removes the event, parts, participants, results and MPL snapshot). Expect `exam MPL behaviour: all checks passed`.
+3. Click-through: Admin deletes a Draft (confirmation names the exam, the list moves to the next exam); the delete button is absent on a published exam; "ส่งออก Excel" downloads `ExamResults-<date>-<type>.xlsx` (sheet "ผลสอบ", and "เกณฑ์ MPL" for MPL exams); phone width (390 px): the bottom bar fills the width for every role and the Export page no longer scrolls sideways.
