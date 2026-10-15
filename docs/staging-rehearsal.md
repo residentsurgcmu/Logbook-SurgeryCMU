@@ -39,3 +39,10 @@ Original worktree logbook-review remains untouched. PBA/2.การประเ�
 Working file is an exact byte prefix of the committed file, missing 909,410 trailing bytes and its ZIP end directory; Python cannot open it as a DOCX ZIP. The file command still recognizes its initial Word signature. This supports truncation, not an identifiable text edit. No filesystem audit identifies the responsible program or person. The committed original reports Microsoft Office Word 16 in metadata, but that is not evidence of what truncated the working file. Do not restore until the owner decides.
 
 No migrations, schema or files under supabase/ changed in this branch. Supabase client guard changed in src/supabase.js as supplied by the staging patch.
+
+## Exam MPL (migrations 20261015100000 and 20261015110000)
+
+1. Apply `supabase/migrations/20261015100000_exam_mpl_schema.sql`, then `supabase/migrations/20261015110000_exam_mpl_rpcs.sql`, each alone with `supabase db query --linked -f <file>` (never `db push`). Read-only check before and after: `select scoring_mode, count(*) from public.resident_exam_events group by 1;` (all existing rows `manual`) and `select count(*) from public.resident_exam_participants where pgy_at_exam is null;`.
+2. Run `npx --yes supabase db query --linked --file tests/resident-exam-mpl-rollback.sql` (needs one Admin and three Resident accounts; always rolls back). Expect the notice `exam MPL behaviour: all checks passed`.
+3. Click-through with test accounts: Admin sets the MPL table, creates an X-ray exam and an MCQ exam, enters scores, sees the live badge, edits an MPL, publishes; Staff sees score / MPL / badge and the pass filter; a Resident sees only their own row; a legacy (manual) exam still opens with the old dropdowns.
+4. Only then merge and let Vercel deploy the frontend.

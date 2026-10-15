@@ -25,16 +25,18 @@ Extend the existing exam tab (`src/features/ResidentExams.jsx`, `resident_exam_*
 |---|---|
 | `resident_exam_standards` (new) | `id`, `exam_type`, `part_name`, `max_score`; unique on `(exam_type, lower(part_name))`. MCQ has one row with a fixed part name. |
 | `resident_exam_standard_mpl` (new) | `standard_id`, `pgy` (1-4), `mpl`; unique `(standard_id, pgy)`; `0 <= mpl <= max_score`. |
-| `resident_exam_events` | add `scoring_mode` (`manual` / `mpl`); existing rows backfilled `manual`, new rows `mpl`. |
+| `resident_exam_events` | add `scoring_mode` (`manual` / `mpl`); column default `manual` (existing rows stay `manual`); `create_resident_exam_event_mpl` sets `mpl`. |
 | `resident_exam_parts` | add `max_score` (copied at creation). |
 | `resident_exam_mpl` (new) | snapshot: `event_id`, `part_id` (null for MCQ), `pgy`, `mpl`. |
 | `resident_exam_participants` | add `pgy_at_exam`, set at creation from the Resident's current PGY; existing rows backfilled from current PGY. |
 | `resident_exam_results` | `score` used for every part; `outcome` becomes nullable; add `outcome_source` (`computed` / `manual`), existing rows `manual`. |
 
 ## Server behaviour
-- `save_resident_exam_results(event_id, results[{resident_id, part_id, score}])`: caller is Admin; event is draft; participant belongs to the event; score format and `score <= part max`; for `scoring_mode = 'mpl'` ignore any client outcome and set `outcome` from the snapshot MPL for `(event, part, pgy_at_exam)`; blank score is not stored. For `scoring_mode = 'manual'` the current behaviour is unchanged.
+- The legacy `create_resident_exam_event` and `save_resident_exam_results` stay unchanged and keep serving `manual` exams (old browser tabs keep working). A trigger on `resident_exam_results` rejects any non-`computed` outcome on an `mpl` exam, so the legacy save cannot bypass the rule.
+- `create_resident_exam_event_mpl`: the browser sends the parts, full scores and MPL (pre-filled from the standards, editable for this exam only); the server reuses the legacy validation, sets `scoring_mode = 'mpl'`, locks `pgy_at_exam`, stores part full scores and the MPL snapshot, and validates `0 <= MPL <= full score`.
+- `save_resident_exam_scores(event_id, results[{residentId, partId, score}])`: caller is Admin; event is `mpl` and draft; participant belongs to the event; score format and `score <= part max`; the client never sends an outcome, the server sets it from the snapshot MPL for `(event, part, pgy_at_exam)`; a blank score is not stored.
 - `update_resident_exam_mpl(event_id, rows)`: draft only; validates `0 <= mpl <= part max`; rewrites the snapshot and recomputes every outcome of the event in the same transaction.
-- `create_resident_exam_event` copies parts, max scores and MPL from the standards into the snapshot and records `pgy_at_exam`. Standards and MPL edits are Admin only.
+- `save_resident_exam_standards(rows)`: Admin only; replaces the central table.
 - `list_resident_exam_records` adds `part_max_score`, `mpl`, `pgy_at_exam`, `scoring_mode`, `outcome_source`; Residents still receive only their own rows.
 
 ## Permissions (RLS)
@@ -51,6 +53,7 @@ Score format or above max (`examScoreError`, now with a per-part max); MPL not a
 ## Testing and rollout
 - Pure function `examOutcome(score, mpl)` tested with `node --test`: equal to MPL passes, 0.01 below fails, no MPL gives empty, above max errors.
 - Regex tests on the SQL and source in the repo style: RPC does not take `outcome` for `mpl` exams, snapshot exists, `pgy_at_exam` set, legacy rows backfilled `manual`.
+- `tests/resident-exam-mpl-rollback.sql` (always rolls back) is run on staging after both migrations.
 - SQL cannot run locally: add a rehearsal section to `docs/staging-rehearsal.md` and run on staging first.
 - Order: migration (own `supabase db query --linked -f`), then frontend push. Production writes are run by the owner; Claude verifies read-only.
 
