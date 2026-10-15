@@ -100,6 +100,7 @@ begin
   if v_event.scoring_mode <> 'mpl' then raise exception 'This exam records outcomes by hand'; end if;
   if v_event.status <> 'draft' then raise exception 'Return the exam to Draft before editing results'; end if;
 
+  perform set_config('app.exam_mpl_save', 'on', true);
   delete from public.resident_exam_results where event_id = p_event_id;
   for v_result in select value from jsonb_array_elements(p_results) loop
     if jsonb_typeof(v_result) <> 'object'

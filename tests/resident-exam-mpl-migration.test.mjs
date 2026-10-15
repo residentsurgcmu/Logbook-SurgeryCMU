@@ -41,7 +41,7 @@ test("RLS: standards for Admin/Staff only, snapshot only for published events th
 });
 
 test("trigger refuses a non-computed outcome on an MPL exam, so the legacy save RPC cannot bypass the rule", () => {
-  assert.match(sql, /create trigger resident_exam_results_mode_guard\s+before insert or update on public\.resident_exam_results/);
+  assert.match(sql, /create trigger resident_exam_results_mode_guard\s+before insert or update or delete on public\.resident_exam_results/);
   assert.match(sql, /e\.scoring_mode = 'mpl'\s*\)\s*and new\.outcome_source <> 'computed'/);
 });
 
@@ -54,4 +54,11 @@ test("save_resident_exam_standards is Admin only, replaces the table, and checks
   assert.match(fn, /revoke all on function public\.save_resident_exam_standards\(jsonb\) from public, anon/);
   assert.match(fn, /grant execute on function public\.save_resident_exam_standards\(jsonb\) to authenticated/);
   assert.match(sql, /\^\[0-9\]\{1,8\}\(\\\.\[0-9\]\{1,2\}\)\?\$/);
+});
+
+test("the guard also blocks DELETE of computed results unless a new RPC set the transaction-local flag", () => {
+  assert.match(sql, /before insert or update or delete on public\.resident_exam_results/);
+  assert.match(sql, /tg_op = 'DELETE'/);
+  assert.match(sql, /current_setting\('app\.exam_mpl_save', true\) is distinct from 'on'/);
+  assert.match(sql, /return old;/);
 });

@@ -98,10 +98,22 @@ grant execute on function private.resident_exam_parse_number(text, numeric, text
 
 -- An MPL exam's outcome is always computed on the server. The legacy save RPC
 -- inserts outcome_source = 'manual' (the column default) and is refused here.
+-- Deleting results is allowed only inside save_resident_exam_scores, which sets
+-- the transaction-local flag app.exam_mpl_save first; the legacy save RPC starts
+-- with a bare delete, so an old browser tab cannot wipe computed results.
 create or replace function private.resident_exam_results_mode_guard()
 returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  if tg_op = 'DELETE' then
+    if exists (
+      select 1 from public.resident_exam_events e
+      where e.id = old.event_id and e.scoring_mode = 'mpl'
+    ) and current_setting('app.exam_mpl_save', true) is distinct from 'on' then
+      raise exception 'MPL exam results are replaced only by save_resident_exam_scores';
+    end if;
+    return old;
+  end if;
   if exists (
     select 1 from public.resident_exam_events e
     where e.id = new.event_id and e.scoring_mode = 'mpl'
@@ -112,7 +124,7 @@ begin
 end;
 $$;
 create trigger resident_exam_results_mode_guard
-  before insert or update on public.resident_exam_results
+  before insert or update or delete on public.resident_exam_results
   for each row execute function private.resident_exam_results_mode_guard();
 
 create or replace function public.save_resident_exam_standards(p_standards jsonb)

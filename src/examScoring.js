@@ -83,7 +83,8 @@ export function groupExamRecords(records) {
       event.participants.set(row.participant_id, {
         id: row.participant_id,
         name: row.resident_name,
-        pgy: row.pgy_at_exam ?? row.resident_pgy,
+        // An MPL exam never falls back to today's profile PGY: a null lock means "no MPL level".
+        pgy: event.scoringMode === "mpl" ? (row.pgy_at_exam ?? null) : (row.pgy_at_exam ?? row.resident_pgy),
       });
     }
     if (row.part_id && !event.parts.has(row.part_id)) {

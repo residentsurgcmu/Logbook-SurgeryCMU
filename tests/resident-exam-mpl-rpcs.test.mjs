@@ -75,3 +75,10 @@ test("every new function is closed to anon", () => {
     assert.match(sql, new RegExp(`grant execute on function public\\.${signature} to authenticated`));
   }
 });
+
+test("save_resident_exam_scores sets the transaction-local flag before it deletes the old results", () => {
+  const body = fn("save_resident_exam_scores");
+  const flag = body.indexOf("set_config('app.exam_mpl_save', 'on', true)");
+  assert.ok(flag > 0, "flag missing");
+  assert.ok(flag < body.indexOf("delete from public.resident_exam_results"), "flag must be set before the delete");
+});

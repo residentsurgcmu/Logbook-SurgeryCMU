@@ -67,7 +67,7 @@ test("groupExamRecords uses PGY at exam time, keeps part max, MPL and null outco
   const a = event.participants.find((p) => p.id === "r1");
   assert.equal(a.pgy, 2, "promoted Resident keeps the PGY at exam time");
   const b = event.participants.find((p) => p.id === "r2");
-  assert.equal(b.pgy, 1, "falls back to the profile PGY when none was locked");
+  assert.equal(b.pgy, null, "an MPL exam never falls back to today's profile PGY");
   assert.equal(event.mpls.get(resultKey("r1", "p1")), 65);
   assert.equal(event.mpls.has(resultKey("r2", "p1")), false);
   const noOutcome = event.results.get(resultKey("r2", "p1"));
@@ -78,7 +78,7 @@ test("groupExamRecords uses PGY at exam time, keeps part max, MPL and null outco
 test("legacy rows (no new columns) still group as manual exams", () => {
   const [event] = groupExamRecords([{ ...row({}), scoring_mode: undefined, part_max_score: undefined, pgy_at_exam: undefined, mpl: undefined, outcome_source: undefined, score: null }]);
   assert.equal(event.scoringMode, "manual");
-  assert.equal(event.participants[0].pgy, 3);
+  assert.equal(event.participants[0].pgy, 3, "manual exams still show the profile PGY");
   assert.equal(event.results.get(resultKey("r1", "p1")).outcome, "pass");
 });
 

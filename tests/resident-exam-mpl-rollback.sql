@@ -78,6 +78,10 @@ begin
   if public.zz_fails(format($q$select public.save_resident_exam_results(%L, jsonb_build_array(
       jsonb_build_object('residentId', %L, 'partId', %L, 'score', null, 'outcome', 'pass')))$q$, v_event, v_r1, v_part)) is not true
     then raise exception 'legacy save must be blocked on an MPL exam'; end if;
+  if public.zz_fails(format($q$select public.save_resident_exam_results(%L, '[]'::jsonb)$q$, v_event)) is not true
+    then raise exception 'legacy save with an empty payload must not delete computed results'; end if;
+  if (select count(*) from public.resident_exam_results where event_id = v_event) <> 3
+    then raise exception 'computed results must still be there after the blocked legacy save'; end if;
 
   -- editing MPL recomputes: lower PGY2 MPL to 55 -> r2 passes; clear PGY1 -> r1 null
   perform public.update_resident_exam_mpl(v_event, jsonb_build_array(

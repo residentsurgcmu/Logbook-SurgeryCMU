@@ -34,3 +34,11 @@ test("the exam page chooses the editor by scoring mode and keeps the legacy edit
   assert.match(src, /import ExamScoreEditor from "\.\/ExamScoreEditor"/);
   assert.match(src, /selected\.scoringMode === "mpl" \? <ExamScoreEditor event=\{selected\} onRefresh=\{onRefresh\} scoreError=\{examScoreError\} \/> : <ExamEditor event=\{selected\} onRefresh=\{onRefresh\} \/>/);
 });
+
+test("typed scores survive a background reload: the reset effect depends on the exam id and status, not on the results Map", async () => {
+  const src = await read("../src/features/ExamScoreEditor.jsx");
+  const start = src.indexOf("const initial = {};");
+  const effect = src.slice(start, src.indexOf("}, [", start) + 40);
+  assert.match(effect, /\}, \[event\.id, event\.status\]\);/);
+  assert.doesNotMatch(effect, /event\.results\]/);
+});

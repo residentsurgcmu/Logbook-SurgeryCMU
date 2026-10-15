@@ -35,7 +35,7 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
     setScores(initial);
     setError("");
     setMessage("");
-  }, [event.id, event.status, event.results]);
+  }, [event.id, event.status]);
 
   useEffect(() => {
     let alive = true;
