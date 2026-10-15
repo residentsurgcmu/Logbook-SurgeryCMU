@@ -7,6 +7,7 @@ import {
 } from "../residentApi";
 import { fullScoreError, groupExamRecords, mplError, outcomeLabel, PGY_LEVELS, resultKey } from "../examScoring";
 import { MplInputs } from "./ExamMplFields";
+import ExamScoreEditor from "./ExamScoreEditor";
 import ExamStandards from "./ExamStandards";
 
 const thaiDate = (value) =>
@@ -428,7 +429,7 @@ export default function ResidentExams({ workspace, onRefresh }) {
     {view === "standards" ? <ExamStandards standards={standards} onSaved={setStandards} /> : <>
       <NewExamForm residents={residents} standards={standards} onCreated={async (eventId) => { setSelectedId(eventId); await onRefresh(); }} />
       <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
-      {selected && <ExamEditor event={selected} onRefresh={onRefresh} />}
+      {selected && (selected.scoringMode === "mpl" ? <ExamScoreEditor event={selected} onRefresh={onRefresh} scoreError={examScoreError} /> : <ExamEditor event={selected} onRefresh={onRefresh} />)}
     </>}
   </div>;
 }
