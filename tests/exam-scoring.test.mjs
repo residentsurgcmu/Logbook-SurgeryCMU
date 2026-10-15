@@ -104,3 +104,14 @@ test("outcomeLabel: computed says ไม่ผ่าน, legacy manual says ต�
   assert.equal(outcomeLabel(null, "computed"), "ยังไม่ตั้งเกณฑ์");
   assert.equal(outcomeLabel(null, "manual"), "—");
 });
+
+test("residentChoices keeps each Resident once, with the PGY from the newest exam, sorted by name", async () => {
+  const { residentChoices } = await import("../src/examScoring.js");
+  const events = [
+    { id: "new", participants: [{ id: "r1", name: "ก", pgy: 3 }, { id: "r2", name: "ข", pgy: 1 }] },
+    { id: "old", participants: [{ id: "r1", name: "ก", pgy: 2 }, { id: "r3", name: "ค", pgy: 4 }] },
+  ];
+  const choices = residentChoices(events);
+  assert.deepEqual(choices.map((c) => c.id), ["r1", "r2", "r3"]);
+  assert.equal(choices.find((c) => c.id === "r1").pgy, 3);
+});

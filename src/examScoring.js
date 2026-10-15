@@ -115,6 +115,15 @@ export function groupExamRecords(records) {
     .sort((a, b) => `${b.date}:${b.id}`.localeCompare(`${a.date}:${a.id}`));
 }
 
+// One entry per Resident; events are newest first, so the first sighting carries the newest PGY.
+export function residentChoices(events) {
+  const choices = new Map();
+  events.forEach((event) => event.participants.forEach((participant) => {
+    if (!choices.has(participant.id)) choices.set(participant.id, participant);
+  }));
+  return [...choices.values()].sort((a, b) => a.name.localeCompare(b.name, "th"));
+}
+
 export function participantOutcome(event, participant) {
   const cells = event.type === "mcq" ? [null] : event.parts.map((part) => part.id);
   const outcomes = cells.map((partId) => event.results.get(resultKey(participant.id, partId))?.outcome ?? null);

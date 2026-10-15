@@ -3,7 +3,7 @@ import {
   examOutcome, missingMplCount, mplError, mplFor, mplMapKey, mplRowsToState, outcomeLabel,
   PGY_LEVELS, resultKey, stateToMplRows,
 } from "../examScoring";
-import { listExamMpl, saveResidentExamScores, setResidentExamPublication, updateExamMpl } from "../residentApi";
+import { listExamMpl, saveResidentExamScores, setResidentExamPublication } from "../residentApi";
 import { MplInputs } from "./ExamMplFields";
 
 const thaiDate = (value) =>
@@ -81,8 +81,8 @@ export default function ExamScoreEditor({ event, onRefresh, scoreError }) {
   async function persist(requireComplete) {
     checkMpl();
     const records = payload(requireComplete);
-    if (mplDirty) await updateExamMpl(event.id, stateToMplRows(mplState));
-    await saveResidentExamScores(event.id, records);
+    // One call: the server replaces the MPL (when changed) and saves the scores in one transaction.
+    await saveResidentExamScores(event.id, records, mplDirty ? stateToMplRows(mplState) : null);
   }
   async function save() {
     setBusy("save"); setError(""); setMessage("");

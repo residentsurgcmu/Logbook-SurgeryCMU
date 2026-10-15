@@ -626,10 +626,11 @@ export async function createResidentExamMpl(form) {
   return data;
 }
 
-export async function saveResidentExamScores(eventId, results) {
+export async function saveResidentExamScores(eventId, results, mplRows = null) {
   const { error } = await supabase.rpc("save_resident_exam_scores", {
     p_event_id: eventId,
     p_results: results,
+    p_mpl: mplRows,
   });
   fail(error);
 }

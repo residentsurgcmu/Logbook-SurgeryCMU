@@ -76,7 +76,8 @@ grant execute on function public.create_resident_exam_event_mpl(text, date, text
 
 create or replace function public.save_resident_exam_scores(
   p_event_id uuid,
-  p_results jsonb
+  p_results jsonb,
+  p_mpl jsonb default null
 ) returns void
 language plpgsql security definer set search_path = public, private, auth as $$
 declare
@@ -100,6 +101,11 @@ begin
   if v_event.scoring_mode <> 'mpl' then raise exception 'This exam records outcomes by hand'; end if;
   if v_event.status <> 'draft' then raise exception 'Return the exam to Draft before editing results'; end if;
 
+  -- The MPL rows (when the Admin changed them) are replaced in the same transaction
+  -- as the scores, so a failed score save never leaves a half-applied MPL edit.
+  if p_mpl is not null then
+    perform private.resident_exam_replace_mpl(p_event_id, p_mpl);
+  end if;
   perform set_config('app.exam_mpl_save', 'on', true);
   delete from public.resident_exam_results where event_id = p_event_id;
   for v_result in select value from jsonb_array_elements(p_results) loop
@@ -151,13 +157,14 @@ begin
   where id = p_event_id;
 end;
 $$;
-revoke all on function public.save_resident_exam_scores(uuid, jsonb) from public, anon;
-grant execute on function public.save_resident_exam_scores(uuid, jsonb) to authenticated;
+revoke all on function public.save_resident_exam_scores(uuid, jsonb, jsonb) from public, anon;
+grant execute on function public.save_resident_exam_scores(uuid, jsonb, jsonb) to authenticated;
 
-create or replace function public.update_resident_exam_mpl(
-  p_event_id uuid,
-  p_mpl jsonb
-) returns void
+-- Replaces the MPL snapshot of an MPL exam and recomputes its outcomes. Callers
+-- (update_resident_exam_mpl, save_resident_exam_scores) have already checked the
+-- Admin role, locked the event row and checked scoring_mode and draft status.
+create or replace function private.resident_exam_replace_mpl(p_event_id uuid, p_mpl jsonb)
+returns void
 language plpgsql security definer set search_path = public, private, auth as $$
 declare
   v_event public.resident_exam_events%rowtype;
@@ -168,14 +175,9 @@ declare
   v_key text;
   v_seen text[] := array[]::text[];
 begin
-  if not (select private.resident_role_is('admin')) then
-    raise exception 'Active Admin account required';
-  end if;
   if coalesce(jsonb_typeof(p_mpl), '') <> 'array' then raise exception 'MPL rows must be an array'; end if;
-  select * into v_event from public.resident_exam_events where id = p_event_id for update;
+  select * into v_event from public.resident_exam_events where id = p_event_id;
   if not found then raise exception 'Exam was not found'; end if;
-  if v_event.scoring_mode <> 'mpl' then raise exception 'This exam records outcomes by hand'; end if;
-  if v_event.status <> 'draft' then raise exception 'Return the exam to Draft before editing MPL'; end if;
 
   delete from public.resident_exam_mpl where event_id = p_event_id;
   for v_item in select value from jsonb_array_elements(p_mpl) loop
@@ -219,6 +221,28 @@ begin
   where result.event_id = p_event_id
     and participant.event_id = result.event_id
     and participant.resident_id = result.resident_id;
+end;
+$$;
+revoke all on function private.resident_exam_replace_mpl(uuid, jsonb) from public, anon, authenticated;
+
+create or replace function public.update_resident_exam_mpl(
+  p_event_id uuid,
+  p_mpl jsonb
+) returns void
+language plpgsql security definer set search_path = public, private, auth as $$
+declare
+  v_event public.resident_exam_events%rowtype;
+begin
+  if not (select private.resident_role_is('admin')) then
+    raise exception 'Active Admin account required';
+  end if;
+  if coalesce(jsonb_typeof(p_mpl), '') <> 'array' then raise exception 'MPL rows must be an array'; end if;
+  select * into v_event from public.resident_exam_events where id = p_event_id for update;
+  if not found then raise exception 'Exam was not found'; end if;
+  if v_event.scoring_mode <> 'mpl' then raise exception 'This exam records outcomes by hand'; end if;
+  if v_event.status <> 'draft' then raise exception 'Return the exam to Draft before editing MPL'; end if;
+
+  perform private.resident_exam_replace_mpl(p_event_id, p_mpl);
 
   update public.resident_exam_events
   set updated_by = (select auth.uid()), updated_at = clock_timestamp()

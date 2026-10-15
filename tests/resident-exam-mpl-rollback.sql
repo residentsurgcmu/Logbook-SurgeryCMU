@@ -91,6 +91,18 @@ begin
   select outcome into v_outcome from public.resident_exam_results where event_id = v_event and resident_id = v_r1;
   if v_outcome is not null then raise exception 'cleared MPL must give a null outcome'; end if;
 
+  -- one transaction: a score save carrying an invalid MPL changes neither the MPL nor the scores
+  if public.zz_fails(format($q$select public.save_resident_exam_scores(%L,
+      jsonb_build_array(jsonb_build_object('residentId', %L, 'partId', %L, 'score', '1')),
+      jsonb_build_array(jsonb_build_object('partId', %L, 'pgy', 2, 'mpl', '999')))$q$, v_event, v_r2, v_part, v_part)) is not true
+    then raise exception 'invalid MPL in a score save must be refused'; end if;
+  select mpl into v_mpl from public.resident_exam_mpl where event_id = v_event and part_id = v_part and pgy = 2;
+  if v_mpl is distinct from 55 then raise exception 'a refused combined save must leave the MPL as it was, got %', v_mpl; end if;
+  if (select count(*) from public.resident_exam_results where event_id = v_event) <> 3
+    then raise exception 'a refused combined save must leave the scores as they were'; end if;
+  if public.zz_fails($q$select public.save_resident_exam_standards(jsonb_build_array(jsonb_build_object('partName', 'X', 'maxScore', '10')))$q$)
+    is not true then raise exception 'a standard without examType must be refused'; end if;
+
   -- restore PGY1 MPL, publish, then a promotion must not change the published row
   perform public.update_resident_exam_mpl(v_event, jsonb_build_array(
     jsonb_build_object('partId', v_part, 'pgy', 1, 'mpl', '60'),

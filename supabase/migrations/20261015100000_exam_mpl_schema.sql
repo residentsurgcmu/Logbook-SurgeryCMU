@@ -153,7 +153,7 @@ begin
     if jsonb_typeof(v_item) <> 'object' then raise exception 'Standard is invalid'; end if;
     v_type := v_item->>'examType';
     v_name := btrim(coalesce(v_item->>'partName', ''));
-    if v_type not in ('xray_anatomy', 'mcq') or char_length(v_name) not between 1 and 120 then
+    if v_type is null or v_type not in ('xray_anatomy', 'mcq') or char_length(v_name) not between 1 and 120 then
       raise exception 'Standard is invalid';
     end if;
     v_key := v_type || ':' || lower(v_name);

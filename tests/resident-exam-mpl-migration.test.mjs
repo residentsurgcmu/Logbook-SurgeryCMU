@@ -62,3 +62,7 @@ test("the guard also blocks DELETE of computed results unless a new RPC set the 
   assert.match(sql, /current_setting\('app\.exam_mpl_save', true\) is distinct from 'on'/);
   assert.match(sql, /return old;/);
 });
+
+test("a standard without an examType is refused with the clean message, not a raw NOT NULL error", () => {
+  assert.match(sql, /if v_type is null or v_type not in \('xray_anatomy', 'mcq'\)/);
+});

@@ -17,7 +17,7 @@ test("each call goes to the matching database object with the agreed parameter n
   assert.match(api, /supabase\.rpc\("update_resident_exam_mpl", \{\s*p_event_id: eventId,\s*p_mpl: rows,?\s*\}\)/);
   assert.match(api, /supabase\.rpc\("create_resident_exam_event_mpl", \{/);
   assert.match(api, /p_parts: form\.parts,/);
-  assert.match(api, /supabase\.rpc\("save_resident_exam_scores", \{\s*p_event_id: eventId,\s*p_results: results,?\s*\}\)/);
+  assert.match(api, /supabase\.rpc\("save_resident_exam_scores", \{\s*p_event_id: eventId,\s*p_results: results,\s*p_mpl: mplRows,?\s*\}\)/);
 });
 
 test("the outcome is never sent when saving MPL scores", () => {

@@ -43,13 +43,14 @@ test("save_resident_exam_scores never reads an outcome from the client and compu
   assert.match(body, /for update/);
 });
 
-test("update_resident_exam_mpl is draft-only and recomputes every outcome in the same transaction", () => {
+test("update_resident_exam_mpl is draft-only; the shared helper rewrites the snapshot and recomputes every outcome", () => {
   const body = fn("update_resident_exam_mpl");
   assert.match(body, /v_event\.status <> 'draft'/);
-  assert.match(body, /delete from public\.resident_exam_mpl where event_id = p_event_id/);
-  assert.match(body, /update public\.resident_exam_results result\s+set outcome = \(/);
-  assert.match(body, /outcome_source = 'computed'/);
-  assert.match(body, /MPL row is duplicated/);
+  const helper = sql.slice(sql.indexOf("create or replace function private.resident_exam_replace_mpl"), sql.indexOf("create or replace function public.update_resident_exam_mpl"));
+  assert.match(helper, /delete from public\.resident_exam_mpl where event_id = p_event_id/);
+  assert.match(helper, /update public\.resident_exam_results result\s+set outcome = \(/);
+  assert.match(helper, /outcome_source = 'computed'/);
+  assert.match(helper, /MPL row is duplicated/);
 });
 
 test("list_resident_exam_records is dropped and recreated with the new columns, same visibility rule", () => {
@@ -68,7 +69,7 @@ test("list_resident_exam_records is dropped and recreated with the new columns, 
 test("every new function is closed to anon", () => {
   for (const signature of [
     "create_resident_exam_event_mpl\\(text, date, text, numeric, jsonb, jsonb\\)",
-    "save_resident_exam_scores\\(uuid, jsonb\\)",
+    "save_resident_exam_scores\\(uuid, jsonb, jsonb\\)",
     "update_resident_exam_mpl\\(uuid, jsonb\\)",
   ]) {
     assert.match(sql, new RegExp(`revoke all on function public\\.${signature} from public, anon`));
@@ -81,4 +82,12 @@ test("save_resident_exam_scores sets the transaction-local flag before it delete
   const flag = body.indexOf("set_config('app.exam_mpl_save', 'on', true)");
   assert.ok(flag > 0, "flag missing");
   assert.ok(flag < body.indexOf("delete from public.resident_exam_results"), "flag must be set before the delete");
+});
+
+test("the MPL replacement is one private helper shared by update_resident_exam_mpl and the score save (one transaction)", () => {
+  assert.match(sql, /create or replace function private\.resident_exam_replace_mpl\(p_event_id uuid, p_mpl jsonb\)/);
+  assert.match(fn("update_resident_exam_mpl"), /perform private\.resident_exam_replace_mpl\(p_event_id, p_mpl\)/);
+  const body = fn("save_resident_exam_scores");
+  assert.match(body, /p_mpl jsonb default null/);
+  assert.match(body, /if p_mpl is not null then\s+perform private\.resident_exam_replace_mpl\(p_event_id, p_mpl\);\s+end if;/);
 });

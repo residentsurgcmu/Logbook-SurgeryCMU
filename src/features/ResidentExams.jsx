@@ -5,7 +5,7 @@ import {
   saveResidentExamResults,
   setResidentExamPublication,
 } from "../residentApi";
-import { fullScoreError, groupExamRecords, mplError, outcomeLabel, participantOutcome, PGY_LEVELS, resultKey } from "../examScoring";
+import { fullScoreError, groupExamRecords, mplError, outcomeLabel, participantOutcome, PGY_LEVELS, residentChoices, resultKey } from "../examScoring";
 import { MplInputs } from "./ExamMplFields";
 import ExamScoreEditor from "./ExamScoreEditor";
 import ExamStandards from "./ExamStandards";
@@ -19,7 +19,7 @@ const thaiDate = (value) =>
 // which Resident's cell is wrong instead of a generic English error.
 export function examScoreError(value, maxScore) {
   const text = String(value ?? "").trim();
-  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(text)) return "ต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง";
+  if (!/^[0-9]{1,8}(\.[0-9]{1,2})?$/.test(text)) return "ต้องเป็นตัวเลขไม่ติดลบ ทศนิยมไม่เกิน 2 ตำแหน่ง";
   if (maxScore != null && Number(text) > Number(maxScore)) return `ต้องไม่เกินคะแนนเต็ม ${maxScore}`;
   return "";
 }
@@ -122,19 +122,27 @@ function NewExamForm({ residents, standards, onCreated }) {
   const [participantIds, setParticipantIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // Copy the central standards into this exam (editable for this exam only).
+  // Copy the central standards into this exam (editable for this exam only). A section
+  // the Admin has already touched is never overwritten by late-loading standards, and
+  // switching the exam type keeps both sections' values.
+  const editedParts = useRef(false);
+  const editedMcq = useRef(false);
+  const changeParts = (updater) => { editedParts.current = true; setParts(updater); };
+  const changeMaxScore = (value) => { editedMcq.current = true; setMaxScore(value); };
+  const changeMcqMpl = (value) => { editedMcq.current = true; setMcqMpl(value); };
   useEffect(() => {
-    if (type === "mcq") {
+    if (!editedMcq.current) {
       const standard = standards.find((item) => item.examType === "mcq");
       setMaxScore(standard?.maxScore ?? "");
       setMcqMpl({ ...(standard?.mpl || {}) });
-    } else {
+    }
+    if (!editedParts.current) {
       const copied = standards
         .filter((item) => item.examType === "xray_anatomy")
         .map((item) => ({ name: item.partName, maxScore: item.maxScore, mpl: { ...item.mpl } }));
       setParts(copied.length ? copied : [blankPart()]);
     }
-  }, [type, standards]);
+  }, [standards]);
   const residentIds = useMemo(() => residents.map((resident) => resident.id), [residents]);
   // Pre-select everyone once. Refilling an empty selection on every workspace
   // refresh undid "ยกเลิกทั้งหมด" and silently created the exam for all.
@@ -224,23 +232,23 @@ function NewExamForm({ residents, standards, onCreated }) {
           <div className="wide exam-parts">
             <label>
               คะแนนเต็ม
-              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} required />
+              <input type="number" inputMode="decimal" min="0.01" step="0.01" value={maxScore} onChange={(event) => changeMaxScore(event.target.value)} required />
             </label>
             <strong>MPL ตามชั้นปี (เฉพาะรอบนี้)</strong>
-            <MplInputs values={mcqMpl} maxScore={maxScore} label="MCQ" onChange={setMcqMpl} />
+            <MplInputs values={mcqMpl} maxScore={maxScore} label="MCQ" onChange={changeMcqMpl} />
           </div>
         ) : (
           <div className="wide exam-parts">
             <strong>Part X-ray &amp; Anatomy (คะแนนเต็ม และ MPL ตามชั้นปี)</strong>
             {parts.map((part, index) => (
               <div key={index} className="exam-part-row exam-part-row-mpl">
-                <input aria-label={`Part ${index + 1}`} value={part.name} maxLength="120" placeholder="เช่น Upper GI, Breast" onChange={(event) => setParts((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} />
-                <input aria-label={`คะแนนเต็ม Part ${index + 1}`} type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="คะแนนเต็ม" value={part.maxScore} onChange={(event) => setParts((current) => current.map((item, position) => position === index ? { ...item, maxScore: event.target.value } : item))} />
-                <MplInputs values={part.mpl} maxScore={part.maxScore} label={part.name || `Part ${index + 1}`} onChange={(mpl) => setParts((current) => current.map((item, position) => position === index ? { ...item, mpl } : item))} />
-                {parts.length > 1 && <button type="button" className="text-button" onClick={() => setParts((current) => current.filter((_, position) => position !== index))}>ลบ</button>}
+                <input aria-label={`Part ${index + 1}`} value={part.name} maxLength="120" placeholder="เช่น Upper GI, Breast" onChange={(event) => changeParts((current) => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item))} />
+                <input aria-label={`คะแนนเต็ม Part ${index + 1}`} type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="คะแนนเต็ม" value={part.maxScore} onChange={(event) => changeParts((current) => current.map((item, position) => position === index ? { ...item, maxScore: event.target.value } : item))} />
+                <MplInputs values={part.mpl} maxScore={part.maxScore} label={part.name || `Part ${index + 1}`} onChange={(mpl) => changeParts((current) => current.map((item, position) => position === index ? { ...item, mpl } : item))} />
+                {parts.length > 1 && <button type="button" className="text-button" onClick={() => changeParts((current) => current.filter((_, position) => position !== index))}>ลบ</button>}
               </div>
             ))}
-            <button type="button" className="secondary-button" onClick={() => setParts((current) => [...current, blankPart()])}>เพิ่ม part</button>
+            <button type="button" className="secondary-button" onClick={() => changeParts((current) => [...current, blankPart()])}>เพิ่ม part</button>
           </div>
         )}
         <fieldset className="wide exam-participants">
@@ -409,11 +417,7 @@ function ExamResults({ events, user }) {
   const [pgy, setPgy] = useState("");
   const [residentId, setResidentId] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
-  const residents = useMemo(() => {
-    const choices = new Map();
-    events.forEach((event) => event.participants.forEach((participant) => choices.set(participant.id, participant)));
-    return [...choices.values()].sort((a, b) => a.name.localeCompare(b.name, "th"));
-  }, [events]);
+  const residents = useMemo(() => residentChoices(events), [events]);
   const visibleEvents = events.map((event) => ({
     ...event,
     participants: event.participants.filter((participant) =>
@@ -456,7 +460,7 @@ export default function ResidentExams({ workspace, onRefresh }) {
     {view === "standards" ? <ExamStandards standards={standards} onSaved={setStandards} /> : <>
       <NewExamForm residents={residents} standards={standards} onCreated={async (eventId) => { setSelectedId(eventId); await onRefresh(); }} />
       <section className="resident-panel exam-event-picker"><h2>รายการสอบ</h2><label>เลือกข้อสอบ<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{thaiDate(event.date)} · {event.title} · {event.status === "published" ? "เผยแพร่แล้ว" : "Draft"}</option>)}</select></label>{!events.length && <p className="muted-empty">ยังไม่มีรายการสอบ</p>}</section>
-      {selected && (selected.scoringMode === "mpl" ? <ExamScoreEditor event={selected} onRefresh={onRefresh} scoreError={examScoreError} /> : <ExamEditor event={selected} onRefresh={onRefresh} />)}
+      {selected && (selected.scoringMode === "mpl" ? <ExamScoreEditor key={selected.id} event={selected} onRefresh={onRefresh} scoreError={examScoreError} /> : <ExamEditor event={selected} onRefresh={onRefresh} />)}
     </>}
   </div>;
 }
