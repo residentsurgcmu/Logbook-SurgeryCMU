@@ -39,7 +39,7 @@ test("workbook has ordered Thai sheets, all forms, frozen name/header, fixed wid
   assert.equal(epa.rowCount, 4); assert.equal(pba.rowCount, 4);
   assert.deepEqual(epa.getRow(1).values.slice(1, 3), ["ชื่อ Resident", "PGY"]);
   assert.deepEqual(EPA_CODES.map((_, i) => epa.getRow(1).getCell(3 + i * 3).value), EPA_CODES.map((code) => `${code}${code === "EPA-8" ? " (ไม่นับในเกณฑ์สอบบอร์ด)" : ""} ใช้แล้ว/เพดาน`));
-  assert.equal(epa.getRow(1).getCell(30).value, "EPA ถึงเกณฑ์ x/8");
+  assert.equal(epa.getRow(1).getCell(30).value, "EPA ถึงเกณฑ์ x/7"); // D-017: board EPA = 7 items
   assert.deepEqual(pba.getRow(1).values.slice(3, 6), ["ทำแล้ว n เรื่อง (เป้า 16)", "ปีนี้ n เรื่อง (เป้าปีละ 4)", "รอประเมิน k"]);
   assert.deepEqual(pba.getRow(1).values.slice(6), PBA_CODES);
   for (const sheet of book.worksheets) {
@@ -48,16 +48,16 @@ test("workbook has ordered Thai sheets, all forms, frozen name/header, fixed wid
   }
 });
 
-test("EPA displays 2/3, extra cap, pending, unlimited and excludes EPA-8 from x/8", () => {
+test("EPA displays 2/3, extra cap, pending, unlimited and excludes EPA-8 from x/7", () => {
   const epa = workbook().getWorksheet("EPA");
   assert.equal(epa.getRow(2).getCell("EPA-1_used").value, "2/3");
   assert.equal(epa.getRow(2).getCell("EPA-1_year").value, 1);
   assert.equal(epa.getRow(2).getCell("EPA-1_met").value, "ใช่");
   assert.equal(epa.getRow(2).getCell("EPA-8_used").value, "1/ไม่จำกัด");
-  assert.equal(epa.getRow(2).getCell("summary").value, "1/8");
+  assert.equal(epa.getRow(2).getCell("summary").value, "1/7");
   assert.equal(epa.getRow(3).getCell("EPA-1_used").value, "3/4 · รอประเมิน");
   assert.equal(epa.getRow(3).getCell("EPA-1_met").value, "ไม่ใช่");
-  assert.equal(epa.getRow(4).getCell("summary").value, "0/8");
+  assert.equal(epa.getRow(4).getCell("summary").value, "0/7");
 });
 
 test("PBA counts finished forms, distinct topics with completed_this_year > 0, counts waiting and renders ✓ / … / empty", () => {
@@ -126,4 +126,13 @@ test("admin-only integration and pre-mount gate; existing API behavior is extend
   assert.match(api, /p_resident_id: residentId, p_template_id: templateId, p_reason: reason/);
   const exporter = await readFile(new URL("../src/adminProgressExcelExport.js", import.meta.url), "utf8");
   assert.match(exporter, /await import\("exceljs"\)/);
+});
+
+test("D-017: Admin EPA x/7 counts EPA 7 once, only when both levels reached", async () => {
+  const { countBoardEpaMet, EPA_BOARD_TOTAL } = await import("../src/adminProgress.js");
+  assert.equal(EPA_BOARD_TOTAL, 7);
+  assert.equal(countBoardEpaMet((code) => code === "EPA-7-L1-L2"), 0);
+  assert.equal(countBoardEpaMet((code) => code === "EPA-7-L1-L2" || code === "EPA-7-L3"), 1);
+  assert.equal(countBoardEpaMet((code) => code === "EPA-8"), 0);
+  assert.equal(countBoardEpaMet(() => true), 7);
 });

@@ -106,7 +106,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
 
       <section className="ms-card" aria-labelledby="ms-board">
         <h2 id="ms-board">เช็กลิสต์ก่อนสอบบอร์ด</h2>
-        <p className="ms-muted">นับต่อปีการศึกษา (เริ่ม 1 ก.ค.) · “ถึงเกณฑ์” = ทุกข้อใน 1 แบบประเมินได้ระดับ L4/L5 (EPA 7 ได้ M/E)</p>
+        <p className="ms-muted">นับต่อปีการศึกษา (เริ่ม 1 ก.ค.) · “ถึงเกณฑ์” = ทุกข้อใน 1 แบบประเมินได้ระดับ L4/L5 (EPA 7 ได้ M/E) · เป้า EPA 7 ข้อ ไม่นับ EPA-8 และ EPA 7 นับ 1 ข้อเมื่อถึงเกณฑ์ทั้ง L1-L2 และ L3</p>
         <h3>EPA</h3>
         <ul className="ms-list">{data.board.epa.map((item) => <EpaRow key={item.code} item={item} />)}</ul>
         <h3>PBA</h3>

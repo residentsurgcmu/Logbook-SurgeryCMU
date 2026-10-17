@@ -1,4 +1,4 @@
-import { EPA_CODES, PBA_CODES, PROGRESS_WARNING, bangkokProgressTime, progressResidents } from "./adminProgress.js";
+import { EPA_CODES, PBA_CODES, PROGRESS_WARNING, bangkokProgressTime, progressResidents, EPA_BOARD_TOTAL, countBoardEpaMet } from "./adminProgress.js";
 
 function formatSheet(sheet) {
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -19,7 +19,7 @@ export function buildAdminProgressWorkbook(ExcelJS, { rows, generatedAt }) {
     ["เพดาน", "จำนวนครั้งทั้งหมดที่ใช้ได้ รวมครั้งที่ Admin เพิ่มให้; ไม่จำกัด แปลว่าไม่มีเพดาน"],
     ["ปีนี้ (EPA)", "จำนวนครั้งที่ใช้ในปีการศึกษานี้ รวมคำขอที่ยังรอประเมิน"],
     ["ถึงเกณฑ์", "มีผลประเมินเสร็จครั้งใดครั้งหนึ่งที่ทุกเกณฑ์เป็น L4/L5 (M/E สำหรับ EPA 7)"],
-    ["EPA ถึงเกณฑ์ x/8", "นับเฉพาะ EPA ที่นับในเกณฑ์สอบบอร์ด ไม่รวม EPA-8"],
+    ["EPA ถึงเกณฑ์ x/7", "เป้าสอบบอร์ด EPA 1–7 (7 ข้อ) ไม่รวม EPA-8; EPA 7 นับเป็น 1 ข้อเมื่อถึงเกณฑ์ทั้ง EPA-7-L1-L2 และ EPA-7-L3"],
     ["ทำแล้ว (PBA)", "จำนวนเรื่องที่มีผลประเมินเสร็จแล้วอย่างน้อยหนึ่งครั้ง เป้า 16 เรื่อง; คำขอที่รอไม่นับว่าทำแล้ว"],
     ["ปีนี้ (PBA)", "จำนวนเรื่องไม่ซ้ำที่มีผลประเมินเสร็จในปีการศึกษานี้ (completed_this_year > 0) เป้าปีละ 4 เรื่อง; เรื่องเดิมหลายผลนับ 1 เรื่อง; ผลที่เชื่อมคำขอใช้ปีของ submitted_at ของคำขอ ส่วนผลที่ Admin บันทึกตรงใช้ assessment_date"],
     ["รอประเมิน (PBA)", "จำนวนเรื่องที่มีคำขอรอประเมิน อาจเป็นเรื่องที่เคยประเมินเสร็จแล้วด้วย"],
@@ -38,7 +38,7 @@ export function buildAdminProgressWorkbook(ExcelJS, { rows, generatedAt }) {
       { header: `${label} ปีนี้`, key: `${code}_year`, width: 18 },
       { header: `${label} ถึงเกณฑ์`, key: `${code}_met`, width: 20 },
     ];
-  }), { header: "EPA ถึงเกณฑ์ x/8", key: "summary", width: 24 }];
+  }), { header: "EPA ถึงเกณฑ์ x/7", key: "summary", width: 24 }];
   pba.columns = [...identity,
     { header: "ทำแล้ว n เรื่อง (เป้า 16)", key: "done", width: 28 },
     { header: "ปีนี้ n เรื่อง (เป้าปีละ 4)", key: "year", width: 28 },
@@ -53,16 +53,16 @@ export function buildAdminProgressWorkbook(ExcelJS, { rows, generatedAt }) {
   for (const resident of progressResidents(rows)) {
     const forms = byResident.get(resident.id);
     const epaRow = { name: resident.name, pgy: resident.pgy };
-    let met = 0;
+    const metCodes = new Set();
     for (const code of EPA_CODES) {
       const form = forms.get(code);
       if (!form) continue; // Absent/inactive forms stay blank, never invent progress.
       epaRow[`${code}_used`] = `${form.attempts_used}/${form.attempts_cap ?? "ไม่จำกัด"}${form.has_pending ? " · รอประเมิน" : ""}`;
       epaRow[`${code}_year`] = form.attempts_this_year;
       epaRow[`${code}_met`] = form.met === true ? "ใช่" : "ไม่ใช่";
-      if (code !== "EPA-8" && form.counts_for_board === true && form.met === true) met++;
+      if (code !== "EPA-8" && form.counts_for_board === true && form.met === true) metCodes.add(code);
     }
-    epaRow.summary = `${met}/8`;
+    epaRow.summary = `${countBoardEpaMet((code) => metCodes.has(code))}/${EPA_BOARD_TOTAL}`;
     epa.addRow(epaRow);
     const pbaRow = { name: resident.name, pgy: resident.pgy, done: 0, year: 0, pending: 0 };
     for (const code of PBA_CODES) {

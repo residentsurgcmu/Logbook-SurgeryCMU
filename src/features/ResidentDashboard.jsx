@@ -11,7 +11,8 @@ import {
   ScanIcon,
   UserIcon,
 } from "../components/Icons";
-import { STALE_PENDING_DAYS, TARGET_ASSESSMENTS_PER_FORM, buildDashboard } from "../residentAnalytics";
+import { STALE_PENDING_DAYS, buildDashboard } from "../residentAnalytics";
+import { buildMySpace } from "../mySpace";
 
 const readableDateTime = (value) =>
   value
@@ -76,6 +77,22 @@ export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest
     (workspace.allProfiles || workspace.profiles).map((profile) => [profile.id, profile.name]),
   );
   const role = workspace.user.role;
+  // Resident numbers come from the same module as My space (D-016/D-017), so the two pages always agree.
+  const mine = useMemo(
+    () =>
+      role === "resident"
+        ? buildMySpace({
+            user: workspace.user,
+            requests: workspace.requests,
+            assessments: workspace.assessments,
+            templates: workspace.templates,
+            epaProgress: workspace.epaProgress,
+            profiles: workspace.allProfiles || workspace.profiles || [],
+            now: new Date(),
+          })
+        : null,
+    [workspace, role],
+  );
   const cards =
     role === "admin"
       ? [
@@ -99,11 +116,14 @@ export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest
             ["ส่งแล้วทั้งหมด", workspace.requests.length, BookIcon],
             ["รอ Staff ประเมิน", dashboard.pending.length, ClockIcon],
             ["ประเมินแล้ว", dashboard.completed, CheckIcon],
-            [
-              `แบบที่ครบ ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง`,
-              `${dashboard.typeTotals.reduce((sum, item) => sum + item.targetMet, 0)}/${workspace.templates.length}`,
-              ChartIcon,
-            ],
+            ...(mine
+              ? [[
+                  "โควต้าปีการศึกษานี้",
+                  `${mine.plan.pbaThisYear}/${mine.plan.pbaYearTarget}`,
+                  ChartIcon,
+                  `PBA ปีนี้ (เรื่อง) · EPA ยังส่งได้อีก ${mine.epaAvailable ? mine.plan.epaCanSend.length : "—"} แบบ`,
+                ]]
+              : []),
           ];
   return (
     <div className="dashboard-stack">
@@ -114,7 +134,7 @@ export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest
         onNavigate={onNavigate}
       />
       <section className="dashboard-summary" aria-label="สรุปภาพรวม">
-        {cards.map(([label, value, Icon]) => {
+        {cards.map(([label, value, Icon, note]) => {
           const focus =
             role === "staff" && label === "Resident ที่เกี่ยวข้อง"
               ? "related"
@@ -140,6 +160,7 @@ export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest
               <div>
                 <small>{label}</small>
                 <strong>{typeof value === "number" ? value.toLocaleString("th-TH") : value}</strong>
+                {note && <span className="metric-note">{note}</span>}
               </div>
             </Element>
           );
@@ -250,45 +271,81 @@ export default function ResidentDashboard({ workspace, onNavigate, onOpenRequest
           )}
         </section>
       </div>
-      <section className="resident-panel progress-panel" aria-labelledby="progress-title">
-        <div className="panel-title-row">
-          <div>
-            <h2 id="progress-title">{role === "resident" ? "ความก้าวหน้าเทียบเป้า" : "สัดส่วนคำขอที่ประเมินเสร็จ"}</h2>
-            <p>
-              {role === "resident"
-                ? `เป้าหมาย: แต่ละแบบ EPA/PBA ได้รับการประเมิน ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง (นับแบบละไม่เกิน ${TARGET_ASSESSMENTS_PER_FORM} ครั้ง)`
-                : "ประเมินเสร็จ ÷ (ประเมินเสร็จ + ยังรอ) แยกตามประเภทแบบประเมิน"}
-            </p>
+      {role === "resident" ? (
+        <section className="resident-panel progress-panel" aria-labelledby="progress-title">
+          <div className="panel-title-row">
+            <div>
+              <h2 id="progress-title">ความก้าวหน้าเทียบเป้า</h2>
+              <p>เป้าก่อนสอบบอร์ด: EPA 1–7 ถึงเกณฑ์ 7 ข้อ (ไม่นับ EPA-8 · EPA 7 ต้องถึงเกณฑ์ทั้ง L1-L2 และ L3) · PBA 16 เรื่อง</p>
+            </div>
+            <ChartIcon size={22} />
           </div>
-          <ChartIcon size={22} />
-        </div>
-        {dashboard.typeTotals.map((item) => {
-          const percent = role === "resident" ? item.targetPercent : item.completionPercent;
-          return (
+          {[
+            {
+              type: "EPA",
+              done: mine.counters.epaReached,
+              total: mine.counters.epaTotal,
+              text: mine.counters.epaReached == null ? "โหลดความคืบหน้า EPA ไม่สำเร็จ ลองรีเฟรชหน้านี้" : `ถึงเกณฑ์ ${mine.counters.epaReached} จาก ${mine.counters.epaTotal} ข้อ`,
+            },
+            {
+              type: "PBA",
+              done: mine.counters.pbaFinished,
+              total: mine.counters.pbaTarget,
+              text: `ประเมินเสร็จ ${mine.counters.pbaFinished} จาก ${mine.counters.pbaTarget} เรื่อง`,
+            },
+          ].map((item) => {
+            const percent = item.done == null || !item.total ? 0 : Math.round((Math.min(item.done, item.total) / item.total) * 100);
+            return (
+              <div className="progress-row" key={item.type}>
+                <div>
+                  <strong>{item.type}</strong>
+                  <span>{item.text}</span>
+                </div>
+                <div
+                  className="progress-track"
+                  role="progressbar"
+                  aria-label={`${item.type} ความพร้อมก่อนสอบบอร์ด`}
+                  aria-valuemin={0}
+                  aria-valuemax={item.total}
+                  aria-valuenow={item.done ?? 0}
+                >
+                  <i style={{ width: `${percent}%` }} />
+                </div>
+                <b>{item.done == null ? "—" : `${item.done}/${item.total}`}</b>
+              </div>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="resident-panel progress-panel" aria-labelledby="progress-title">
+          <div className="panel-title-row">
+            <div>
+              <h2 id="progress-title">สัดส่วนคำขอที่ประเมินเสร็จ</h2>
+              <p>ประเมินเสร็จ ÷ (ประเมินเสร็จ + ยังรอ) แยกตามประเภทแบบประเมิน</p>
+            </div>
+            <ChartIcon size={22} />
+          </div>
+          {dashboard.typeTotals.map((item) => (
             <div className="progress-row" key={item.type}>
               <div>
                 <strong>{item.type}</strong>
-                <span>
-                  {role === "resident"
-                    ? `ครบเป้า ${item.targetMet} จาก ${item.templates} แบบ · ประเมินแล้ว ${item.targetDone} จาก ${item.targetTotal} ครั้ง`
-                    : `${item.templates} แบบ · ประเมินแล้ว ${item.completed} · รอ ${item.pending}`}
-                </span>
+                <span>{`${item.templates} แบบ · ประเมินแล้ว ${item.completed} · รอ ${item.pending}`}</span>
               </div>
               <div
                 className="progress-track"
                 role="progressbar"
-                aria-label={`${item.type} ${role === "resident" ? "ความก้าวหน้าเทียบเป้า" : "สัดส่วนที่ประเมินเสร็จ"}`}
+                aria-label={`${item.type} สัดส่วนที่ประเมินเสร็จ`}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-valuenow={percent}
+                aria-valuenow={item.completionPercent}
               >
-                <i style={{ width: `${percent}%` }} />
+                <i style={{ width: `${item.completionPercent}%` }} />
               </div>
-              <b>{role === "resident" ? `${item.targetDone}/${item.targetTotal}` : `${percent}%`}</b>
+              <b>{`${item.completionPercent}%`}</b>
             </div>
-          );
-        })}
-      </section>
+          ))}
+        </section>
+      )}
       {role === "admin" && (
         <section className="resident-panel">
           <div className="panel-title-row">

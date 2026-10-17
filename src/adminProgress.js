@@ -1,6 +1,12 @@
 // Pure helpers shared by the Admin panels and the Excel builder.
 export const EPA_CODES = ["EPA-1", "EPA-2", "EPA-3", "EPA-4", "EPA-5", "EPA-6", "EPA-7-L1-L2", "EPA-7-L3", "EPA-8"];
 export const PBA_CODES = Array.from({ length: 21 }, (_, i) => `PBA-${String(i + 1).padStart(2, "0")}`);
+// Board-exam EPA readiness (D-017, 2026-10-17): EPA 1–7 = 7 items. EPA-8 never counts. EPA 7 counts as one
+// item, and only when BOTH EPA-7-L1-L2 and EPA-7-L3 have reached the level. My space, the Resident home page and
+// the Admin progress file all count with this one list so the numbers can never disagree.
+export const EPA_BOARD_ITEMS = [["EPA-1"], ["EPA-2"], ["EPA-3"], ["EPA-4"], ["EPA-5"], ["EPA-6"], ["EPA-7-L1-L2", "EPA-7-L3"]];
+export const EPA_BOARD_TOTAL = EPA_BOARD_ITEMS.length;
+export const countBoardEpaMet = (isMet) => EPA_BOARD_ITEMS.filter((codes) => codes.every((code) => isMet(code))).length;
 export const PROGRESS_WARNING = "ไฟล์นี้มีข้อมูลรายบุคคลของ Resident ใช้ภายในภาควิชาเท่านั้น ห้ามส่งต่อในกลุ่มสาธารณะ";
 
 export function adminAttemptError(error) {
