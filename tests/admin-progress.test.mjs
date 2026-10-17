@@ -60,10 +60,10 @@ test("EPA displays 2/3, extra cap, pending, unlimited and excludes EPA-8 from x/
   assert.equal(epa.getRow(4).getCell("summary").value, "0/8");
 });
 
-test("PBA counts finished forms, sums completed_this_year, counts waiting and renders ✓ / … / empty", () => {
+test("PBA counts finished forms, distinct topics with completed_this_year > 0, counts waiting and renders ✓ / … / empty", () => {
   const pba = workbook().getWorksheet("PBA");
   assert.equal(pba.getRow(2).getCell("done").value, 1);
-  assert.equal(pba.getRow(2).getCell("year").value, 2);
+  assert.equal(pba.getRow(2).getCell("year").value, 1);
   assert.equal(pba.getRow(2).getCell("pending").value, 2);
   assert.equal(pba.getRow(2).getCell("PBA-01").value, "✓");
   assert.equal(pba.getRow(2).getCell("PBA-02").value, "…");

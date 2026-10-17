@@ -58,11 +58,14 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
       </section>
 
       <ul className="ms-counters" aria-label="ตัวเลขสรุปของฉัน">
-        <li><b>{counters.waiting}</b><span>รอประเมิน</span></li>
-        <li><b>{counters.finishedThisYear}</b><span>ประเมินเสร็จปีนี้</span></li>
+        <li><b>{counters.waitingEpa}</b><span>รอประเมิน (EPA)</span><small>ครั้ง</small></li>
+        <li><b>{counters.waitingPba}</b><span>รอประเมิน (PBA)</span><small>เรื่อง</small></li>
+        <li><b>{counters.finishedEpaThisYear}</b><span>ประเมินเสร็จปีนี้ (EPA)</span><small>ครั้ง</small></li>
+        <li><b>{counters.finishedPbaThisYear}</b><span>ประเมินเสร็จปีนี้ (PBA)</span><small>เรื่อง</small></li>
         <li><b>{counters.epaReached == null ? "—" : `${counters.epaReached}/${counters.epaTotal}`}</b><span>EPA ถึงเกณฑ์</span></li>
         <li><b>{counters.pbaFinished}/{counters.pbaTarget}</b><span>PBA เสร็จแล้ว</span></li>
       </ul>
+      {counters.waitingUnknown > 0 && <p className="ms-note" role="status">มีคำขอรอประเมินที่ระบุประเภท EPA/PBA ไม่ได้ {counters.waitingUnknown} คำขอ แสดงในรายการรอการประเมินด้านล่าง กรุณาติดต่อ Admin เพื่อตรวจสอบ</p>}
       {!data.epaAvailable && <p className="ms-note" role="status">ยังโหลดความคืบหน้า EPA ไม่ได้ ลองรีเฟรชหน้านี้ ส่วนอื่นยังใช้ได้ตามปกติ</p>}
 
       <section className="ms-card" aria-labelledby="ms-waiting">

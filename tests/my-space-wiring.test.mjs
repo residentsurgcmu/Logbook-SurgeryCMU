@@ -31,6 +31,21 @@ test("the page renders the seven sections with the exact Thai headings and label
     assert.ok(page.includes(text), `missing: ${text}`);
 });
 
+test("summary renders six separate cards with units and reports unclassified pending requests", async () => {
+  const page = await read("src/features/ResidentMySpace.jsx");
+  const counters = page.slice(page.indexOf('<ul className="ms-counters"'), page.indexOf("</ul>", page.indexOf('<ul className="ms-counters"')));
+  assert.equal((counters.match(/<li>/g) || []).length, 6);
+  for (const [key, label, unit] of [
+    ["waitingEpa", "รอประเมิน (EPA)", "ครั้ง"], ["waitingPba", "รอประเมิน (PBA)", "เรื่อง"],
+    ["finishedEpaThisYear", "ประเมินเสร็จปีนี้ (EPA)", "ครั้ง"], ["finishedPbaThisYear", "ประเมินเสร็จปีนี้ (PBA)", "เรื่อง"],
+  ]) assert.ok(counters.includes(`<li><b>{counters.${key}}</b><span>${label}</span><small>${unit}</small></li>`));
+  assert.doesNotMatch(page, /counters\.(waiting|finishedThisYear)\}/);
+  assert.match(page, /counters\.waitingUnknown > 0/);
+  assert.match(page, /ระบุประเภท EPA\/PBA ไม่ได้ \{counters\.waitingUnknown\} คำขอ/);
+  assert.match(page, /attendance\.loading/);
+  assert.match(page, /ยังโหลดความคืบหน้า EPA ไม่ได้/);
+});
+
 test("forbidden wording and combined totals are absent from the page, module and styles", async () => {
   const files = await Promise.all(["src/features/ResidentMySpace.jsx", "src/mySpace.js", "src/mySpace.css"].map(read));
   for (const source of files) {
