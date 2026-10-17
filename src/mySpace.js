@@ -1,6 +1,6 @@
 // "My space": every number on the Resident's own page is computed here, without React or the network,
 // so it can be tested. Forms are counted with the same lists the Admin progress file uses.
-import { EPA_CODES, PBA_CODES } from "./adminProgress.js";
+import { EPA_BOARD_TOTAL, EPA_CODES, PBA_CODES, countBoardEpaMet } from "./adminProgress.js";
 import { academicYearStart, bangkokDate, levelThreshold } from "./residentAssessmentRules.js";
 
 export const EPA_BOARD_CODES = EPA_CODES.filter((code) => code !== "EPA-8");
@@ -148,8 +148,8 @@ export function buildMySpace({
       waitingUnknown,
       finishedEpaThisYear: finishedEpaThisYear.length,
       finishedPbaThisYear: pbaDoneThisYear.size,
-      epaReached: epaAvailable ? epaRows.filter((row) => row.state === "reached").length : null,
-      epaTotal: EPA_BOARD_CODES.length,
+      epaReached: epaAvailable ? countBoardEpaMet((code) => epaRows.some((row) => row.code === code && row.state === "reached")) : null,
+      epaTotal: EPA_BOARD_TOTAL,
       pbaFinished: pbaDone.size,
       pbaTarget: PBA_TARGET,
     },

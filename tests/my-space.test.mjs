@@ -40,13 +40,25 @@ test("six separate counters: EPA attempts and PBA distinct topics; nothing combi
     requests: [request("EPA-3"), request("PBA-02"), request("EPA-4", { status: "cancelled" }), request("EPA-5", { status: "completed" })],
     assessments: [assessment("EPA-1", "2026-09-01"), assessment("PBA-01", "2026-08-01"), assessment("EPA-2", "2026-05-01")],
   });
-  assert.deepEqual(space.counters, { waitingEpa: 1, waitingPba: 1, waitingUnknown: 0, finishedEpaThisYear: 1, finishedPbaThisYear: 1, epaReached: 2, epaTotal: 8, pbaFinished: 1, pbaTarget: 16 });
+  assert.deepEqual(space.counters, { waitingEpa: 1, waitingPba: 1, waitingUnknown: 0, finishedEpaThisYear: 1, finishedPbaThisYear: 1, epaReached: 2, epaTotal: 7, pbaFinished: 1, pbaTarget: 16 }); // D-017: board EPA = 7 items
   assert.equal(space.epaAvailable, true);
 });
 
-test("EPA-8 never counts toward x/8", () => {
+test("EPA-8 never counts toward x/7", () => {
   const rows = epaProgress().map((row) => (row.template_code === "EPA-8" ? { ...row, met: true } : row));
   assert.equal(build({ epaProgress: rows }).counters.epaReached, 0);
+});
+
+test("D-017: EPA 7 counts as one board item, only when both EPA-7-L1-L2 and EPA-7-L3 reached", () => {
+  const met = (codes) => epaProgress().map((row) => (codes.includes(row.template_code) ? { ...row, met: true } : row));
+  assert.equal(build({ epaProgress: met(["EPA-7-L1-L2"]) }).counters.epaReached, 0);
+  assert.equal(build({ epaProgress: met(["EPA-7-L3"]) }).counters.epaReached, 0);
+  assert.equal(build({ epaProgress: met(["EPA-7-L1-L2", "EPA-7-L3"]) }).counters.epaReached, 1);
+  const all = build({ epaProgress: met(["EPA-1", "EPA-2", "EPA-3", "EPA-4", "EPA-5", "EPA-6", "EPA-7-L1-L2", "EPA-7-L3", "EPA-8"]) });
+  assert.equal(all.counters.epaReached, 7);
+  assert.equal(all.counters.epaTotal, 7);
+  // The checklist still lists both EPA 7 levels separately so the Resident sees which one is missing.
+  assert.equal(all.board.epa.length, 8);
 });
 
 test("PBA: a waiting request is not finished; distinct forms only", () => {

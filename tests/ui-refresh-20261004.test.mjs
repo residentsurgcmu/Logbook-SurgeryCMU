@@ -106,7 +106,14 @@ test("the home page is role specific and the old misleading percentage is relabe
   assert.match(page, /function HomeHero/);
   assert.match(page, /onOpenRequest\(request\)/);
   assert.match(page, /role="progressbar"/);
-  assert.match(page, /TARGET_ASSESSMENTS_PER_FORM/);
+  // D-016/D-017: the Resident card measures board readiness (EPA x/7, PBA x/16) from the My space module.
+  assert.doesNotMatch(page, /TARGET_ASSESSMENTS_PER_FORM/);
+  assert.doesNotMatch(page, /แบบที่ครบ/);
+  assert.match(page, /import \{ buildMySpace \} from "\.\.\/mySpace"/);
+  assert.match(page, /ความก้าวหน้าเทียบเป้า/);
+  assert.match(page, /โควต้าปีการศึกษานี้/);
+  assert.match(page, /mine\.counters\.epaTotal/);
+  assert.match(page, /mine\.counters\.pbaTarget/);
   assert.match(page, /ประเมินเสร็จ ÷ \(ประเมินเสร็จ \+ ยังรอ\)/);
 });
 
