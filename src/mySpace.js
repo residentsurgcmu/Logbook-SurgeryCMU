@@ -44,10 +44,21 @@ export function buildMySpace({
     const template = row.resident_template_definitions || templatesById.get(row.template_id) || {};
     return { code: template.template_code || "—", title: template.title || "", type: template.template_type || "" };
   };
+  const typeOf = (row) => {
+    const { code, type } = formOf(row);
+    if (type) return type;
+    if (EPA_CODES.includes(code)) return "EPA";
+    if (PBA_CODES.includes(code)) return "PBA";
+    return "";
+  };
 
   const pending = requests
     .filter((row) => mine(row) && row.status === "pending")
     .sort((a, b) => time(b.submitted_at) - time(a.submitted_at));
+  const waitingEpa = pending.filter((row) => typeOf(row) === "EPA").length;
+  const waitingPba = pending.filter((row) => typeOf(row) === "PBA").length;
+  // Keep unclassified requests visible; the two typed counters must not silently lose them.
+  const waitingUnknown = pending.length - waitingEpa - waitingPba;
   const waitingList = pending.map((row) => {
     const form = formOf(row);
     const submittedAt = dayOf(row.submitted_at);
@@ -62,7 +73,7 @@ export function buildMySpace({
   });
 
   const finished = assessments.filter(mine);
-  const finishedThisYear = finished.filter((row) => inYear(row.assessment_date, start));
+  const finishedEpaThisYear = finished.filter((row) => typeOf(row) === "EPA" && inYear(row.assessment_date, start));
   const recent = [...finished]
     .sort((a, b) => time(b.assessment_date) - time(a.assessment_date) || time(b.created_at) - time(a.created_at))
     .slice(0, RECENT_LIMIT)
@@ -132,8 +143,11 @@ export function buildMySpace({
     year: { start, label: `ปีการศึกษา ${Number(start.slice(0, 4)) + 543}` },
     greeting: { name: user.name || "", pgy: user.pgy ?? null },
     counters: {
-      waiting: waitingList.length,
-      finishedThisYear: finishedThisYear.length,
+      waitingEpa,
+      waitingPba,
+      waitingUnknown,
+      finishedEpaThisYear: finishedEpaThisYear.length,
+      finishedPbaThisYear: pbaDoneThisYear.size,
       epaReached: epaAvailable ? epaRows.filter((row) => row.state === "reached").length : null,
       epaTotal: EPA_BOARD_CODES.length,
       pbaFinished: pbaDone.size,

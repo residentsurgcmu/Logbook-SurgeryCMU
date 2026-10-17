@@ -21,7 +21,7 @@ export function buildAdminProgressWorkbook(ExcelJS, { rows, generatedAt }) {
     ["ถึงเกณฑ์", "มีผลประเมินเสร็จครั้งใดครั้งหนึ่งที่ทุกเกณฑ์เป็น L4/L5 (M/E สำหรับ EPA 7)"],
     ["EPA ถึงเกณฑ์ x/8", "นับเฉพาะ EPA ที่นับในเกณฑ์สอบบอร์ด ไม่รวม EPA-8"],
     ["ทำแล้ว (PBA)", "จำนวนเรื่องที่มีผลประเมินเสร็จแล้วอย่างน้อยหนึ่งครั้ง เป้า 16 เรื่อง; คำขอที่รอไม่นับว่าทำแล้ว"],
-    ["ปีนี้ (PBA)", "รวมจำนวนผลประเมินที่เสร็จในปีการศึกษานี้ (completed_this_year) เป้าปีละ 4 เรื่อง; อาจรวมการประเมินเรื่องเดิมหลายครั้ง"],
+    ["ปีนี้ (PBA)", "จำนวนเรื่องไม่ซ้ำที่มีผลประเมินเสร็จในปีการศึกษานี้ (completed_this_year > 0) เป้าปีละ 4 เรื่อง; เรื่องเดิมหลายผลนับ 1 เรื่อง; ผลที่เชื่อมคำขอใช้ปีของ submitted_at ของคำขอ ส่วนผลที่ Admin บันทึกตรงใช้ assessment_date"],
     ["รอประเมิน (PBA)", "จำนวนเรื่องที่มีคำขอรอประเมิน อาจเป็นเรื่องที่เคยประเมินเสร็จแล้วด้วย"],
     ["เครื่องหมาย PBA", "✓ = มีผลประเมินเสร็จแล้ว; … = มีแต่คำขอที่รอประเมิน; ช่องว่าง = ยังไม่ขอประเมิน"],
     ["รอประเมิน (EPA)", "ข้อความรอประเมินในช่องใช้แล้ว/เพดาน แสดงว่ามีคำขอรอ Staff"],
@@ -69,7 +69,7 @@ export function buildAdminProgressWorkbook(ExcelJS, { rows, generatedAt }) {
       const form = forms.get(code);
       if (!form) continue;
       if (form.done === true) pbaRow.done++;
-      pbaRow.year += form.completed_this_year || 0;
+      if (form.completed_this_year > 0) pbaRow.year++;
       if (form.has_pending === true) pbaRow.pending++;
       pbaRow[code] = form.done === true ? "✓" : form.has_pending === true ? "…" : "";
     }

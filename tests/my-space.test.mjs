@@ -33,14 +33,14 @@ test("constants: 8 board EPA forms (EPA-8 excluded), PBA target 16, PBA per year
   assert.equal(PBA_YEAR_TARGET, 4);
 });
 
-test("four separate counters; nothing combined", () => {
+test("six separate counters: EPA attempts and PBA distinct topics; nothing combined", () => {
   const rows = epaProgress().map((row) => (["EPA-1", "EPA-2", "EPA-8"].includes(row.template_code) ? { ...row, met: true } : row));
   const space = build({
     epaProgress: rows,
     requests: [request("EPA-3"), request("PBA-02"), request("EPA-4", { status: "cancelled" }), request("EPA-5", { status: "completed" })],
     assessments: [assessment("EPA-1", "2026-09-01"), assessment("PBA-01", "2026-08-01"), assessment("EPA-2", "2026-05-01")],
   });
-  assert.deepEqual(space.counters, { waiting: 2, finishedThisYear: 2, epaReached: 2, epaTotal: 8, pbaFinished: 1, pbaTarget: 16 });
+  assert.deepEqual(space.counters, { waitingEpa: 1, waitingPba: 1, waitingUnknown: 0, finishedEpaThisYear: 1, finishedPbaThisYear: 1, epaReached: 2, epaTotal: 8, pbaFinished: 1, pbaTarget: 16 });
   assert.equal(space.epaAvailable, true);
 });
 
@@ -72,14 +72,17 @@ test("academic year boundary in Bangkok: 30 June 23:59 vs 1 July 00:00", () => {
   const items = { assessments: [assessment("EPA-1", "2026-06-30"), assessment("EPA-2", "2026-07-01"), assessment("PBA-01", "2026-06-30"), assessment("PBA-02", "2026-07-01")], attendance: [{ session_id: "x", checked_in_at: "2026-06-30T16:59:00Z" }, { session_id: "y", checked_in_at: "2026-06-30T17:00:00Z" }] };
   const a = build({ ...items, now: new Date("2026-06-30T16:59:00Z") });
   const b = build({ ...items, now: new Date("2026-06-30T17:00:00Z") });
-  assert.equal(a.counters.finishedThisYear, 2); // 30 June rows belong to the old year, 1 July rows too late for it.
-  assert.equal(b.counters.finishedThisYear, 2);
+  assert.equal(a.counters.finishedEpaThisYear, 1); // EPA dates stay on the assessment-date basis.
+  assert.equal(a.counters.finishedPbaThisYear, 1);
+  assert.equal(b.counters.finishedEpaThisYear, 1);
+  assert.equal(b.counters.finishedPbaThisYear, 1);
   assert.equal(a.plan.pbaThisYear, 1); // only the 30 June PBA belongs to the old year
   assert.equal(b.plan.pbaThisYear, 1); // only the 1 July PBA belongs to the new year
   assert.equal(a.attendance.countThisYear, 1);
   assert.equal(b.attendance.countThisYear, 1);
   const c = build({ assessments: items.assessments, now: new Date("2026-07-02T05:00:00Z") });
-  assert.equal(c.counters.finishedThisYear, 2);
+  assert.equal(c.counters.finishedEpaThisYear, 1);
+  assert.equal(c.counters.finishedPbaThisYear, 1);
   assert.equal(c.plan.pbaThisYear, 1);
 });
 
@@ -125,7 +128,7 @@ test("epaProgress null or empty: note-able state, other counters still right", (
     const space = build({ epaProgress: missing, requests: [request("EPA-3")], assessments: [assessment("PBA-01", "2026-09-01")] });
     assert.equal(space.epaAvailable, false);
     assert.equal(space.counters.epaReached, null);
-    assert.equal(space.counters.waiting, 1);
+    assert.equal(space.counters.waitingEpa, 1);
     assert.equal(space.counters.pbaFinished, 1);
     assert.ok(space.board.epa.every((item) => item.state === "unknown"));
     assert.deepEqual(space.plan.epaCanSend, []);
@@ -137,8 +140,8 @@ test("cancelled requests ignored; Admin-recorded assessments (no request) counte
     requests: [request("EPA-1", { status: "cancelled" })],
     assessments: [assessment("EPA-2", "2026-09-15")], // no request row = recorded directly by an Admin
   });
-  assert.equal(space.counters.waiting, 0);
-  assert.equal(space.counters.finishedThisYear, 1);
+  assert.equal(space.counters.waitingEpa, 0);
+  assert.equal(space.counters.finishedEpaThisYear, 1);
   assert.equal(space.recent.length, 1);
 });
 
@@ -165,7 +168,7 @@ test("unknown template or Staff never throws", () => {
 
 test("only the signed-in Resident's own rows are counted", () => {
   const space = build({ requests: [request("EPA-3", { resident_id: "someone-else" })], assessments: [assessment("PBA-01", "2026-09-01", { resident_id: "someone-else" })] });
-  assert.equal(space.counters.waiting, 0);
+  assert.equal(space.counters.waitingEpa, 0);
   assert.equal(space.counters.pbaFinished, 0);
 });
 
@@ -202,6 +205,39 @@ test("PBA this year follows the Admin file: request-linked rows by the request's
   assert.equal(build({ assessments: [linked], requests: [done] }).plan.pbaThisYear, 1);
   const direct = assessment("PBA-02", "2026-06-28"); // recorded by an Admin, no request
   assert.equal(build({ assessments: [direct] }).plan.pbaThisYear, 0);
+});
+
+test("split pending counts conserve every own pending request; unknown types stay visible", () => {
+  const requests = [
+    request("EPA-1"), request("EPA-8"), request("PBA-01"),
+    request("PBA-02", { resident_template_definitions: { template_code: "PBA-02" } }),
+    request("EPA-2", { resident_template_definitions: undefined }), // catalog fallback
+    request("missing", { template_id: "missing", resident_template_definitions: undefined }),
+    request("invalid", { resident_template_definitions: { template_type: "OTHER" } }),
+    request("EPA-3", { status: "cancelled" }), request("PBA-03", { status: "completed" }),
+    request("EPA-4", { resident_id: "someone-else" }),
+  ];
+  const space = build({ requests });
+  assert.equal(space.counters.waitingEpa, 3);
+  assert.equal(space.counters.waitingPba, 2);
+  assert.equal(space.counters.waitingUnknown, 2);
+  const oldTotal = requests.filter((row) => row.resident_id === ME.id && row.status === "pending").length;
+  assert.equal(space.counters.waitingEpa + space.counters.waitingPba + space.counters.waitingUnknown, oldTotal);
+  assert.equal(space.waitingList.length, oldTotal);
+  assert.ok(space.waitingList.some((row) => row.code === "—"));
+  const known = build({ requests: requests.slice(0, 5) });
+  assert.equal(known.counters.waitingEpa + known.counters.waitingPba, known.waitingList.length);
+  assert.equal(known.counters.waitingUnknown, 0);
+});
+
+test("EPA yearly summary counts assessments including EPA-8; PBA summary reuses distinct yearly topics", () => {
+  const space = build({ assessments: [
+    assessment("EPA-1", "2026-08-01"), assessment("EPA-1", "2026-09-01"), assessment("EPA-8", "2026-09-02"),
+    assessment("EPA-2", "2026-06-30"), assessment("PBA-01", "2026-08-01"), assessment("PBA-01", "2026-09-01"),
+  ] });
+  assert.equal(space.counters.finishedEpaThisYear, 3);
+  assert.equal(space.counters.finishedPbaThisYear, 1);
+  assert.equal(space.counters.finishedPbaThisYear, space.plan.pbaThisYear);
 });
 
 test("a request with no sent date does not crash or claim 'today'", () => {

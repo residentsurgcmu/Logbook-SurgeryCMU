@@ -1,14 +1,15 @@
 /* My space (Resident page). Component classes only; colours and radii come from tokens.css. Mobile first. */
-.ms-page { display: grid; gap: 16px; max-width: 720px; margin: 0 auto; padding-bottom: 24px; }
+.ms-page { display: grid; gap: 16px; min-width: 0; max-width: 720px; margin: 0 auto; padding-bottom: 24px; }
 .ms-page h2 { margin: 0 0 8px; font-size: 1.15rem; }
 .ms-page h3 { margin: 16px 0 6px; font-size: 1rem; color: var(--text-muted); }
 .ms-page p { margin: 6px 0; font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; }
 .ms-hero { padding: 16px; border-radius: var(--radius-lg); background: var(--brand-soft); border: 1px solid var(--line); }
 .ms-hero h2 { font-size: 1.3rem; }
 .ms-counters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.ms-counters li { display: grid; gap: 4px; padding: 14px; min-height: 88px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+.ms-counters li { display: grid; gap: 4px; min-width: 0; padding: 14px; min-height: 88px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
 .ms-counters b { font-size: 1.8rem; line-height: 1.1; color: var(--brand-dark); }
 .ms-counters span { font-size: 1rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ms-counters small { font-size: 1rem; color: var(--text-muted); }
 .ms-card { padding: 16px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); min-width: 0; }
 .ms-list { display: grid; gap: 8px; margin: 8px 0; padding: 0; list-style: none; }
 .ms-row { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--canvas); border: 1px solid var(--line); overflow-wrap: anywhere; }
@@ -35,5 +36,5 @@
   .ms-page { max-width: none; }
 }
 @media (min-width: 901px) {
-  .ms-counters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ms-counters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
