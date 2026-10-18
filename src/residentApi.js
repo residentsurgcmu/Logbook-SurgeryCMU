@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { residentTemplates } from "./generated/residentTemplates";
 import { fetchAllRows } from "./supabasePaging";
 import { planCriteriaSync } from "./criteriaSync";
+import { createAdminAccountsApi } from "./adminAccountsApi.js";
 import {
   isJwtIssuedInFutureError,
   normalizeResidentEmail,
@@ -11,6 +12,10 @@ import {
 const fail = (error) => {
   if (error) throw error;
 };
+export const {
+  listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction,
+  updateAdminAccount, setAdminAccountActive,
+} = createAdminAccountsApi(supabase);
 const mapProfile = (row) => ({
   id: row.user_id,
   name: row.full_name,
