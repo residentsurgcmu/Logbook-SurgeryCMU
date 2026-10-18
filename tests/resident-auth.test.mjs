@@ -82,9 +82,14 @@ test("Admin can provision Staff with a unit without overwriting existing Residen
   assert.match(functionSource, /redirectTo: resetPasswordUrl\(\)/);
   assert.match(functionSource, /\["resident", "staff", "admin"\]\.includes\(role\)/);
   assert.match(functionSource, /role === "staff" && !hasLength\(unitName, 2, 80\)/);
-  assert.match(functionSource, /existingRole && existingRole\.role !== "staff"/);
-  assert.match(functionSource, /insert\(\{ email, full_name: fullName, unit_name: unitName, active: true \}\)/);
-  assert.match(functionSource, /auth_user_id: invitedUserId/);
+  // RC-02a-1 / D-011: the account is created by one database function that never overwrites
+  // (it also creates and links the Staff list entry); an existing email is refused with ACCOUNT_EXISTS.
+  const accountsSql = await readFile(new URL("../supabase/migrations/20261018090000_accounts_piece1_edit_deactivate.sql", import.meta.url), "utf8");
+  assert.match(functionSource, /rpc\("admin_provision_account_internal"/);
+  assert.match(functionSource, /if \(profileId\) return accountExists\(profileId\);/);
+  assert.doesNotMatch(functionSource, /\.upsert\(/);
+  assert.match(accountsSql, /insert into public\.resident_staff_directory \(email, full_name, unit_name, active\)/);
+  assert.match(accountsSql, /set auth_user_id = p_user_id, invited_at = now\(\)/);
   assert.match(platformSource, /เพิ่มบัญชี Resident \/ Staff \/ Admin/);
   assert.match(platformSource, /<option value="staff">Staff<\/option>/);
   assert.match(platformSource, /account\.role === "staff"[\s\S]*?minLength="2"[\s\S]*?maxLength="80"[\s\S]*?required/);
