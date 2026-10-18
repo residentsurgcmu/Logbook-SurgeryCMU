@@ -10,6 +10,7 @@ import {
 } from "../residentApi";
 import ResidentDashboard from "./ResidentDashboard";
 import AdminAttemptPages from "./AdminAttemptPages";
+import AdminAccounts from "./AdminAccounts";
 import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
 import ResidentSchedule from "./ResidentSchedule";
 import ResidentMySpace from "./ResidentMySpace";
@@ -592,6 +593,7 @@ function Admin({ workspace, onRefresh }) {
   }
   return (
     <>
+      <AdminAccounts userId={workspace.user.id} onRefresh={onRefresh} refreshKey={workspace} />
       <section className="resident-panel admin-summary">
         <div>
           <h2>Catalog EPA/PBA</h2>
@@ -730,35 +732,6 @@ function Admin({ workspace, onRefresh }) {
         onInvite={invite}
         busyEmail={busyEmail}
       />
-      <section className="resident-panel">
-        <h2>สถานะบัญชี</h2>
-        <div className="resident-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ชื่อ</th>
-                <th>อีเมล</th>
-                <th>บทบาท/PGY</th>
-              </tr>
-            </thead>
-            <tbody>
-              {workspace.profiles.map((person) => (
-                <tr key={person.id}>
-                  <td>{person.name}</td>
-                  <td>{person.email}</td>
-                  <td>
-                    {person.pgy
-                      ? `Resident · PGY ${person.pgy}`
-                      : staffIds.has(person.id)
-                        ? "Staff"
-                        : "Admin"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </>
   );
 }
