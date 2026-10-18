@@ -35,9 +35,13 @@ Deno.serve(async (request) => {
   const { data: callerData } = await callerClient.auth.getUser(token);
   if (!callerData.user) return json({ error: "Session expired" }, 401);
   const adminClient = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: callerRole, error: callerRoleError } = await adminClient.from("resident_user_roles").select("role,active").eq("user_id", callerData.user.id).maybeSingle();
-  if (callerRoleError) return json({ error: "Could not verify caller role" }, 500);
-  if (!callerRole?.active || callerRole.role !== "admin") return json({ error: "Admin role required" }, 403);
+  // RC-02a-1: an account is usable only when both the role and the profile are active (D-022).
+  const [{ data: callerRole, error: callerRoleError }, { data: callerProfile, error: callerProfileError }] = await Promise.all([
+    adminClient.from("resident_user_roles").select("role,active").eq("user_id", callerData.user.id).maybeSingle(),
+    adminClient.from("resident_profiles").select("active").eq("user_id", callerData.user.id).maybeSingle(),
+  ]);
+  if (callerRoleError || callerProfileError) return json({ error: "Could not verify caller role" }, 500);
+  if (!callerRole?.active || !callerProfile?.active || callerRole.role !== "admin") return json({ error: "Admin role required" }, 403);
 
   // Invite a new Auth user, or link the Auth account that already exists for
   // this email (e.g. Staff who had a login in the retired Year 4 system).
@@ -62,11 +66,38 @@ Deno.serve(async (request) => {
     return { userId: existingUserId as string, invitationSent: false, linkedExistingAccount: true };
   };
 
-  const ensureStaffAccess = async (userId: string, staffEmail: string, fullName: string) => {
-    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: staffEmail, full_name: fullName, pgy: null, active: true }, { onConflict: "user_id" });
-    if (profileError) throw profileError;
-    const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role: "staff", active: true }, { onConflict: "user_id" });
-    if (roleError) throw roleError;
+  // RC-02a-1 / D-011: an existing account is never overwritten. The database function creates the
+  // profile, role and (for Staff) the Staff list link in one transaction, under a per-email lock,
+  // and refuses with ACCOUNT_EXISTS if this person already has a profile or a role.
+  const accountExists = (userId?: string | null) => json({ error: "ACCOUNT_EXISTS", code: "ACCOUNT_EXISTS", userId: userId || null }, 409);
+  // Release safety (G0 B-R02): while the owner has paused account writes, refuse before any invitation e-mail.
+  const PAUSED_MESSAGE = "ระบบบัญชีพักชั่วคราวระหว่างปรับปรุง กรุณาลองใหม่ภายหลัง";
+  const accountsPaused = () => json({ error: PAUSED_MESSAGE, code: "ACCOUNTS_PAUSED" }, 503);
+  const isPaused = async () => {
+    const { data, error } = await adminClient.rpc("resident_accounts_paused");
+    if (error) throw error;
+    return data === true;
+  };
+  const createAccount = async (userId: string, accountEmail: string, fullName: string, accountRole: string, accountPgy: number | null, accountUnit: string | null) => {
+    const { error } = await adminClient.rpc("admin_provision_account_internal", {
+      p_actor_id: callerData.user!.id,
+      p_user_id: userId,
+      p_email: accountEmail,
+      p_full_name: fullName,
+      p_role: accountRole,
+      p_pgy: accountPgy,
+      p_unit_name: accountUnit,
+    });
+    if (!error) return null;
+    if (error.message.includes("ACCOUNTS_PAUSED")) return accountsPaused();
+    const existing = /ACCOUNT_EXISTS:\s*([0-9a-f-]{36})/i.exec(error.message);
+    if (existing || error.message.includes("ACCOUNT_EXISTS")) return accountExists(existing?.[1] || userId);
+    throw error;
+  };
+  const existingProfileId = async (accountEmail: string) => {
+    const { data, error } = await adminClient.from("resident_profiles").select("user_id").eq("email", accountEmail).maybeSingle();
+    if (error) throw error;
+    return (data?.user_id as string | undefined) || null;
   };
 
   try {
@@ -104,23 +135,26 @@ Deno.serve(async (request) => {
 
     if (action === "invite_staff") {
       if (!email) throw new Error("Invalid Staff email");
+      if (await isPaused()) return accountsPaused();
       const { data: directory, error: directoryError } = await adminClient
         .from("resident_staff_directory")
-        .select("email,full_name,active,auth_user_id")
+        .select("email,full_name,unit_name,active,auth_user_id")
         .eq("email", email)
         .maybeSingle();
       if (directoryError) throw directoryError;
       if (!directory?.active) throw new Error("This email is not an active approved Staff account");
-      if (directory.auth_user_id) return json({ ok: true, invitationSent: false, alreadyProvisioned: true });
+      const profileId = await existingProfileId(directory.email);
+      if (directory.auth_user_id) {
+        // Already linked: nothing is written. A linked entry without a profile (old data) gets one created.
+        if (profileId) return json({ ok: true, invitationSent: false, alreadyProvisioned: true });
+        const refused = await createAccount(directory.auth_user_id, directory.email, directory.full_name, "staff", null, directory.unit_name);
+        return refused || json({ ok: true, userId: directory.auth_user_id, invitationSent: false, alreadyProvisioned: true });
+      }
+      if (profileId) return accountExists(profileId);
 
       const { userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(directory.email, directory.full_name);
-      const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email: directory.email, full_name: directory.full_name, pgy: null, active: true }, { onConflict: "user_id" });
-      if (profileError) throw profileError;
-      const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role: "staff", active: true }, { onConflict: "user_id" });
-      if (roleError) throw roleError;
-      const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", directory.email);
-      if (linkError) throw linkError;
-      return json({ ok: true, invitationSent, linkedExistingAccount });
+      const refused = await createAccount(userId, directory.email, directory.full_name, "staff", null, directory.unit_name);
+      return refused || json({ ok: true, userId, invitationSent, linkedExistingAccount });
     }
 
     if (action !== "provision_account") throw new Error("Invalid action");
@@ -131,88 +165,29 @@ Deno.serve(async (request) => {
     if (role === "resident" && ![1, 2, 3, 4].includes(Number(pgy))) throw new Error("Resident PGY must be 1–4");
     if (role === "staff" && !hasLength(unitName, 2, 80)) throw new Error("Staff unit must be 2–80 characters");
 
+    // Checked before any invitation so an existing person never gets an e-mail from a refused add.
+    if (await isPaused()) return accountsPaused();
+    const profileId = await existingProfileId(email);
+    if (profileId) return accountExists(profileId);
+
     const { data: directory, error: directoryError } = await adminClient
       .from("resident_staff_directory")
       .select("email,full_name,unit_name,active,auth_user_id")
       .eq("email", email)
       .maybeSingle();
     if (directoryError) throw directoryError;
+    if (role !== "staff" && directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
+    if (role === "staff" && directory && !directory.active) throw new Error("This Staff directory entry is inactive");
 
-    const { data: existing, error: existingError } = await adminClient.from("resident_profiles").select("user_id").eq("email", email).maybeSingle();
-    if (existingError) throw existingError;
-    const { data: existingRole, error: existingRoleError } = existing
-      ? await adminClient.from("resident_user_roles").select("role,active").eq("user_id", existing.user_id).maybeSingle()
-      : { data: null, error: null };
-    if (existingRoleError) throw existingRoleError;
-
-    if (role === "staff") {
-      if (existingRole && existingRole.role !== "staff") {
-        throw new Error("This email already belongs to a Resident or Admin account");
-      }
-      if (directory && !directory.active) throw new Error("This Staff directory entry is inactive");
-
-      let staffDirectory = directory;
-      if (!staffDirectory) {
-        const { data: createdDirectory, error: createDirectoryError } = await adminClient
-          .from("resident_staff_directory")
-          .insert({ email, full_name: fullName, unit_name: unitName, active: true })
-          .select("email,full_name,unit_name,active,auth_user_id")
-          .single();
-        if (createDirectoryError) throw createDirectoryError;
-        staffDirectory = createdDirectory;
-      }
-
-      if (staffDirectory.auth_user_id) {
-        if (existing && existing.user_id !== staffDirectory.auth_user_id) {
-          throw new Error("Staff directory account does not match the existing account");
-        }
-        const { data: linkedRole, error: linkedRoleError } = await adminClient
-          .from("resident_user_roles")
-          .select("role,active")
-          .eq("user_id", staffDirectory.auth_user_id)
-          .maybeSingle();
-        if (linkedRoleError) throw linkedRoleError;
-        if (linkedRole && linkedRole.role !== "staff") {
-          throw new Error("Staff directory account has an incompatible role");
-        }
-        // Re-adding a linked Staff also repairs a missing/inactive profile or role.
-        await ensureStaffAccess(staffDirectory.auth_user_id, staffDirectory.email, staffDirectory.full_name);
-        return json({ ok: true, userId: staffDirectory.auth_user_id, invitationSent: false, alreadyProvisioned: true });
-      }
-
-      const userId = existing?.user_id;
-      if (userId) {
-        // The profile existed without an active Staff role (e.g. created by an
-        // older flow). Linking the directory alone left the account unable to
-        // sign in, so grant the Staff profile and role here as well.
-        await ensureStaffAccess(userId, staffDirectory.email, staffDirectory.full_name);
-        const { error: linkError } = await adminClient
-          .from("resident_staff_directory")
-          .update({ auth_user_id: userId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq("email", staffDirectory.email);
-        if (linkError) throw linkError;
-        return json({ ok: true, userId, invitationSent: false, alreadyProvisioned: true });
-      }
-
-      const { userId: invitedUserId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(staffDirectory.email, staffDirectory.full_name);
-      await ensureStaffAccess(invitedUserId, staffDirectory.email, staffDirectory.full_name);
-      const { error: linkError } = await adminClient.from("resident_staff_directory").update({ auth_user_id: invitedUserId, invited_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("email", staffDirectory.email);
-      if (linkError) throw linkError;
-      return json({ ok: true, userId: invitedUserId, invitationSent, linkedExistingAccount });
+    if (role === "staff" && directory?.auth_user_id) {
+      // Linked Staff list entry without a profile (old data): create it, never overwrite.
+      const refused = await createAccount(directory.auth_user_id, email, directory.full_name, "staff", null, directory.unit_name);
+      return refused || json({ ok: true, userId: directory.auth_user_id, invitationSent: false, alreadyProvisioned: true });
     }
 
-    if (directory) throw new Error("Staff accounts must be invited from the approved Staff directory");
-    let userId = existing?.user_id;
-    let invitationSent = false;
-    let linkedExistingAccount = false;
-    if (!userId) {
-      ({ userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(email, fullName));
-    }
-    const { error: profileError } = await adminClient.from("resident_profiles").upsert({ user_id: userId, email, full_name: fullName, pgy: role === "resident" ? Number(pgy) : null, active: true }, { onConflict: "user_id" });
-    if (profileError) throw profileError;
-    const { error: roleError } = await adminClient.from("resident_user_roles").upsert({ user_id: userId, role, active: true }, { onConflict: "user_id" });
-    if (roleError) throw roleError;
-    return json({ ok: true, userId, invitationSent, linkedExistingAccount });
+    const { userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(email, role === "staff" && directory ? directory.full_name : fullName);
+    const refused = await createAccount(userId, email, fullName, role, role === "resident" ? Number(pgy) : null, role === "staff" ? unitName : null);
+    return refused || json({ ok: true, userId, invitationSent, linkedExistingAccount });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Could not save account" }, 400);
   }

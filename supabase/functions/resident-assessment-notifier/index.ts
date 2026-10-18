@@ -272,6 +272,12 @@ Deno.serve(async (request) => {
     const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
     const { data: authData } = await caller.auth.getUser(token);
     if (!authData.user) return json({ error: "Session expired" }, 401);
+    // RC-02a-1: a deactivated account cannot trigger e-mail (both flags must be on, D-022).
+    const [{ data: callerRole }, { data: callerProfile }] = await Promise.all([
+      admin.from("resident_user_roles").select("active").eq("user_id", authData.user.id).maybeSingle(),
+      admin.from("resident_profiles").select("active").eq("user_id", authData.user.id).maybeSingle(),
+    ]);
+    if (!callerRole?.active || !callerProfile?.active) return json({ error: "Active account required" }, 403);
     const { data: assessmentRequest } = await admin.from("resident_assessment_requests").select("resident_id").eq("id", payload.requestId).maybeSingle();
     if (!assessmentRequest || assessmentRequest.resident_id !== authData.user.id) return json({ error: "Request owner required" }, 403);
     const result = await deliver(admin, payload.requestId, "initial");

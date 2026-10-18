@@ -66,14 +66,20 @@ test("deliver_due selects only requests whose due email is unsent", async () => 
   assert.match(block, /due\.slice\(0, MAX_DELIVERIES_PER_RUN\)/);
 });
 
-// 5) Linking an existing profile as Staff also grants the Staff role
+// 5) Linking a Staff account creates profile + Staff role together (RC-02a-1: in one database
+//    transaction, and an existing profile or role is never overwritten — D-011)
 test("resident-admin grants profile and Staff role whenever it links a Staff account", async () => {
   const fn = await read("supabase/functions/resident-admin/index.ts");
-  assert.match(fn, /const ensureStaffAccess = async/);
-  const staffBranch = fn.slice(fn.indexOf('if (role === "staff") {'), fn.indexOf("if (directory) throw new Error"));
-  assert.equal(staffBranch.match(/await ensureStaffAccess\(/g).length, 3);
-  const existingBranch = staffBranch.slice(staffBranch.indexOf("const userId = existing?.user_id;"));
-  assert.ok(existingBranch.indexOf("ensureStaffAccess") < existingBranch.indexOf("alreadyProvisioned: true"));
+  const sql = await read("supabase/migrations/20261018090000_accounts_piece1_edit_deactivate.sql");
+  assert.doesNotMatch(fn, /ensureStaffAccess/);
+  const invite = fn.slice(fn.indexOf('if (action === "invite_staff") {'), fn.indexOf('if (action !== "provision_account")'));
+  assert.equal(invite.match(/await createAccount\([^)]*"staff"/g).length, 2);
+  const provision = fn.slice(fn.indexOf('if (action !== "provision_account")'));
+  assert.ok(provision.indexOf("existingProfileId(email)") < provision.indexOf("inviteOrLinkUser("), "existing account is refused before any invitation e-mail");
+  const rpc = sql.slice(sql.indexOf("function public.admin_provision_account_internal"));
+  assert.match(rpc, /insert into public\.resident_profiles \(user_id, full_name, email, pgy, active\)/);
+  assert.match(rpc, /insert into public\.resident_user_roles \(user_id, role, active\)/);
+  assert.match(rpc, /raise exception 'ACCOUNT_EXISTS: % ', v_existing;/);
 });
 
 // 6) Deleting an assessment renumbers later attempts

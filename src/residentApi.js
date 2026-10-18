@@ -675,12 +675,22 @@ export async function inviteStaff(email) {
   return data;
 }
 
+export const ACCOUNTS_PAUSED_MESSAGE =
+  "ระบบบัญชีพักชั่วคราวระหว่างปรับปรุง กรุณาลองใหม่ภายหลัง";
+
+export const ACCOUNT_EXISTS_MESSAGE =
+  "อีเมลนี้มีบัญชีในระบบอยู่แล้ว ระบบจึงไม่ได้เปลี่ยนแปลงบัญชีเดิม";
+
 async function residentAdminError(error, fallback) {
   const context = error?.context;
   const payload =
     context && typeof context.json === "function"
       ? await context.json().catch(() => ({}))
       : {};
+  // RC-02a-1 / D-011: adding an email that already has an account never overwrites it.
+  if (payload.code === "ACCOUNT_EXISTS") return new Error(ACCOUNT_EXISTS_MESSAGE);
+  // Release safety: account writes paused by the owner during an update.
+  if (payload.code === "ACCOUNTS_PAUSED") return new Error(ACCOUNTS_PAUSED_MESSAGE);
   return new Error(payload.error || error?.message || fallback);
 }
 
