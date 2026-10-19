@@ -1,0 +1,1662 @@
+{
+ "cases": [
+  {
+   "n": 1,
+   "call": "rc04_create_managed_exam",
+   "case": "create managed exam",
+   "request": {
+    "p_payload": {
+     "parts": [
+      {
+       "mpl": {
+        "2": 60,
+        "3": 65
+       },
+       "name": "Part A",
+       "max_score": 100,
+       "sort_order": 1
+      },
+      {
+       "mpl": {
+        "2": 30,
+        "3": 30
+       },
+       "name": "Part B",
+       "max_score": 50,
+       "sort_order": 2
+      }
+     ],
+     "title": "X-ray & Anatomy fixture",
+     "roster": [
+      {
+       "pgy_at_exam": 2,
+       "resident_id": "10000000-0000-4000-8000-0000000000c1"
+      },
+      {
+       "pgy_at_exam": 3,
+       "resident_id": "10000000-0000-4000-8000-0000000000c2",
+       "reference_name": "Fixture R2 (as on the paper)"
+      }
+     ],
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "academic_year": 2569
+    },
+    "p_request_id": "20000000-0000-4000-8000-000000000001"
+   },
+   "response": {
+    "state": "working",
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000002"
+   }
+  },
+  {
+   "n": 2,
+   "call": "rc04_create_managed_exam",
+   "case": "create replay (same request, same payload)",
+   "request": {
+    "p_payload": {
+     "parts": [
+      {
+       "mpl": {
+        "2": 60,
+        "3": 65
+       },
+       "name": "Part A",
+       "max_score": 100,
+       "sort_order": 1
+      },
+      {
+       "mpl": {
+        "2": 30,
+        "3": 30
+       },
+       "name": "Part B",
+       "max_score": 50,
+       "sort_order": 2
+      }
+     ],
+     "title": "X-ray & Anatomy fixture",
+     "roster": [
+      {
+       "pgy_at_exam": 2,
+       "resident_id": "10000000-0000-4000-8000-0000000000c1"
+      },
+      {
+       "pgy_at_exam": 3,
+       "resident_id": "10000000-0000-4000-8000-0000000000c2",
+       "reference_name": "Fixture R2 (as on the paper)"
+      }
+     ],
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "academic_year": 2569
+    },
+    "p_request_id": "20000000-0000-4000-8000-000000000001"
+   },
+   "response": {
+    "state": "working",
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "replayed": true,
+    "revision_id": "90000000-0000-4000-8000-000000000002"
+   }
+  },
+  {
+   "n": 3,
+   "call": "rc04_create_managed_exam",
+   "case": "create key reuse (same request, other payload)",
+   "error": {
+    "code": "RC04_IDEMPOTENCY_KEY_REUSED",
+    "message": "RC04_IDEMPOTENCY_KEY_REUSED: this request_id was already used with a different payload",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_payload": {
+     "parts": [
+      {
+       "mpl": {
+        "2": 60,
+        "3": 65
+       },
+       "name": "Part A",
+       "max_score": 100,
+       "sort_order": 1
+      },
+      {
+       "mpl": {
+        "2": 30,
+        "3": 30
+       },
+       "name": "Part B",
+       "max_score": 50,
+       "sort_order": 2
+      }
+     ],
+     "title": "other",
+     "roster": [
+      {
+       "pgy_at_exam": 2,
+       "resident_id": "10000000-0000-4000-8000-0000000000c1"
+      },
+      {
+       "pgy_at_exam": 3,
+       "resident_id": "10000000-0000-4000-8000-0000000000c2",
+       "reference_name": "Fixture R2 (as on the paper)"
+      }
+     ],
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "academic_year": 2569
+    },
+    "p_request_id": "20000000-0000-4000-8000-000000000001"
+   }
+  },
+  {
+   "n": 4,
+   "call": "rc04_create_managed_exam",
+   "case": "create by a Resident (forbidden)",
+   "error": {
+    "code": "RC04_FORBIDDEN",
+    "message": "RC04_FORBIDDEN: Active Admin account required",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_payload": {
+     "parts": [
+      {
+       "mpl": {
+        "2": 60,
+        "3": 65
+       },
+       "name": "Part A",
+       "max_score": 100,
+       "sort_order": 1
+      },
+      {
+       "mpl": {
+        "2": 30,
+        "3": 30
+       },
+       "name": "Part B",
+       "max_score": 50,
+       "sort_order": 2
+      }
+     ],
+     "title": "X-ray & Anatomy fixture",
+     "roster": [
+      {
+       "pgy_at_exam": 2,
+       "resident_id": "10000000-0000-4000-8000-0000000000c1"
+      },
+      {
+       "pgy_at_exam": 3,
+       "resident_id": "10000000-0000-4000-8000-0000000000c2",
+       "reference_name": "Fixture R2 (as on the paper)"
+      }
+     ],
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "academic_year": 2569
+    },
+    "p_request_id": "20000000-0000-4000-8000-000000000001"
+   }
+  },
+  {
+   "n": 5,
+   "call": "rc04_get_import_template",
+   "case": "template",
+   "request": {
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002"
+   },
+   "response": {
+    "exam": {
+     "state": "working",
+     "title": "X-ray & Anatomy fixture",
+     "exam_id": "90000000-0000-4000-8000-000000000001",
+     "version": 1,
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "revision_id": "90000000-0000-4000-8000-000000000002",
+     "revision_seq": 1,
+     "academic_year": 2569
+    },
+    "cells": [
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "value_state": "unknown"
+     },
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "value_state": "unknown"
+     },
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "value_state": "unknown"
+     },
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "value_state": "unknown"
+     }
+    ],
+    "parts": [
+     {
+      "mpl": {
+       "2": 60.0,
+       "3": 65.0
+      },
+      "name": "Part A",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "max_score": 100.0,
+      "column_key": "part_1",
+      "sort_order": 1
+     },
+     {
+      "mpl": {
+       "2": 30.0,
+       "3": 30.0
+      },
+      "name": "Part B",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "max_score": 50.0,
+      "column_key": "part_2",
+      "sort_order": 2
+     }
+    ],
+    "limits": {
+     "score_decimals": 2,
+     "preview_ttl_minutes": 30,
+     "max_cells_per_import": 10000
+    },
+    "roster": [
+     {
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "reference_name": "Fixture R2 (as on the paper)"
+     },
+     {
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "reference_name": "Fixture c1"
+     }
+    ],
+    "importable": true,
+    "allowed_states": [
+     "scored",
+     "absent",
+     "awaiting"
+    ],
+    "template_version": "RC04-TEMPLATE-1"
+   }
+  },
+  {
+   "n": 6,
+   "call": "rc04_preview_import",
+   "case": "preview with errors (position kept, nothing written)",
+   "request": {
+    "p_cells": [
+     {
+      "score": 101,
+      "state": "scored",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "score": "55ผ่าน",
+      "state": "scored",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "cell_ref": "E5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "score": 3,
+      "state": "absent",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D6",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2"
+     }
+    ],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_file_evidence": {
+     "file_hash": "fixture-sha256"
+    },
+    "p_file_reported": null,
+    "p_expected_version": 1
+   },
+   "response": {
+    "ok": false,
+    "counts": {
+     "errors": 3,
+     "submitted": 3
+    },
+    "errors": [
+     {
+      "code": "SCORE_EXCEEDS_MAX",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "code": "INVALID_SCORE_TYPE",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "cell_ref": "E5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "code": "STATE_WITH_SCORE",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D6",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2"
+     }
+    ],
+    "preview_id": null
+   }
+  },
+  {
+   "n": 7,
+   "call": "rc04_preview_import",
+   "case": "preview partial: scored 0, absent, awaiting; one cell left blank (stays unknown)",
+   "request": {
+    "p_cells": [
+     {
+      "score": 0,
+      "state": "scored",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "state": "absent",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "cell_ref": "E5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     },
+     {
+      "state": "awaiting",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D6",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2"
+     }
+    ],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_file_evidence": {
+     "file_hash": "fixture-sha256",
+     "file_name": "fixture.xlsx"
+    },
+    "p_file_reported": {
+     "exam_id": "90000000-0000-4000-8000-000000000001",
+     "version": 1,
+     "revision_id": "90000000-0000-4000-8000-000000000002",
+     "academic_year": 2569,
+     "template_version": "RC04-TEMPLATE-1"
+    },
+    "p_expected_version": 1
+   },
+   "response": {
+    "ok": true,
+    "diff": [
+     {
+      "after": {
+       "score": 0.0,
+       "outcome": "fail",
+       "value_state": "scored"
+      },
+      "before": {
+       "score": null,
+       "outcome": null,
+       "value_state": "unknown"
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "overwrites_recorded_value": false
+     },
+     {
+      "after": {
+       "score": null,
+       "outcome": null,
+       "value_state": "absent"
+      },
+      "before": {
+       "score": null,
+       "outcome": null,
+       "value_state": "unknown"
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "cell_ref": "E5",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "overwrites_recorded_value": false
+     },
+     {
+      "after": {
+       "score": null,
+       "outcome": null,
+       "value_state": "awaiting"
+      },
+      "before": {
+       "score": null,
+       "outcome": null,
+       "value_state": "unknown"
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "cell_ref": "D6",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "overwrites_recorded_value": false
+     }
+    ],
+    "counts": {
+     "errors": 0,
+     "changed": 3,
+     "submitted": 3,
+     "unchanged": 0
+    },
+    "errors": [],
+    "warnings": [],
+    "expires_at": "2026-10-19T11:27:55.389525+00:00",
+    "preview_id": "90000000-0000-4000-8000-000000000005",
+    "requires_reason": false,
+    "expected_version": 1,
+    "delta_fingerprint": "d803767813af769236e09015acc87062a49c3e5c89e9dd83bc695d0aef4815cd"
+   }
+  },
+  {
+   "n": 8,
+   "call": "rc04_commit_import",
+   "case": "commit import",
+   "request": {
+    "p_reason": null,
+    "p_preview_id": "90000000-0000-4000-8000-000000000005",
+    "p_request_id": "20000000-0000-4000-8000-000000000002",
+    "p_expected_version": 1,
+    "p_delta_fingerprint": "d803767813af769236e09015acc87062a49c3e5c89e9dd83bc695d0aef4815cd"
+   },
+   "response": {
+    "noop": false,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 2,
+    "batch_id": "90000000-0000-4000-8000-000000000006",
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000002",
+    "changed_count": 3
+   }
+  },
+  {
+   "n": 9,
+   "call": "rc04_commit_import",
+   "case": "commit replay after lost response",
+   "request": {
+    "p_reason": null,
+    "p_preview_id": "90000000-0000-4000-8000-000000000005",
+    "p_request_id": "20000000-0000-4000-8000-000000000002",
+    "p_expected_version": 1,
+    "p_delta_fingerprint": "d803767813af769236e09015acc87062a49c3e5c89e9dd83bc695d0aef4815cd"
+   },
+   "response": {
+    "noop": false,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 2,
+    "batch_id": "90000000-0000-4000-8000-000000000006",
+    "replayed": true,
+    "revision_id": "90000000-0000-4000-8000-000000000002",
+    "changed_count": 3
+   }
+  },
+  {
+   "n": 10,
+   "call": "rc04_commit_import",
+   "case": "new request from the old template (conflict)",
+   "error": {
+    "code": "RC04_PREVIEW_CONSUMED",
+    "message": "RC04_PREVIEW_CONSUMED: this preview was already used; preview again",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_reason": null,
+    "p_preview_id": "90000000-0000-4000-8000-000000000005",
+    "p_request_id": "20000000-0000-4000-8000-000000000003",
+    "p_expected_version": 1,
+    "p_delta_fingerprint": "d803767813af769236e09015acc87062a49c3e5c89e9dd83bc695d0aef4815cd"
+   }
+  },
+  {
+   "n": 11,
+   "call": "rc04_preview_import",
+   "case": "preview against an old version (conflict)",
+   "error": {
+    "code": "RC04_REVISION_CONFLICT",
+    "message": "RC04_REVISION_CONFLICT: the revision is at version 2 (you sent 1); reload and preview again",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_cells": [],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_file_evidence": {},
+    "p_file_reported": null,
+    "p_expected_version": 1
+   }
+  },
+  {
+   "n": 12,
+   "call": "rc04_preview_import",
+   "case": "preview same values again (no change)",
+   "request": {
+    "p_cells": [
+     {
+      "score": 0,
+      "state": "scored",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1"
+     }
+    ],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_file_evidence": {
+     "file_hash": "another-hash"
+    },
+    "p_file_reported": null,
+    "p_expected_version": 2
+   },
+   "response": {
+    "ok": true,
+    "diff": [],
+    "counts": {
+     "errors": 0,
+     "changed": 0,
+     "submitted": 1,
+     "unchanged": 1
+    },
+    "errors": [],
+    "warnings": [
+     {
+      "code": "RESIDENTS_NOT_IN_FILE",
+      "count": 1
+     },
+     {
+      "code": "PARTS_NOT_IN_FILE",
+      "count": 1
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.39992+00:00",
+    "preview_id": "90000000-0000-4000-8000-000000000007",
+    "requires_reason": false,
+    "expected_version": 2,
+    "delta_fingerprint": "0a81f80d9c56e2ba192ba02e0d8b2e3fa1d3215f5d91b681c2e7af7c137da68c"
+   }
+  },
+  {
+   "n": 13,
+   "call": "rc04_commit_import",
+   "case": "commit no-op",
+   "request": {
+    "p_reason": null,
+    "p_preview_id": "90000000-0000-4000-8000-000000000007",
+    "p_request_id": "20000000-0000-4000-8000-000000000004",
+    "p_expected_version": 2,
+    "p_delta_fingerprint": "0a81f80d9c56e2ba192ba02e0d8b2e3fa1d3215f5d91b681c2e7af7c137da68c"
+   },
+   "response": {
+    "noop": true,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 2,
+    "batch_id": null,
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000002",
+    "changed_count": 0
+   }
+  },
+  {
+   "n": 14,
+   "call": "rc04_preview_import",
+   "case": "preview fill the rest (R2 Part B fails)",
+   "request": {
+    "p_cells": [
+     {
+      "score": 12.5,
+      "state": "scored",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2"
+     }
+    ],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_file_evidence": {},
+    "p_file_reported": null,
+    "p_expected_version": 2
+   },
+   "response": {
+    "ok": true,
+    "diff": [
+     {
+      "after": {
+       "score": 12.5,
+       "outcome": "fail",
+       "value_state": "scored"
+      },
+      "before": {
+       "score": null,
+       "outcome": null,
+       "value_state": "unknown"
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "cell_ref": null,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "overwrites_recorded_value": false
+     }
+    ],
+    "counts": {
+     "errors": 0,
+     "changed": 1,
+     "submitted": 1,
+     "unchanged": 0
+    },
+    "errors": [],
+    "warnings": [
+     {
+      "code": "RESIDENTS_NOT_IN_FILE",
+      "count": 1
+     },
+     {
+      "code": "PARTS_NOT_IN_FILE",
+      "count": 1
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.401918+00:00",
+    "preview_id": "90000000-0000-4000-8000-000000000008",
+    "requires_reason": false,
+    "expected_version": 2,
+    "delta_fingerprint": "41d3d79b323cb4d08c2e88f55426a4c4fcdb343c7b785b424679529424ffac0d"
+   }
+  },
+  {
+   "n": 15,
+   "call": "rc04_commit_import",
+   "case": "commit fill",
+   "request": {
+    "p_reason": null,
+    "p_preview_id": "90000000-0000-4000-8000-000000000008",
+    "p_request_id": "20000000-0000-4000-8000-000000000005",
+    "p_expected_version": 2,
+    "p_delta_fingerprint": "41d3d79b323cb4d08c2e88f55426a4c4fcdb343c7b785b424679529424ffac0d"
+   },
+   "response": {
+    "noop": false,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 3,
+    "batch_id": "90000000-0000-4000-8000-000000000009",
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000002",
+    "changed_count": 1
+   }
+  },
+  {
+   "n": 16,
+   "call": "rc04_admin_get_revision",
+   "case": "admin view of the working revision (validation + overall)",
+   "request": {
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002"
+   },
+   "response": {
+    "exam": {
+     "state": "working",
+     "title": "X-ray & Anatomy fixture",
+     "exam_id": "90000000-0000-4000-8000-000000000001",
+     "version": 3,
+     "exam_date": "2026-06-20",
+     "exam_type": "xray_anatomy",
+     "revision_id": "90000000-0000-4000-8000-000000000002",
+     "revision_seq": 1,
+     "academic_year": 2569
+    },
+    "cells": [
+     {
+      "score": 0.0,
+      "outcome": "fail",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "value_state": "scored"
+     },
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "value_state": "absent"
+     },
+     {
+      "score": null,
+      "outcome": null,
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "value_state": "awaiting"
+     },
+     {
+      "score": 12.5,
+      "outcome": "fail",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "value_state": "scored"
+     }
+    ],
+    "parts": [
+     {
+      "mpl": {
+       "2": 60.0,
+       "3": 65.0
+      },
+      "name": "Part A",
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "max_score": 100.0,
+      "column_key": "part_1",
+      "sort_order": 1
+     },
+     {
+      "mpl": {
+       "2": 30.0,
+       "3": 30.0
+      },
+      "name": "Part B",
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "max_score": 50.0,
+      "column_key": "part_2",
+      "sort_order": 2
+     }
+    ],
+    "limits": {
+     "score_decimals": 2,
+     "preview_ttl_minutes": 30,
+     "max_cells_per_import": 10000
+    },
+    "roster": [
+     {
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "reference_name": "Fixture R2 (as on the paper)"
+     },
+     {
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "reference_name": "Fixture c1"
+     }
+    ],
+    "overall": {
+     "10000000-0000-4000-8000-0000000000c1": {
+      "status": "incomplete",
+      "absent_part_ids": [
+       "90000000-0000-4000-8000-000000000004"
+      ],
+      "failed_part_ids": [
+       "90000000-0000-4000-8000-000000000003"
+      ],
+      "unknown_part_ids": [],
+      "awaiting_part_ids": [],
+      "criteria_missing_part_ids": []
+     },
+     "10000000-0000-4000-8000-0000000000c2": {
+      "status": "incomplete",
+      "absent_part_ids": [],
+      "failed_part_ids": [
+       "90000000-0000-4000-8000-000000000004"
+      ],
+      "unknown_part_ids": [],
+      "awaiting_part_ids": [
+       "90000000-0000-4000-8000-000000000003"
+      ],
+      "criteria_missing_part_ids": []
+     }
+    },
+    "reviewed": null,
+    "importable": true,
+    "validation": {
+     "counts": {
+      "cells": 4,
+      "absent": 1,
+      "scored": 2,
+      "unknown": 0,
+      "awaiting": 1,
+      "criteria_missing": 0
+     },
+     "blockers": []
+    },
+    "allowed_states": [
+     "scored",
+     "absent",
+     "awaiting"
+    ],
+    "template_version": "RC04-TEMPLATE-1"
+   }
+  },
+  {
+   "n": 17,
+   "call": "rc04_mark_reviewed",
+   "case": "mark reviewed with wrong counts",
+   "error": {
+    "code": "RC04_CONFIRMATION_MISMATCH",
+    "message": "RC04_CONFIRMATION_MISMATCH: confirm the current absent/awaiting counts (absent 1, awaiting 1)",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_confirm": {
+     "absent": 0,
+     "awaiting": 0
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000006",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_expected_version": 3
+   }
+  },
+  {
+   "n": 18,
+   "call": "rc04_mark_reviewed",
+   "case": "mark reviewed",
+   "request": {
+    "p_confirm": {
+     "absent": 1,
+     "awaiting": 1
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000007",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_expected_version": 3
+   },
+   "response": {
+    "counts": {
+     "cells": 4,
+     "absent": 1,
+     "scored": 2,
+     "unknown": 0,
+     "awaiting": 1,
+     "criteria_missing": 0
+    },
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000002",
+    "checked_version": 3
+   }
+  },
+  {
+   "n": 19,
+   "call": "rc04_publish_revision",
+   "case": "publish",
+   "request": {
+    "p_confirm": {
+     "absent": 1,
+     "awaiting": 1
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000008",
+    "p_revision_id": "90000000-0000-4000-8000-000000000002",
+    "p_expected_version": 3,
+    "p_expected_published_revision_id": null
+   },
+   "response": {
+    "counts": {
+     "cells": 4,
+     "absent": 1,
+     "scored": 2,
+     "unknown": 0,
+     "awaiting": 1,
+     "criteria_missing": 0
+    },
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "replayed": false,
+    "published_at": "2026-10-19T10:57:55.412473+00:00",
+    "published_revision_id": "90000000-0000-4000-8000-000000000002",
+    "previous_published_revision_id": null
+   }
+  },
+  {
+   "n": 20,
+   "call": "rc04_open_read_set",
+   "case": "Staff opens a read set (old publication)",
+   "request": {
+    "p_scope": "staff",
+    "p_exam_id": null,
+    "p_revision_id": null,
+    "p_academic_year": null
+   },
+   "response": {
+    "scope": "staff",
+    "entries": [
+     {
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "is_current": true,
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "published_at": "2026-10-19T10:57:55.412473+00:00",
+      "revision_seq": 1,
+      "academic_year": 2569
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.416058+00:00",
+    "manifest_id": "90000000-0000-4000-8000-000000000010",
+    "page_size_max": 500,
+    "page_size_default": 200
+   }
+  },
+  {
+   "n": 21,
+   "call": "rc04_read_page",
+   "case": "Staff page 1 (limit 2): incomplete + failed, absent/awaiting rows with null score",
+   "request": {
+    "p_limit": 2,
+    "p_cursor": null,
+    "p_manifest_id": "90000000-0000-4000-8000-000000000010"
+   },
+   "response": {
+    "done": false,
+    "rows": [
+     {
+      "mpl": 60.0,
+      "score": 0.0,
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": "fail",
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 100.0,
+      "part_name": "Part A",
+      "entry_index": 0,
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "value_state": "scored",
+      "revision_seq": 1,
+      "academic_year": 2569,
+      "reference_name": "Fixture c1",
+      "criteria_status": "complete",
+      "part_sort_order": 1
+     },
+     {
+      "mpl": 30.0,
+      "score": null,
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": null,
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 50.0,
+      "part_name": "Part B",
+      "entry_index": 0,
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "value_state": "absent",
+      "revision_seq": 1,
+      "academic_year": 2569,
+      "reference_name": "Fixture c1",
+      "criteria_status": "complete",
+      "part_sort_order": 2
+     }
+    ],
+    "row_count": 2,
+    "manifest_id": "90000000-0000-4000-8000-000000000010",
+    "next_cursor": {
+     "i": 0,
+     "p": "90000000-0000-4000-8000-000000000004",
+     "r": "10000000-0000-4000-8000-0000000000c1",
+     "s": 2,
+     "manifest_id": "90000000-0000-4000-8000-000000000010"
+    }
+   }
+  },
+  {
+   "n": 22,
+   "call": "rc04_open_read_set",
+   "case": "Resident own history",
+   "request": {
+    "p_scope": "own",
+    "p_exam_id": null,
+    "p_revision_id": null,
+    "p_academic_year": null
+   },
+   "response": {
+    "scope": "own",
+    "entries": [
+     {
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "is_current": true,
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "published_at": "2026-10-19T10:57:55.412473+00:00",
+      "revision_seq": 1,
+      "academic_year": 2569
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.42274+00:00",
+    "manifest_id": "90000000-0000-4000-8000-000000000011",
+    "page_size_max": 500,
+    "page_size_default": 200
+   }
+  },
+  {
+   "n": 23,
+   "call": "rc04_begin_correction",
+   "case": "begin correction",
+   "request": {
+    "p_reason": "paper recheck",
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000009",
+    "p_expected_published_revision_id": "90000000-0000-4000-8000-000000000002"
+   },
+   "response": {
+    "state": "working",
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000012",
+    "base_published_revision_id": "90000000-0000-4000-8000-000000000002"
+   }
+  },
+  {
+   "n": 24,
+   "call": "rc04_update_working_revision",
+   "case": "edit the draft correction (title, PGY, criteria)",
+   "request": {
+    "p_reason": "criteria typo",
+    "p_changes": {
+     "parts": [
+      {
+       "mpl": {
+        "3": 12
+       },
+       "part_id": "90000000-0000-4000-8000-000000000004"
+      }
+     ],
+     "title": "X-ray & Anatomy fixture (corrected)"
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000010",
+    "p_revision_id": "90000000-0000-4000-8000-000000000012",
+    "p_expected_version": 1
+   },
+   "response": {
+    "noop": false,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 2,
+    "replayed": false,
+    "validation": {
+     "counts": {
+      "cells": 4,
+      "absent": 1,
+      "scored": 2,
+      "unknown": 0,
+      "awaiting": 1,
+      "criteria_missing": 0
+     },
+     "blockers": []
+    },
+    "revision_id": "90000000-0000-4000-8000-000000000012"
+   }
+  },
+  {
+   "n": 25,
+   "call": "rc04_mark_reviewed",
+   "case": "mark reviewed correction",
+   "request": {
+    "p_confirm": {
+     "absent": 1,
+     "awaiting": 1
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000011",
+    "p_revision_id": "90000000-0000-4000-8000-000000000012",
+    "p_expected_version": 2
+   },
+   "response": {
+    "counts": {
+     "cells": 4,
+     "absent": 1,
+     "scored": 2,
+     "unknown": 0,
+     "awaiting": 1,
+     "criteria_missing": 0
+    },
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000012",
+    "checked_version": 2
+   }
+  },
+  {
+   "n": 26,
+   "call": "rc04_publish_revision",
+   "case": "publish correction",
+   "request": {
+    "p_confirm": {
+     "absent": 1,
+     "awaiting": 1
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000012",
+    "p_revision_id": "90000000-0000-4000-8000-000000000012",
+    "p_expected_version": 2,
+    "p_expected_published_revision_id": "90000000-0000-4000-8000-000000000002"
+   },
+   "response": {
+    "counts": {
+     "cells": 4,
+     "absent": 1,
+     "scored": 2,
+     "unknown": 0,
+     "awaiting": 1,
+     "criteria_missing": 0
+    },
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "replayed": false,
+    "published_at": "2026-10-19T10:57:55.431453+00:00",
+    "published_revision_id": "90000000-0000-4000-8000-000000000012",
+    "previous_published_revision_id": "90000000-0000-4000-8000-000000000002"
+   }
+  },
+  {
+   "n": 27,
+   "call": "rc04_read_page",
+   "case": "Staff page 2 of the OLD read set after the correction was published (still old revision)",
+   "request": {
+    "p_limit": 2,
+    "p_cursor": {
+     "i": 0,
+     "p": "90000000-0000-4000-8000-000000000004",
+     "r": "10000000-0000-4000-8000-0000000000c1",
+     "s": 2,
+     "manifest_id": "90000000-0000-4000-8000-000000000010"
+    },
+    "p_manifest_id": "90000000-0000-4000-8000-000000000010"
+   },
+   "response": {
+    "done": false,
+    "rows": [
+     {
+      "mpl": 65.0,
+      "score": null,
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": null,
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 100.0,
+      "part_name": "Part A",
+      "entry_index": 0,
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "value_state": "awaiting",
+      "revision_seq": 1,
+      "academic_year": 2569,
+      "reference_name": "Fixture R2 (as on the paper)",
+      "criteria_status": "complete",
+      "part_sort_order": 1
+     },
+     {
+      "mpl": 30.0,
+      "score": 12.5,
+      "title": "X-ray & Anatomy fixture",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": "fail",
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 50.0,
+      "part_name": "Part B",
+      "entry_index": 0,
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "revision_id": "90000000-0000-4000-8000-000000000002",
+      "value_state": "scored",
+      "revision_seq": 1,
+      "academic_year": 2569,
+      "reference_name": "Fixture R2 (as on the paper)",
+      "criteria_status": "complete",
+      "part_sort_order": 2
+     }
+    ],
+    "row_count": 2,
+    "manifest_id": "90000000-0000-4000-8000-000000000010",
+    "next_cursor": {
+     "i": 0,
+     "p": "90000000-0000-4000-8000-000000000004",
+     "r": "10000000-0000-4000-8000-0000000000c2",
+     "s": 2,
+     "manifest_id": "90000000-0000-4000-8000-000000000010"
+    }
+   }
+  },
+  {
+   "n": 28,
+   "call": "rc04_open_read_set",
+   "case": "Staff opens a NEW read set (new publication)",
+   "request": {
+    "p_scope": "staff",
+    "p_exam_id": null,
+    "p_revision_id": null,
+    "p_academic_year": null
+   },
+   "response": {
+    "scope": "staff",
+    "entries": [
+     {
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "is_current": true,
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "published_at": "2026-10-19T10:57:55.431453+00:00",
+      "revision_seq": 2,
+      "academic_year": 2569
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.439212+00:00",
+    "manifest_id": "90000000-0000-4000-8000-000000000013",
+    "page_size_max": 500,
+    "page_size_default": 200
+   }
+  },
+  {
+   "n": 29,
+   "call": "rc04_read_page",
+   "case": "Staff page of the new read set",
+   "request": {
+    "p_limit": 10,
+    "p_cursor": null,
+    "p_manifest_id": "90000000-0000-4000-8000-000000000013"
+   },
+   "response": {
+    "done": true,
+    "rows": [
+     {
+      "mpl": 60.0,
+      "score": 0.0,
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": "fail",
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 100.0,
+      "part_name": "Part A",
+      "entry_index": 0,
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "value_state": "scored",
+      "revision_seq": 2,
+      "academic_year": 2569,
+      "reference_name": "Fixture c1",
+      "criteria_status": "complete",
+      "part_sort_order": 1
+     },
+     {
+      "mpl": 30.0,
+      "score": null,
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": null,
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [
+        "90000000-0000-4000-8000-000000000004"
+       ],
+       "failed_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 50.0,
+      "part_name": "Part B",
+      "entry_index": 0,
+      "pgy_at_exam": 2,
+      "resident_id": "10000000-0000-4000-8000-0000000000c1",
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "value_state": "absent",
+      "revision_seq": 2,
+      "academic_year": 2569,
+      "reference_name": "Fixture c1",
+      "criteria_status": "complete",
+      "part_sort_order": 2
+     },
+     {
+      "mpl": 65.0,
+      "score": null,
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": null,
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [],
+       "failed_part_ids": [],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000003",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 100.0,
+      "part_name": "Part A",
+      "entry_index": 0,
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "value_state": "awaiting",
+      "revision_seq": 2,
+      "academic_year": 2569,
+      "reference_name": "Fixture R2 (as on the paper)",
+      "criteria_status": "complete",
+      "part_sort_order": 1
+     },
+     {
+      "mpl": 12.0,
+      "score": 12.5,
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_id": "90000000-0000-4000-8000-000000000001",
+      "outcome": "pass",
+      "overall": {
+       "status": "incomplete",
+       "absent_part_ids": [],
+       "failed_part_ids": [],
+       "unknown_part_ids": [],
+       "awaiting_part_ids": [
+        "90000000-0000-4000-8000-000000000003"
+       ],
+       "criteria_missing_part_ids": []
+      },
+      "part_id": "90000000-0000-4000-8000-000000000004",
+      "exam_date": "2026-06-20",
+      "exam_type": "xray_anatomy",
+      "max_score": 50.0,
+      "part_name": "Part B",
+      "entry_index": 0,
+      "pgy_at_exam": 3,
+      "resident_id": "10000000-0000-4000-8000-0000000000c2",
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "value_state": "scored",
+      "revision_seq": 2,
+      "academic_year": 2569,
+      "reference_name": "Fixture R2 (as on the paper)",
+      "criteria_status": "complete",
+      "part_sort_order": 2
+     }
+    ],
+    "row_count": 4,
+    "manifest_id": "90000000-0000-4000-8000-000000000013",
+    "next_cursor": null
+   }
+  },
+  {
+   "n": 30,
+   "call": "rc04_read_page",
+   "case": "another user uses that read set (refused)",
+   "error": {
+    "code": "RC04_READ_SET_NOT_FOUND",
+    "message": "RC04_READ_SET_NOT_FOUND: start the read again",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_limit": 10,
+    "p_cursor": null,
+    "p_manifest_id": "90000000-0000-4000-8000-000000000013"
+   }
+  },
+  {
+   "n": 31,
+   "call": "rc04_admin_list_exams",
+   "case": "Admin list of managed exams",
+   "request": {
+    "p_academic_year": null
+   },
+   "response": [
+    {
+     "exam_id": "90000000-0000-4000-8000-000000000001",
+     "working": null,
+     "sort_key": "2026-06-2090000000-0000-4000-8000-000000000001",
+     "published": {
+      "seq": 2,
+      "title": "X-ray & Anatomy fixture (corrected)",
+      "exam_date": "2026-06-20",
+      "revision_id": "90000000-0000-4000-8000-000000000012",
+      "published_at": "2026-10-19T10:57:55.431453+00:00",
+      "academic_year": 2569
+     },
+     "published_revision_id": "90000000-0000-4000-8000-000000000012"
+    }
+   ]
+  },
+  {
+   "n": 32,
+   "call": "rc04_read_page",
+   "case": "cursor with missing keys (refused, not an empty page)",
+   "error": {
+    "code": "RC04_INVALID_CURSOR",
+    "message": "RC04_INVALID_CURSOR: malformed cursor (expected {manifest_id, i, r, s, p})",
+    "sqlstate": "P0001"
+   },
+   "request": {
+    "p_limit": 10,
+    "p_cursor": {
+     "manifest_id": "90000000-0000-4000-8000-000000000013"
+    },
+    "p_manifest_id": "90000000-0000-4000-8000-000000000013"
+   }
+  },
+  {
+   "n": 33,
+   "call": "rc04_begin_correction",
+   "case": "begin second correction",
+   "request": {
+    "p_reason": "second look",
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000013",
+    "p_expected_published_revision_id": "90000000-0000-4000-8000-000000000012"
+   },
+   "response": {
+    "state": "working",
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000014",
+    "base_published_revision_id": "90000000-0000-4000-8000-000000000012"
+   }
+  },
+  {
+   "n": 34,
+   "call": "rc04_update_working_revision",
+   "case": "update with the same values (no-op: version and review kept)",
+   "request": {
+    "p_reason": null,
+    "p_changes": {
+     "title": "X-ray & Anatomy fixture (corrected)"
+    },
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_request_id": "20000000-0000-4000-8000-000000000014",
+    "p_revision_id": "90000000-0000-4000-8000-000000000014",
+    "p_expected_version": 1
+   },
+   "response": {
+    "noop": true,
+    "exam_id": "90000000-0000-4000-8000-000000000001",
+    "version": 1,
+    "replayed": false,
+    "revision_id": "90000000-0000-4000-8000-000000000014"
+   }
+  },
+  {
+   "n": 35,
+   "call": "rc04_preview_import",
+   "case": "preview with file metadata {} (refused)",
+   "request": {
+    "p_cells": [],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000014",
+    "p_file_evidence": {},
+    "p_file_reported": {},
+    "p_expected_version": 1
+   },
+   "response": {
+    "ok": false,
+    "counts": {
+     "errors": 5,
+     "submitted": 0
+    },
+    "errors": [
+     {
+      "key": "template_version",
+      "code": "FILE_REPORTED_MISSING_KEY"
+     },
+     {
+      "key": "exam_id",
+      "code": "FILE_REPORTED_MISSING_KEY"
+     },
+     {
+      "key": "revision_id",
+      "code": "FILE_REPORTED_MISSING_KEY"
+     },
+     {
+      "key": "version",
+      "code": "FILE_REPORTED_MISSING_KEY"
+     },
+     {
+      "key": "academic_year",
+      "code": "FILE_REPORTED_MISSING_KEY"
+     }
+    ],
+    "preview_id": null
+   }
+  },
+  {
+   "n": 36,
+   "call": "rc04_preview_import",
+   "case": "p_file_reported null over the API arrives as SQL NULL = metadata not sent (accepted; proves nothing about a file)",
+   "request": {
+    "p_cells": [],
+    "p_exam_id": "90000000-0000-4000-8000-000000000001",
+    "p_revision_id": "90000000-0000-4000-8000-000000000014",
+    "p_file_evidence": {},
+    "p_file_reported": null,
+    "p_expected_version": 1
+   },
+   "response": {
+    "ok": true,
+    "diff": [],
+    "counts": {
+     "errors": 0,
+     "changed": 0,
+     "submitted": 0,
+     "unchanged": 0
+    },
+    "errors": [],
+    "warnings": [
+     {
+      "code": "RESIDENTS_NOT_IN_FILE",
+      "count": 2
+     },
+     {
+      "code": "PARTS_NOT_IN_FILE",
+      "count": 2
+     }
+    ],
+    "expires_at": "2026-10-19T11:27:55.450444+00:00",
+    "preview_id": "90000000-0000-4000-8000-000000000015",
+    "requires_reason": false,
+    "expected_version": 1,
+    "delta_fingerprint": "2aafb9fb1923bab5d4daa265d82e0dbcb89ca0cd61459a7fdba6269f6f5a8b4c"
+   }
+  }
+ ],
+ "fixture_note": "Synthetic data from tests/rc04-fixtures.sql; every UUID is a fixture id. Nulls inside request/response are kept exactly as sent/returned (a JSON null argument is passed as SQL NULL). Each case has either response or error. Errors are what PostgREST returns as message/code (P0001); the RC04_* prefix before \":\" is the error code."
+}

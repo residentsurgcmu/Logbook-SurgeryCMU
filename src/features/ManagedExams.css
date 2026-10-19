@@ -1,0 +1,20 @@
+.rc04-area { display: grid; gap: 1rem; min-width: 0; }
+.rc04-area label { display: grid; gap: .4rem; }
+.rc04-area fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 1rem; min-width: 0; }
+.rc04-area input:not([type=checkbox]), .rc04-area select, .rc04-area textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: .7rem; border: 1px solid #b4c5bd; border-radius: .5rem; background: #fff; color: #163c29; font: inherit; }
+.rc04-area button { min-height: 44px; }
+.rc04-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; }
+.rc04-area .rc04-check { display: flex; align-items: flex-start; gap: .7rem; }
+.rc04-check input { margin-top: .3rem; }
+.rc04-part { padding: 1rem; background: #f3f7f4; border-radius: .6rem; }
+.rc04-callout { padding: 1rem; border: 1px solid #c6a461; border-radius: .7rem; background: #fffbef; display: grid; gap: .8rem; }
+.rc04-table { border-collapse: collapse; width: 100%; min-width: 620px; }
+.rc04-table th, .rc04-table td { text-align: left; vertical-align: top; padding: .75rem; border-bottom: 1px solid #d8e2dc; }
+.rc04-table thead { background: #edf4ef; }
+.rc04-table small { display: block; padding-top: .3rem; }
+.rc04-roster { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; }
+.rc04-roster label { display: flex; align-items: center; }
+.rc04-roster select { max-width: 120px; }
+.rc04-area summary { cursor: pointer; padding: .8rem 0; font-weight: 600; }
+.rc04-area .button-row { flex-wrap: wrap; }
+@media (max-width: 600px) { .rc04-grid { grid-template-columns: 1fr; } .rc04-roster { flex-wrap: wrap; } }

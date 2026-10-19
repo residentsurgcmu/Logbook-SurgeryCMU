@@ -1,0 +1,323 @@
+{
+ "interface": "RC-04 backend B001",
+ "version": "RC04-API-2",
+ "migration": "20261019090000_rc04_managed_exams.sql",
+ "transport": "PostgREST RPC (supabase.rpc(name, args)); errors arrive as {code:'P0001', message:'RC04_<CODE>: text'} — the code is the prefix before ':'",
+ "identity": "actor is always auth.uid(); no actor id is accepted from the client",
+ "value_states": {
+  "scored": "score 0..max (0 is a real score), outcome pass (score >= MPL) | fail | null when criteria missing",
+  "absent": "score null, outcome null",
+  "awaiting": "score null, outcome null",
+  "unknown": "no data yet (initial state); blocks review/publish"
+ },
+ "overall_rules": [
+  "unknown cell or missing MPL → not_ready (Admin draft only; cannot be published)",
+  "any absent/awaiting → incomplete (+ failed_part_ids if any)",
+  "any fail → failed_some",
+  "else all_passed"
+ ],
+ "limits": {
+  "roster_max": 200,
+  "parts_max": 50,
+  "cells_per_import_max": 10000,
+  "score_decimals": 2,
+  "preview_ttl_minutes": 30,
+  "read_set_ttl_minutes": 30,
+  "page_size_default": 200,
+  "page_size_max": 500,
+  "reason_max_chars": 300
+ },
+ "fingerprints": "sha256 hex of jsonb text; delta fingerprint covers exam_id, revision_id, version and the sorted normalized delta",
+ "receipts": "actor+operation+request_id unique; INSERT ON CONFLICT DO NOTHING (an identical in-flight request waits, then replays); committed receipts never purged in v1",
+ "errors": {
+  "RC04_FORBIDDEN": "caller is not the required active role (checked before any receipt/preview lookup)",
+  "RC04_INVALID_INPUT": "malformed or out-of-range input (message says which)",
+  "RC04_LIMIT": "size limit exceeded (roster 1-200 also after update, 50 parts, 10 000 cells)",
+  "RC04_NOT_FOUND": "exam/revision not found for this caller (also for drafts guessed by id)",
+  "RC04_NOT_WORKING": "only the working revision can change",
+  "RC04_REVISION_CONFLICT": "expected_version is not the current version (new request on old template/preview)",
+  "RC04_IDEMPOTENCY_KEY_REUSED": "same request_id with a different payload",
+  "RC04_PREVIEW_NOT_FOUND": "preview does not exist or belongs to another Admin",
+  "RC04_PREVIEW_CONSUMED": "preview already committed by another request",
+  "RC04_PREVIEW_EXPIRED": "preview older than 30 min or invalidated by a change",
+  "RC04_PREVIEW_MISMATCH": "delta_fingerprint differs from the preview",
+  "RC04_REASON_REQUIRED": "change overwrites recorded values / correction / roster removal without reason",
+  "RC04_SCORE_EXCEEDS_NEW_MAX": "new max below a recorded score",
+  "RC04_NOT_READY": "validation blockers (UNKNOWN_CELLS, CRITERIA_MISSING, SCORE_EXCEEDS_MAX, MPL_EXCEEDS_MAX, EMPTY_ROSTER_OR_PARTS)",
+  "RC04_CONFIRMATION_MISMATCH": "confirm.absent/awaiting differ from the current counts (P01)",
+  "RC04_NOT_REVIEWED": "publish without review of this exact version",
+  "RC04_PUBLISHED_REVISION_CONFLICT": "expected_published_revision_id is not current / correction base changed",
+  "RC04_NOT_PUBLISHED": "correction requested before first publication",
+  "RC04_WORKING_REVISION_EXISTS": "only one working revision per exam",
+  "RC04_READ_SET_NOT_FOUND": "read set unknown or owned by another user",
+  "RC04_READ_SET_EXPIRED": "read set older than 30 min: restart the whole read",
+  "RC04_INVALID_CURSOR": "cursor not exactly {manifest_id,i,r,s,p} with right types/range, or from another read set",
+  "RC04_MANAGED_EXAM": "legacy writer / direct write on a managed exam refused",
+  "RC04_IMMUTABLE": "published revision rows / audit cannot change"
+ },
+ "operations": [
+  {
+   "name": "rc04_create_managed_exam",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_payload": {
+     "exam_type": "'xray_anatomy'",
+     "title": "text 1-160",
+     "exam_date": "date",
+     "academic_year": "integer 2500-2700 (Buddhist year, set by Admin)",
+     "roster": "[{resident_id uuid (Resident account), pgy_at_exam 1-4 (confirmed), reference_name text optional (default profile name at creation)}] 1-200, unique",
+     "parts": "[{name text 1-120, sort_order 1-50 unique, max_score > 0, mpl {\"<pgy>\": numeric 0..max} optional}] 1-50"
+    }
+   },
+   "returns": {
+    "exam_id": "uuid",
+    "revision_id": "uuid",
+    "version": 1,
+    "state": "working",
+    "replayed": "boolean"
+   },
+   "notes": "all-or-nothing; every roster x part cell is created as unknown; profile PGY is not touched"
+  },
+  {
+   "name": "rc04_update_working_revision",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid",
+    "p_expected_version": "integer",
+    "p_changes": "{title?, exam_date?, academic_year?, participants?:[{resident_id, pgy_at_exam?, reference_name?}], add_participants?:[{resident_id, pgy_at_exam, reference_name?}], remove_participants?:[uuid], parts?:[{part_id, name?, max_score?, mpl?:{\"<pgy>\": numeric|null(null deletes)}}]}",
+    "p_reason": "text <=300, required when removing a resident with recorded results"
+   },
+   "returns": {
+    "exam_id": "uuid",
+    "revision_id": "uuid",
+    "version": "integer",
+    "noop": "boolean",
+    "validation": "object"
+   },
+   "notes": "final roster must be 1-200 after all removes/adds of the request (RC04_LIMIT otherwise, whole request rolled back). Only values that really change after normalization count: if none changes → {noop:true}, version/review/previews kept (still needs the right expected_version). A real change bumps version, clears review, expires previews, recomputes outcomes. remove+add of the same resident is a real change (results restart as unknown). Working revision only."
+  },
+  {
+   "name": "rc04_get_import_template",
+   "role": "Active Admin",
+   "mutation": false,
+   "args": {
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid"
+   },
+   "returns": {
+    "template_version": "'RC04-TEMPLATE-1'",
+    "importable": "boolean (working only)",
+    "exam": "{exam_id, revision_id, revision_seq, version, state, academic_year, exam_date, exam_type, title}",
+    "parts": "[{part_id, column_key 'part_<sort>', name, sort_order, max_score, mpl {pgy: mpl}}] by sort_order",
+    "roster": "[{resident_id, reference_name, pgy_at_exam}]",
+    "cells": "[{resident_id, part_id, value_state, score, outcome}]",
+    "allowed_states": [
+     "scored",
+     "absent",
+     "awaiting"
+    ],
+    "limits": {
+     "max_cells_per_import": 10000,
+     "score_decimals": 2,
+     "preview_ttl_minutes": 30
+    }
+   }
+  },
+  {
+   "name": "rc04_preview_import",
+   "role": "Active Admin",
+   "mutation": "writes a preview row only, never results",
+   "args": {
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid",
+    "p_expected_version": "integer",
+    "p_cells": [
+     {
+      "resident_id": "uuid",
+      "part_id": "uuid",
+      "state": "'scored'|'absent'|'awaiting' (unknown cannot be imported; blank cells are simply not sent)",
+      "score": "JSON number, 0..max_score, <= 2 decimals; only with state=scored",
+      "cell_ref": "text, optional (e.g. 'D5'), echoed in errors/diff; not an identity"
+     }
+    ],
+    "p_file_evidence": "jsonb (e.g. {file_hash, file_name}) stored with the preview/batch",
+    "p_file_reported": {
+     "nullable": "SQL NULL / omitted / JSON null over HTTP = no file metadata sent (accepted; proves nothing about an XLSX)",
+     "when_sent": "JSON object, unknown keys refused",
+     "required": {
+      "template_version": "string, must be 'RC04-TEMPLATE-1'",
+      "exam_id": "string uuid = p_exam_id",
+      "revision_id": "string uuid = p_revision_id",
+      "version": "integer (JSON number) = current version",
+      "academic_year": "integer = revision academic_year"
+     },
+     "optional": {
+      "roster": "array (not null) of {resident_id string uuid, pgy_at_exam integer, cell_ref string|null optional}; partial list allowed; each must equal the snapshot; no duplicates",
+      "parts": "array (not null) of {part_id string uuid, max_score number, mpl object {\"1\"..\"4\": number}, cell_ref string|null optional}; partial list allowed; max and the FULL mpl map of each listed part must equal the snapshot; no duplicates"
+     },
+     "errors": "FILE_REPORTED_NOT_OBJECT, FILE_REPORTED_MISSING_KEY, FILE_REPORTED_NULL, FILE_REPORTED_WRONG_TYPE, FILE_REPORTED_UNKNOWN_KEY, FILE_REPORTED_DUPLICATE, then value mismatches TEMPLATE_VERSION_MISMATCH, EXAM_MISMATCH, REVISION_MISMATCH, TEMPLATE_OUTDATED, ACADEMIC_YEAR_MISMATCH, ROSTER_OR_PGY_MISMATCH, PART_OR_CRITERIA_MISMATCH — any error → ok=false, no preview",
+     "server_checks": "types/nulls/keys above; ids, version, year, roster PGY, part max and MPL against the server snapshot; never writes PGY or MPL",
+     "parser_gate_C0": "XLSX type/size/ZIP limits, sheets and headers present, macros/external links/formulas refused, numeric cells only, blank → not sent, reference_name, part name/order and part-column mapping compared with rc04_get_import_template; SQL fixtures are not workbook tests"
+    }
+   },
+   "returns": {
+    "ok": "boolean",
+    "preview_id": "uuid|null",
+    "expires_at": "timestamptz",
+    "expected_version": "integer",
+    "delta_fingerprint": "hex sha256",
+    "requires_reason": "boolean",
+    "diff": "[{resident_id, part_id, cell_ref, overwrites_recorded_value, before{value_state,score,outcome}, after{value_state,score,outcome(predicted)}}] changed cells only",
+    "errors": "[{code, cell_ref, resident_id, part_id}] codes: INVALID_ID, UNKNOWN_RESIDENT, UNKNOWN_PART, DUPLICATE_CELL, INVALID_STATE, INVALID_SCORE_TYPE, SCORE_NEGATIVE, SCORE_EXCEEDS_MAX, SCORE_TOO_PRECISE, STATE_WITH_SCORE, TEMPLATE_VERSION_MISMATCH, EXAM_MISMATCH, REVISION_MISMATCH, TEMPLATE_OUTDATED, ACADEMIC_YEAR_MISMATCH, ROSTER_OR_PGY_MISMATCH, PART_OR_CRITERIA_MISMATCH",
+    "warnings": "[{code RESIDENTS_NOT_IN_FILE|PARTS_NOT_IN_FILE, count}] (kept as they are)",
+    "counts": "{submitted, changed, unchanged, errors}"
+   },
+   "notes": "ok=false → no preview row; any error rejects the whole file"
+  },
+  {
+   "name": "rc04_commit_import",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_preview_id": "uuid",
+    "p_expected_version": "integer",
+    "p_delta_fingerprint": "text",
+    "p_reason": "text|null (required when requires_reason)"
+   },
+   "returns": {
+    "batch_id": "uuid|null",
+    "changed_count": "integer",
+    "version": "integer",
+    "noop": "boolean",
+    "exam_id": "uuid",
+    "revision_id": "uuid",
+    "replayed": "boolean"
+   },
+   "notes": "merges only the previewed cells; no-op keeps version and review; replay returns the first result before any stale check"
+  },
+  {
+   "name": "rc04_mark_reviewed",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid",
+    "p_expected_version": "integer",
+    "p_confirm": "{absent: int, awaiting: int} = current counts"
+   },
+   "returns": {
+    "checked_version": "integer",
+    "counts": "{cells, scored, absent, awaiting, unknown, criteria_missing}"
+   }
+  },
+  {
+   "name": "rc04_publish_revision",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid",
+    "p_expected_version": "integer",
+    "p_expected_published_revision_id": "uuid|null (null = first publication)",
+    "p_confirm": "{absent, awaiting}"
+   },
+   "returns": {
+    "published_revision_id": "uuid",
+    "previous_published_revision_id": "uuid|null",
+    "published_at": "timestamptz",
+    "counts": "object"
+   },
+   "notes": "revision becomes immutable; pointer + events projection (title/date/type/status) change in the same transaction"
+  },
+  {
+   "name": "rc04_begin_correction",
+   "role": "Active Admin",
+   "mutation": true,
+   "args": {
+    "p_request_id": "uuid",
+    "p_exam_id": "uuid",
+    "p_expected_published_revision_id": "uuid",
+    "p_reason": "text 1-300"
+   },
+   "returns": {
+    "revision_id": "uuid",
+    "version": 1,
+    "state": "working",
+    "base_published_revision_id": "uuid"
+   },
+   "notes": "clone of the exact published revision (same part_ids); readers keep the old one until publish"
+  },
+  {
+   "name": "rc04_admin_list_exams",
+   "role": "Active Admin",
+   "mutation": false,
+   "args": {
+    "p_academic_year": "integer|null"
+   },
+   "returns": "[{exam_id, published_revision_id, published{...}|null, working{revision_id, seq, version, reviewed, academic_year, exam_date, title, base_published_revision_id, validation}|null}]"
+  },
+  {
+   "name": "rc04_admin_get_revision",
+   "role": "Active Admin",
+   "mutation": false,
+   "args": {
+    "p_exam_id": "uuid",
+    "p_revision_id": "uuid"
+   },
+   "returns": "template object + {validation, reviewed, overall {resident_id: overall}}"
+  },
+  {
+   "name": "rc04_open_read_set",
+   "role": "own: Active Resident; staff: Active Staff or Admin",
+   "mutation": "writes a manifest row",
+   "args": {
+    "p_scope": "'own'|'staff'",
+    "p_exam_id": "uuid|null",
+    "p_academic_year": "integer|null",
+    "p_revision_id": "uuid|null (older PUBLISHED revision of p_exam_id; drafts → NOT_FOUND)"
+   },
+   "returns": {
+    "manifest_id": "uuid",
+    "scope": "text",
+    "expires_at": "timestamptz (30 min)",
+    "entries": "[{exam_id, revision_id, revision_seq, academic_year, exam_date, title, exam_type, published_at, is_current}] ordered academic_year desc, exam_date desc, exam_id",
+    "page_size_default": 200,
+    "page_size_max": 500
+   }
+  },
+  {
+   "name": "rc04_read_page",
+   "role": "same as the read set, re-checked on every page; owner of the manifest only",
+   "mutation": false,
+   "args": {
+    "p_manifest_id": "uuid",
+    "p_cursor": "SQL NULL (or null over HTTP) = first page; otherwise exactly {manifest_id string uuid of this read set, i integer 0..entries-1, r string uuid, s integer, p string uuid} — anything else → RC04_INVALID_CURSOR (checked before any query); always pass next_cursor unchanged",
+    "p_limit": "integer 1-500 (default 200)"
+   },
+   "returns": {
+    "rows": "[{entry_index, exam_id, revision_id, revision_seq, academic_year, exam_date, title, exam_type, resident_id, reference_name, pgy_at_exam, part_id, part_name, part_sort_order, max_score, mpl|null, criteria_status 'complete'|'missing', value_state, score|null, outcome 'pass'|'fail'|null, overall{status 'all_passed'|'failed_some'|'incomplete'|'not_ready', failed_part_ids, absent_part_ids, awaiting_part_ids, unknown_part_ids, criteria_missing_part_ids}}] ordered entry_index, resident_id, part_sort_order, part_id",
+    "row_count": "integer",
+    "done": "boolean",
+    "next_cursor": "jsonb|null"
+   },
+   "notes": "rows with null score/outcome (absent/awaiting) are always returned; the pinned revision never changes inside a read set; expired/foreign read set → restart the whole read and discard partial data"
+  }
+ ],
+ "changes_from_v1": [
+  "B01 final roster 1-200 checked in rc04_update_working_revision",
+  "B02 strict p_file_reported schema",
+  "B03 update no-op when no value really changes",
+  "cursor schema validated (INVALID_CURSOR)",
+  "fixtures keep nulls"
+ ],
+ "nullability_over_http": "PostgREST passes a JSON null argument as SQL NULL. For p_file_reported and p_cursor, null/omitted therefore means 'not sent' (first page / no file metadata). A JSON null VALUE inside an object is a real null and is validated.",
+ "audit_scope": "revision.update audit stores changed_keys, items and before/after version (not the old values). Immutable published revisions are full snapshots; intermediate working states cannot be rebuilt from the audit."
+}

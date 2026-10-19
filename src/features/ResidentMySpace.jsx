@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { buildMySpace, PBA_TARGET, PBA_YEAR_TARGET, STUCK_TEXT } from "../mySpace";
 import { academicYearStart, thaiDate } from "../residentAssessmentRules";
 import { loadOwnRoundAttendanceSince } from "../residentApi";
+import { ManagedPersonalScores } from "./ManagedExams";
 
 const checkInTime = (iso) =>
   new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(iso));
@@ -52,6 +53,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
 
   return (
     <div className="ms-page">
+      <ManagedPersonalScores key={workspace.user.id} userId={workspace.user.id} />
       <section className="ms-hero">
         <h2>สวัสดี {data.greeting.name || "Resident"}</h2>
         <p>{data.greeting.pgy ? `PGY ${data.greeting.pgy} · ` : ""}{data.year.label}</p>
