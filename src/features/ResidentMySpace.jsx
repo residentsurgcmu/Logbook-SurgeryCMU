@@ -12,7 +12,7 @@ const statusText = { reached: "ถึงเกณฑ์แล้ว", finished: 
 
 function TopicLabel({ item }) {
   const topic = assessmentTopic(item.code);
-  return <><span className="ms-topic-icon"><AssessmentTopicIcon topic={topic.icon} /></span><span className="ms-form-name"><small>{item.code} · {topic.label}</small><strong>{assessmentDisplayName(item.code, item.title)}</strong></span></>;
+  return <><span className="ms-topic-icon"><AssessmentTopicIcon topic={topic.icon} code={item.code} /></span><span className="ms-form-name"><small>{item.code} · {topic.label}</small><strong>{assessmentDisplayName(item.code, item.title)}</strong></span></>;
 }
 function Status({ state }) {
   return <span className={`ms-status ms-status-${state}`}>{statusText[state]}</span>;

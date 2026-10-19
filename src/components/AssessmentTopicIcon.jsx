@@ -1,4 +1,6 @@
 import React from "react";
+import { assessmentIconMapping } from "../assessmentIconMapping";
+import { assessmentOrganPaths } from "../assessmentOrganPaths";
 
 const paths = {
   trauma: <><path d="m12 3 8 3v5c0 5-4 8-8 10-4-2-8-5-8-10V6Z" /><path d="M12 7v9M8 11h8" /></>,
@@ -13,6 +15,9 @@ const paths = {
   airway: <><path d="M9 2v11l-6 6M15 2v11l6 6M9 6h6M9 10h6M9 13l3 2 3-2M6 16l3 3M15 19l3-3" /></>,
 };
 
-export default function AssessmentTopicIcon({ topic }) {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{paths[topic] || paths.general}</svg>;
+export default function AssessmentTopicIcon({ topic, code }) {
+  const icon = assessmentIconMapping[code];
+  const organ = assessmentOrganPaths[icon];
+  if (organ) return <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true" focusable="false" data-icon-set="healthicons" data-icon-name={icon}>{organ.map((attributes, index) => <path key={index} {...attributes} />)}</svg>;
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" data-icon-set="c0" data-icon-name={code === "PBA-19" ? "tracheostomy" : topic || "general"}>{code === "PBA-19" ? paths.airway : paths[topic] || paths.general}</svg>;
 }

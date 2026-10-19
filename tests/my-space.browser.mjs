@@ -38,6 +38,20 @@ try {
   await page.getByRole("button", { name: "ดูครบ 21 แบบตามสถานะที่เลือก →", exact: true }).click();
   ok(await page.getByText("Modified radical mastectomy (MRM)", { exact: true }).isVisible(), "PBA-14 source name visible");
   ok(await page.locator(".ms-form-row").count() === 29, "eight EPA level rows and 21 PBA options retained"); ok(await page.locator(".ms-form-row svg[aria-hidden=true]").count() === 29, "topic SVG icons are decorative beside full text");
+  const renderedIcons = await page.locator(".ms-form-row").evaluateAll((rows) => rows.map((row) => {
+    const svg = row.querySelector("svg"); return { code: row.querySelector(".ms-form-name small").textContent.split(" · ")[0],
+      icon: svg.dataset.iconName, set: svg.dataset.iconSet, viewBox: svg.getAttribute("viewBox"), stroke: svg.getAttribute("stroke"),
+      width: svg.getAttribute("width"), paths: [...svg.querySelectorAll("path")].map((path) => ({ d: path.getAttribute("d"), fill: path.getAttribute("fill") })) };
+  }));
+  const { assessmentIconMapping } = await import("../src/assessmentIconMapping.js");
+  for (const icon of renderedIcons) {
+    if (icon.code === "PBA-19") {
+      ok(icon.set === "c0" && icon.icon === "tracheostomy" && icon.viewBox === "0 0 24 24" && icon.stroke === "currentColor", "PBA19 keeps C0 stroke SVG");
+      ok(JSON.stringify(icon.paths.map((path) => path.d)) === JSON.stringify(["M9 2v11l-6 6M15 2v11l6 6M9 6h6M9 10h6M9 13l3 2 3-2M6 16l3 3M15 19l3-3"]), "PBA19 original C0 geometry unchanged");
+    } else {
+      ok(icon.set === "healthicons" && icon.icon === assessmentIconMapping[icon.code] && icon.viewBox === "0 0 48 48" && icon.stroke === null && icon.width === "22" && icon.paths.every((path) => path.fill === "currentColor"), "G3 organ asset at native filled 48 viewBox: " + icon.code);
+    }
+  }
   await page.getByRole("button", { name: "รอประเมิน", exact: true }).click(); ok(await page.locator(".ms-form-row").count() === 3, "waiting filter has EPA4, EPA7-L3 and AVF");
   await page.locator(".ms-form-row summary").first().click(); ok(await page.locator(".ms-form-row[open]").count() === 1, "detail expands");
   await page.getByRole("tab", { name: "ผลสอบ", exact: true }).click(); ok(ownReadCalls === 0, "no exam request until explicit reveal");
