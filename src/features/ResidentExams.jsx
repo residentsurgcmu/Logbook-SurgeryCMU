@@ -11,6 +11,7 @@ import ExamExportButton from "./ExamExportButton";
 import { MplInputs } from "./ExamMplFields";
 import ExamScoreEditor from "./ExamScoreEditor";
 import ExamStandards from "./ExamStandards";
+import ManagedExams from "./ManagedExams";
 
 const thaiDate = (value) =>
   new Intl.DateTimeFormat("th-TH", {
@@ -457,7 +458,7 @@ function ExamResults({ events, user }) {
   </>;
 }
 
-export default function ResidentExams({ workspace, onRefresh }) {
+function LegacyResidentExams({ workspace, onRefresh }) {
   const events = useMemo(() => groupExamRecords(workspace.examRecords), [workspace.examRecords]);
   const [selectedId, setSelectedId] = useState("");
   const [view, setView] = useState("exams");
@@ -490,4 +491,12 @@ export default function ResidentExams({ workspace, onRefresh }) {
       {selected && (selected.scoringMode === "mpl" ? <ExamScoreEditor key={selected.id} event={selected} onRefresh={onRefresh} onDeleted={afterDelete} scoreError={examScoreError} /> : <ExamEditor key={selected.id} event={selected} onRefresh={onRefresh} onDeleted={afterDelete} />)}
     </>}
   </div>;
+}
+
+export default function ResidentExams({ workspace, onRefresh }) {
+  const [mode, setMode] = useState("managed");
+  return <div className="exam-layout"><div className="button-row" role="tablist" aria-label="ระบบผลสอบ">
+    <button type="button" role="tab" aria-selected={mode === "managed"} className={mode === "managed" ? "primary-button" : "secondary-button"} onClick={() => setMode("managed")}>X-ray &amp; Anatomy · นำเข้า Excel</button>
+    <button type="button" role="tab" aria-selected={mode === "legacy"} className={mode === "legacy" ? "primary-button" : "secondary-button"} onClick={() => setMode("legacy")}>MCQ / รายการสอบเดิม</button>
+  </div>{mode === "managed" ? <ManagedExams key={workspace.user.id} user={workspace.user} /> : <LegacyResidentExams workspace={workspace} onRefresh={onRefresh} />}</div>;
 }

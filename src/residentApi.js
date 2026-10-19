@@ -3,6 +3,8 @@ import { residentTemplates } from "./generated/residentTemplates";
 import { fetchAllRows } from "./supabasePaging";
 import { planCriteriaSync } from "./criteriaSync";
 import { createAdminAccountsApi } from "./adminAccountsApi.js";
+import { createManagedExamsApi } from "./managedExams.js";
+export const managedExamsApi = createManagedExamsApi(supabase);
 import {
   isJwtIssuedInFutureError,
   normalizeResidentEmail,
@@ -36,6 +38,7 @@ export async function signIn({ email, password }) {
 }
 
 export async function signOut() {
+  managedExamsApi.setActor(null);
   const { error } = await supabase.auth.signOut({ scope: "local" });
   fail(error);
 }
@@ -44,9 +47,10 @@ export async function updatePassword(password) {
   fail(error);
 }
 export function onAuthChange(listener) {
-  return supabase.auth.onAuthStateChange((event, session) =>
-    listener(event, session),
-  );
+  return supabase.auth.onAuthStateChange((event, session) => {
+    managedExamsApi.setActor(session?.user?.id || null);
+    listener(event, session);
+  });
 }
 
 export async function getResidentSession() {

@@ -1,0 +1,130 @@
+// Run with Vite on :5178 and fixture env variables. Every non-local request is intercepted.
+import { createRequire } from "node:module";
+const { chromium } = createRequire(import.meta.url)("playwright");
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import ExcelJS from "exceljs";
+const fixtures = JSON.parse(await readFile(new URL("../docs/rc04/RC04_backend_fixtures_v2.json", import.meta.url)));
+const at = (n) => structuredClone(fixtures.cases.find((c) => c.n === n).response);
+const snapshot = at(16), exam = snapshot.exam.exam_id, rev = snapshot.exam.revision_id;
+const browser = await chromium.launch({ headless: true, ...(process.env.RC04_CHROME ? { executablePath: process.env.RC04_CHROME, args: ["--no-sandbox", "--disable-dev-shm-usage"] } : {}) });
+let failures = [];
+try {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage(), calls = [];
+  let current = structuredClone(snapshot), published = false, readScope = "staff", holdPage = null;
+  page.on("pageerror", (e) => failures.push(e.message));
+  await context.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === "127.0.0.1") return route.continue();
+    if (!url.pathname.includes("/rest/v1/rpc/")) return route.abort();
+    const name = url.pathname.split("/").at(-1), args = route.request().postDataJSON(); calls.push({ name, args });
+    let data;
+    switch (name) {
+      case "admin_list_accounts": data = current.roster.map((r) => ({ user_id: r.resident_id, full_name: r.reference_name, pgy: r.pgy_at_exam, role: "resident", active: true })); break;
+      case "rc04_admin_list_exams": data = [{ exam_id: exam, published_revision_id: published ? rev : null, published: published ? { ...snapshot.exam, revision_id: rev } : null, working: current.exam.state === "working" ? { ...current.exam, revision_id: current.exam.revision_id } : null }]; break;
+      case "rc04_admin_get_revision": data = current; break;
+      case "rc04_mark_reviewed": current.reviewed = true; data = { checked_version: current.exam.version }; break;
+      case "rc04_publish_revision": current.exam.state = "published"; current.importable = false; published = true; data = { published_revision_id: rev }; break;
+      case "rc04_begin_correction": current.exam = { ...current.exam, revision_id: rev.replace(/.$/, "9"), revision_seq: 2, version: 1, state: "working" }; current.reviewed = false; current.importable = true; data = { revision_id: current.exam.revision_id, version: 1 }; break;
+      case "rc04_update_working_revision": current.exam.title = args.p_changes.title; current.exam.version++; current.reviewed = false; data = { revision_id: current.exam.revision_id, version: current.exam.version, noop: false }; break;
+      case "rc04_open_read_set": readScope = args.p_scope; data = at(28); break;
+      case "rc04_read_page": data = at(29); data.manifest_id = args.p_manifest_id; if (readScope === "own") { const id = data.rows[0].resident_id; data.rows = data.rows.filter((r) => r.resident_id === id); data.row_count = data.rows.length; } break;
+      case "rc04_preview_import":
+        data = { ok: true, preview_id: "fixture-preview", expected_version: current.exam.version, delta_fingerprint: "fixture-hash", requires_reason: true, errors: [], warnings: [], counts: { changed: 1, unchanged: 3 }, diff: [{ ...current.cells[0], before: current.cells[0], after: { value_state: "scored", score: 0, outcome: "fail" }, cell_ref: "คะแนน!D2" }] }; break;
+      case "rc04_commit_import": data = { revision_id: rev, version: ++current.exam.version, changed_count: 1 }; current.reviewed = false; break;
+      default: throw new Error(`Unmocked RPC ${name}`);
+    }
+    if (name === "rc04_read_page" && holdPage) { const hold = holdPage; holdPage = null; hold.reached(); await hold.wait; }
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify(data) });
+  });
+  await page.goto("http://127.0.0.1:5178/tests/rc04-browser.html");
+  await page.getByRole("heading", { name: current.exam.title, exact: true }).waitFor();
+  const downloadWait = page.waitForEvent("download");
+  await page.getByRole("button", { name: "1. ดาวน์โหลดแม่แบบ Excel" }).click();
+  const download = await downloadWait, bytes = await readFile(await download.path()), workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(bytes);
+  assert.equal(workbook.worksheets.length, 3);
+  workbook.getWorksheet("คะแนน").getCell("D2").value = 0; workbook.getWorksheet("คะแนน").getCell("E2").value = null;
+  const edited = Buffer.from(await workbook.xlsx.writeBuffer());
+  await page.locator('input[type="file"]').setInputFiles({ name: "fixture.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: edited });
+  await page.getByRole("heading", { name: "3. ตรวจเทียบก่อนบันทึก" }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "บันทึกฉบับร่าง (ยังไม่ประกาศ)", exact: true }).isDisabled(), true);
+  await page.getByLabel("ตรวจเทียบรายการเปลี่ยนกับต้นฉบับแล้ว").check();
+  await page.getByText("ยืนยันขอบเขตนำเข้า", { exact: false }).click();
+  await page.getByLabel("เหตุผล (จำเป็น)").fill("Fixture paper recheck");
+  await page.getByRole("button", { name: "บันทึกฉบับร่าง (ยังไม่ประกาศ)", exact: true }).click();
+  await page.getByRole("button", { name: "4. ตรวจแล้ว" }).waitFor();
+  assert.equal(calls.filter((c) => c.name === "rc04_publish_revision").length, 0);
+  await page.getByText("ตรวจข้อมูลฉบับนี้แล้ว", { exact: false }).click();
+  await page.getByRole("button", { name: "4. ตรวจแล้ว" }).click();
+  await page.getByText("ตรวจแล้ว ยังไม่ประกาศ", { exact: false }).waitFor();
+  await page.getByText("ตรวจข้อมูลฉบับนี้แล้ว", { exact: false }).click();
+  page.once("dialog", (d) => d.accept()); await page.getByRole("button", { name: "5. ประกาศผล" }).click();
+  await page.getByRole("button", { name: "เริ่มฉบับแก้" }).waitFor();
+  assert.equal(calls.filter((c) => c.name === "rc04_publish_revision").length, 1);
+  console.log("PASS Admin browser: download → edit workbook → upload → compare → commit → separate review → publish");
+  await page.getByLabel("เหตุผลเริ่มแก้ผลประกาศ").fill("Fixture correction reason");
+  await page.getByRole("button", { name: "เริ่มฉบับแก้", exact: true }).click();
+  await page.getByRole("button", { name: "แก้ชื่อ / วันที่ / ผู้สอบ / ชั้นปี / เกณฑ์", exact: true }).click();
+  await page.getByLabel("ชื่อการสอบ", { exact: true }).fill("Fixture title corrected");
+  await page.getByRole("button", { name: "บันทึกรายละเอียดฉบับร่าง", exact: true }).click();
+  await page.getByRole("heading", { name: "Fixture title corrected", exact: true }).waitFor();
+  const beforeStale = calls.filter((c) => c.name === "rc04_preview_import").length;
+  await page.locator('input[type="file"]').setInputFiles({ name: "old-template.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: edited });
+  await page.getByRole("alert").filter({ hasText: "ไม่ตรง" }).waitFor();
+  assert.equal(calls.filter((c) => c.name === "rc04_preview_import").length, beforeStale);
+  console.log("PASS Correction browser: begin with reason → edit metadata → stale workbook rejected before preview");
+  await page.goto("http://127.0.0.1:5178/tests/rc04-browser.html?role=personal");
+  await page.getByRole("button", { name: "เปิดคะแนนสอบ" }).waitFor();
+  assert.equal(await page.getByText("Fixture R1").count(), 0);
+  await page.getByRole("button", { name: "เปิดคะแนนสอบ" }).click();
+  await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+  const lastOpen = calls.filter((c) => c.name === "rc04_open_read_set").at(-1); assert.equal(lastOpen.args.p_scope, "own"); assert.equal(lastOpen.args.p_academic_year, null);
+  await page.getByLabel("ปีการศึกษา", { exact: true }).selectOption("2569");
+  await page.getByRole("button", { name: "เปิดคะแนนสอบ", exact: true }).waitFor();
+  assert.equal(await page.getByText("ยังไม่ครบ", { exact: false }).count(), 0);
+  await page.getByRole("button", { name: "เปิดคะแนนสอบ", exact: true }).click();
+  await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+  await page.getByRole("button", { name: "ซ่อนคะแนนสอบ" }).click();
+  assert.equal(await page.getByText("ยังไม่ครบ", { exact: false }).count(), 0);
+  console.log("PASS Personal browser: hidden default → own all-year read → year change re-hides → reopen → hide");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("http://127.0.0.1:5178/tests/rc04-browser.html?role=staff");
+  await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+  assert.equal(calls.filter((c) => c.name === "rc04_open_read_set").at(-1).args.p_scope, "staff");
+  const screenshot = process.env.RC04_SCREENSHOT;
+  if (screenshot) await page.screenshot({ path: screenshot, fullPage: true });
+  console.log("PASS Staff browser: published snapshot on mobile");
+  const downloads = []; page.on("download", (d) => downloads.push(d.suggestedFilename()));
+  const positiveDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "ส่งออกผลประกาศ Excel", exact: true }).click();
+  const positive = await positiveDownload; const exported = new ExcelJS.Workbook(); await exported.xlsx.load(await readFile(await positive.path()));
+  const ids = new Set(); exported.getWorksheet("ผลประกาศ").eachRow((r, i) => { if (i > 1) ids.add(r.getCell(6).value); });
+  assert.equal(ids.size, 2);
+  console.log("PASS Export positive control: Staff workbook contains both synthetic residents");
+  async function blockedExport(switchAction, label) {
+    await page.goto("http://127.0.0.1:5178/tests/rc04-browser.html?role=staff");
+    await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+    let reached, release; const waiting = new Promise((r) => { reached = r; });
+    holdPage = { reached, wait: new Promise((r) => { release = r; }) };
+    const before = downloads.length;
+    await page.getByRole("button", { name: "ส่งออกผลประกาศ Excel", exact: true }).click();
+    await waiting; await switchAction(); release(); await page.waitForTimeout(500);
+    assert.equal(downloads.length, before, `${label}: stale export downloaded`);
+    console.log(`PASS F-B01 ${label}: delayed Staff response cannot download`);
+  }
+  await blockedExport(async () => {
+    await page.getByRole("button", { name: "Fixture: switch to Resident B", exact: true }).click();
+    await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+    assert.equal(calls.filter((c) => c.name === "rc04_open_read_set").at(-1).args.p_scope, "own");
+  }, "Staff A → Resident B");
+  await blockedExport(async () => { await page.getByRole("button", { name: "Fixture: leave results", exact: true }).click(); }, "same-account unmount");
+  await blockedExport(async () => { await page.getByRole("button", { name: "Fixture: logout", exact: true }).click(); }, "logout");
+  await blockedExport(async () => {
+    await page.getByRole("button", { name: "Fixture: switch to Resident B", exact: true }).click();
+    await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+    await page.getByRole("button", { name: "Fixture: login Staff A", exact: true }).click();
+    await page.getByText("ยังไม่ครบ", { exact: false }).first().waitFor();
+  }, "A → B → A");
+  assert.deepEqual(failures, []);
+} finally { await browser.close(); }
