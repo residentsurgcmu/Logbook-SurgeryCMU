@@ -13,6 +13,8 @@
 .corner-shell main { padding:0 8px; }
 .corner-shell .page-heading { margin-bottom:20px; }
 .corner-shell .primary-button { background:#08675e; }
+/* Match the scan action's soft hover color at rest, including touch screens. */
+.corner-shell .round-scanner > .primary-button.icon-button { background:var(--brand-soft); }
 .corner-home { display:grid; gap:24px; }
 .corner-welcome { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:8px 0 12px; }
 .corner-welcome h2 { font-size:clamp(24px,2.5vw,32px); letter-spacing:-.6px; margin:8px 0; line-height:1.4; }
