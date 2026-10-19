@@ -914,7 +914,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           </div>
         </div>
       <main>
-        <div className="page-heading">
+        {tab !== "myspace" && <div className="page-heading">
           <div>
             <h1>{titles[tab]}</h1>
             <p>
@@ -922,7 +922,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
               {workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}
             </p>
           </div>
-        </div>
+        </div>}
         {tab === "home" ? (
           <ResidentCornerHome workspace={workspace} onNavigate={navigate} onOpenRequest={openScannedRequest} />
         ) : tab === "schedule" ? (
