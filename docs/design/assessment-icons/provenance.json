@@ -1,0 +1,129 @@
+{
+  "rc_base": "57438d720ce5c97193fd7fdc37bf2605cf1b95a3",
+  "healthicons_commit": "3c3a8e65938cb1b1e48707e5a91c410af7368bc7",
+  "icons": [
+    {
+      "icon": "anus",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/anus.svg",
+      "source_sha256": "0a4548b2c845b6358a213d24665db95e65053f25a16f2b70f6ff1a176cca48a9",
+      "svg_sha256": "ca8e523fabc33b7b0737bffb10539cb140e0fd42a690dc4a664044f6e0503df8",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "blood-vessel",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/blood-vessel.svg",
+      "source_sha256": "0b8abd3426b136ad10cdf340ae8723df32a7823e357eaee5533b624142f7a081",
+      "svg_sha256": "80f49a49028a420a9cd9d7b30231d4facef7b66c6102c861ad23cbefbf09093b",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "body",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/body.svg",
+      "source_sha256": "88905ff30db3b3039fae6e7e0b3b7446fece4c5b5c8dfa03b59dd720c430bce6",
+      "svg_sha256": "6d7be9e80ed6cf9c66dad3b0358ab268fb6bef2b6ab94266213fe2b067353976",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "breasts",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/breasts.svg",
+      "source_sha256": "d871ed1862b2e49dd12012d0815370c83be2faa17898528c5c635f01f83e5ad4",
+      "svg_sha256": "281e5301c6ee00d8dbe6e70735b3684e9c51c060041ac3a18dd83855710514ee",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "colon",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/colon.svg",
+      "source_sha256": "03659aaf7f785d4e775e8b65ca59d79a35e778f717398814135dd05c872bee78",
+      "svg_sha256": "55088e67ebf37d7da0d2ceed1eaa68927ffa02f12f8b775c707e4aeb2736b8e7",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "gallbladder",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/gallbladder.svg",
+      "source_sha256": "99510698c6c666d8b23820c4fa5591854edb23e33695b8f5091457aadbb06c08",
+      "svg_sha256": "92d5a69f3dd7cbe843f7004b168f6e5c256e029ca7b654c9fb27d0218e739741",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "general-surgery",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/specialties/general-surgery.svg",
+      "source_sha256": "d782c1340577d06f3feb2b6f1b404fc6b1f155b8e0dcc70b4be8293b8040a370",
+      "svg_sha256": "e30620bb852f1d845f6b247f6c7dfa88468b988dd4a10852bd66aa8f4ce0cb1d",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "intestine",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/intestine.svg",
+      "source_sha256": "5083eb9caab7c3213f94d2a1eacb7759e8886d6a353b75c50e12c47b2c3f5cfd",
+      "svg_sha256": "c12f3d8551cdafcc26468bb519649cd06a77d66348a345f4503cedb63f885f9e",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "leg",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/leg.svg",
+      "source_sha256": "53c049040c6bb72b88c779405c9db2fde4a4ea3a9d615de5b7e2d131a3470bc7",
+      "svg_sha256": "91edf0870a4254000d0257da989e500630dec3ea9f6dd71c118481e2b1eba59f",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "liver",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/liver.svg",
+      "source_sha256": "7bfc5f45d399ce3a9e762409879a660a8ae8ac48fc8d8f1c81a2354bab52f122",
+      "svg_sha256": "1ad23054d9ac699528f5d7cc0e3f18713ba413288751638982c706d1155394b9",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "spleen",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/spleen.svg",
+      "source_sha256": "825325f901bc0efd2595fa35da1c4ce10eed3fccfa250a3349ada2a54fb4b845",
+      "svg_sha256": "f2f8395222c23b1bf553d217653b1f6daf2e327595fc4611634c4cc91fc11643",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "stomach",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/stomach.svg",
+      "source_sha256": "b0aa0f8eedb762647c20bd23636cc5b335705baf60ef2aa3d716a62eb845f526",
+      "svg_sha256": "fb801a35593938d2a497f4df2c2a22483d551fc02fd7fd284a0b2f7ce1d483ba",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    },
+    {
+      "icon": "thyroid",
+      "source_url": "https://github.com/resolvetosavelives/healthicons/blob/3c3a8e65938cb1b1e48707e5a91c410af7368bc7/public/icons/svg/outline/body/thyroid.svg",
+      "source_sha256": "69318bc2ee2304be5909c0779964ec2ccfb9c4e90d76fb5c1553d54a7286f905",
+      "svg_sha256": "711a75de6c21bd437b3e474a30b5e2c95ad18e9d55225598c7d22ee1c373d10b",
+      "modification": "Added aria-hidden and focusable on root only; original paths, currentColor and 48x48 viewBox unchanged."
+    }
+  ],
+  "mapping": {
+    "EPA-1": "body",
+    "EPA-2": "body",
+    "EPA-3": "stomach",
+    "EPA-4": "liver",
+    "EPA-5": "breasts",
+    "EPA-6": "blood-vessel",
+    "EPA-7-L1-L2": "general-surgery",
+    "EPA-7-L3": "general-surgery",
+    "PBA-01": "leg",
+    "PBA-02": "intestine",
+    "PBA-03": "blood-vessel",
+    "PBA-04": "breasts",
+    "PBA-05": "colon",
+    "PBA-06": "colon",
+    "PBA-07": "colon",
+    "PBA-08": "stomach",
+    "PBA-09": "anus",
+    "PBA-10": "body",
+    "PBA-11": "intestine",
+    "PBA-12": "gallbladder",
+    "PBA-13": "liver",
+    "PBA-14": "breasts",
+    "PBA-15": "gallbladder",
+    "PBA-16": "stomach",
+    "PBA-17": "spleen",
+    "PBA-18": "thyroid",
+    "PBA-19": "c0-tracheostomy",
+    "PBA-20": "blood-vessel",
+    "PBA-21": "general-surgery"
+  },
+  "exception": "PBA-19 retains the original C0 airway vector at viewBox 0 0 24 24, stroke width 1.6, per Sense."
+}
