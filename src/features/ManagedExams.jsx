@@ -69,7 +69,19 @@ function ResultTable({ rows }) {
     </table></div>
   </section>);
 }
-export function ManagedPublishedResults({ role, userId, initialYear = "", onYearChange }) {
+function PersonalResultCards({ rows }) {
+  const groups = useMemo(() => groupManagedRows(rows), [rows]);
+  return groups.map((exam) => <section className="ms-exam-result" key={exam.revision_id}>
+    <h3>{exam.title}</h3><p className="ms-exam-meta">ปีการศึกษา {exam.academic_year} · {exam.exam_date}</p>
+    {exam.residents.map((resident) => <div key={resident.id}>
+      <p className="ms-exam-meta">{resident.name} · PGY {resident.pgy} ณ วันสอบ</p>
+      <div className="ms-exam-overall">{OVERALL_LABELS[resident.overall.status]}{resident.overall.failed_part_ids.length > 0 && <small>ส่วนที่ไม่ผ่าน: {exam.parts.filter((part) => resident.overall.failed_part_ids.includes(part.id)).map((part) => part.name).join(", ")}</small>}</div>
+      {exam.parts.map((part) => { const cell = resident.cells.get(part.id); return <div className="ms-exam-cell" key={part.id}><strong>{part.name}</strong><span>{cell ? managedCellLabel(cell) : "ข้อมูลไม่ครบ"}</span><small>{cell?.value_state === "scored" && <>{cell.score} / {cell.max_score} · </>}MPL {cell?.mpl ?? "ยังไม่ตั้งเกณฑ์"}</small></div>; })}
+    </div>)}
+  </section>);
+}
+
+export function ManagedPublishedResults({ role, userId, initialYear = "", onYearChange, personalLayout = false }) {
   const [loaded, setBundle] = useState(null), [error, setError] = useState(""), [reload, setReload] = useState(0), [year, setYear] = useState(initialYear), [pgy, setPgy] = useState(""), [resident, setResident] = useState(""), [exporting, setExporting] = useState(false);
   const owner = `${userId}/${role}/${reload}`, exportTask = useRef(null), identity = useRef("");
   identity.current = `${owner}/${year}/${pgy}/${resident}`;
@@ -116,14 +128,13 @@ export function ManagedPublishedResults({ role, userId, initialYear = "", onYear
     {error && <p role="alert" className="form-error">{error} กรุณาโหลดใหม่ทั้งชุด</p>}{!bundle && !error && <p role="status">กำลังโหลดผลประกาศทุกปี…</p>}
     {bundle && <><div className="rc04-grid"><label>ปีการศึกษา<select aria-label="ปีการศึกษา" value={year} onChange={(e) => { setYear(e.target.value); onYearChange?.(e.target.value); }}><option value="">ทุกปี (รวมประวัติ)</option>{years.map((y) => <option key={y}>{y}</option>)}</select></label>
       {role !== "resident" && <><label>PGY ณ วันสอบ<select value={pgy} onChange={(e) => setPgy(e.target.value)}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((y) => <option key={y}>{y}</option>)}</select></label><label>ผู้สอบ<select value={resident} onChange={(e) => setResident(e.target.value)}><option value="">ทุกคน</option>{residents.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select></label></>}
-    </div>{!visible.length ? <p>ยังไม่มีผลประกาศในกลุ่มที่เลือก ผลปีก่อนยังดูได้โดยเลือกทุกปี</p> : <ResultTable rows={visible} />}</>}
+    </div>{!visible.length ? <p>ยังไม่มีผลประกาศในกลุ่มที่เลือก ผลปีก่อนยังดูได้โดยเลือกทุกปี</p> : personalLayout && role === "resident" ? <PersonalResultCards rows={visible} /> : <ResultTable rows={visible} />}</>}
   </div>;
 }
-export function ManagedPersonalScores({ userId }) {
+export function ManagedPersonalScores({ userId, personalLayout = false }) {
   const [open, setOpen] = useState(false), [year, setYear] = useState("");
-  return <section className="ms-card rc04-area"><h2>ผลการสอบของฉัน</h2><p>คะแนนบนหน้าส่วนตัวเริ่มต้นเป็นซ่อน และซ่อนให้อีกครั้งเมื่อเปลี่ยนปี เปิดดูได้เมื่อพร้อม{year ? ` · ปีที่เลือก ${year}` : ""}</p>
-    <button className="secondary-button" aria-expanded={open} onClick={() => setOpen((x) => !x)}>{open ? "ซ่อนคะแนนสอบ" : "เปิดคะแนนสอบ"}</button>
-    {open && <ManagedPublishedResults role="resident" userId={userId} initialYear={year} onYearChange={(next) => { setYear(next); setOpen(false); }} />}
+  return <section className={`ms-card rc04-area${personalLayout ? " rc04-personal" : ""}`}><div className="ms-personal-heading"><h2>ผลการสอบของฉัน</h2><button className="secondary-button" aria-expanded={open} onClick={() => setOpen((x) => !x)}>{open ? "ซ่อนคะแนนสอบ" : "เปิดคะแนนสอบ"}</button></div><p className={personalLayout ? "ms-muted" : undefined}>คะแนนบนหน้าส่วนตัวเริ่มต้นเป็นซ่อน และซ่อนให้อีกครั้งเมื่อเปลี่ยนปี เปิดดูได้เมื่อพร้อม{year ? ` · ปีที่เลือก ${year}` : ""}</p>
+    {open && <ManagedPublishedResults role="resident" userId={userId} initialYear={year} personalLayout={personalLayout} onYearChange={(next) => { setYear(next); setOpen(false); }} />}
   </section>;
 }
 
