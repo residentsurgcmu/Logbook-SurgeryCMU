@@ -107,6 +107,9 @@ alter table public.resident_staff_directory enable row level security;
 revoke all on table public.resident_staff_directory from anon, authenticated;
 grant select (email, full_name, unit_name, active, auth_user_id, invited_at)
   on public.resident_staff_directory to authenticated;
+-- Both Edge Functions read the directory through the Data API; writes use
+-- the guarded account RPC after RC-02. Do not restore direct write privileges.
+grant select on table public.resident_staff_directory to service_role;
 
 create policy resident_staff_directory_admin_select
   on public.resident_staff_directory for select to authenticated

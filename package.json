@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test tests/*.test.mjs",
+    "test:db-grants": "node scripts/test-data-api-grants.mjs",
     "build:corner-preview": "node scripts/build-corner-preview.mjs"
   },
   "dependencies": {
@@ -25,5 +26,8 @@
     "react-dom": "19.2.8",
     "three": "0.186.1",
     "vite": "8.2.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10"
   }
 }

@@ -13,6 +13,13 @@ See `README.md` for features, local run and secrets.
 - No local Postgres or Deno: SQL and edge functions cannot be run locally.
 
 ## Production rules (Supabase)
+- **Data API grants (2026-10-30 platform change):** every new public table must
+  declare its intended grants/revokes in its creation migration alongside RLS.
+  Never assume `service_role` bypasses missing grants. Never fix a permission
+  error with schema-wide grants: RC-02 account writes and RC-04 internal tables
+  are intentionally closed. Run `npm run test:db-grants` after SQL changes.
+  The historical September grants added for rebuilds must NOT be replayed on a
+  populated project; see `docs/data-api-grants-20261030.md`.
 - **Never run `supabase db push`.** The `supabase_migrations` history only records up to
   20260824042343 while the real schema already has later migrations, so a push would
   re-run ~39 old migrations, some destructive.
