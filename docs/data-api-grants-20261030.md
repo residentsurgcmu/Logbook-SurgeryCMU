@@ -52,6 +52,28 @@ separate concern and their defaults were not changed here.
 
 ## Verification performed
 
+### G27-B01 targeted runner fix (2026-10-24)
+
+Before reporting any matrix PASS, the runner now validates exactly 48 rows,
+the independent expected identity list with each name occurring exactly once,
+and strict boolean `true` for every result. The inventory is maintained in
+`scripts/data-api-grants-matrix.mjs`, independently of SQL output. Update it
+alongside an intentional capability change; never infer completeness from the
+number of rows returned. Empty, missing, duplicate and unknown checks fail.
+`tests/data-api-grants-runner.test.mjs` covers validator rejection cases and
+runs the real runner in disposable source copies with 0 rows, 47 rows, 48 rows
+with duplicate/missing identity, and 48 rows with an unknown identity. All four
+must exit 1 before any matrix PASS or final success summary. Grants, migration
+exceptions and the existing role/RLS/RC-04 fixture logic are unchanged.
+
+Targeted results: validator/real-runner regression **14/14** (including the
+parent test and four real-runner subtests); complete `npm test` **542/542**,
+exit 0. The normal `npm run test:db-grants` remains **53 checks**, replaying
+74 migrations with the same four declared skips. G27-B01 is submitted for G0
+targeted recheck; C0 does not close the independent review on G0's behalf.
+
+### Original validation (2026-10-21)
+
 - `npm test`: **528/528**, exit 0 with complete summary.
 - `npm run build`: passed, existing chunk-size warning.
 - `git diff --check`: passed.

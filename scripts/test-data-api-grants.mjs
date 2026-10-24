@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { PGlite } from '@electric-sql/pglite';
+import { validateGrantsMatrix } from './data-api-grants-matrix.mjs';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const baseline = process.argv.find(a => a.startsWith('--baseline-ref='))?.split('=')[1];
@@ -44,7 +45,8 @@ try {
     join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'
     and c.relkind in ('r','p','S') order by c.relname`;
   const beforeProbes = (await db.query(catalogSql)).rows;
-  for (const row of (await db.query(await read('supabase/manual/data_api_grants_check.sql'))).rows) {
+  const matrix = validateGrantsMatrix((await db.query(await read('supabase/manual/data_api_grants_check.sql'))).rows);
+  for (const row of matrix) {
     ok(row.ok, row.check_name);
   }
   // Positive path + negative authorization probes use SQL roles, not mocks of
