@@ -140,6 +140,21 @@ alter table public.resident_evaluator_assignments enable row level security;
 alter table public.resident_assessments enable row level security;
 alter table public.resident_assessment_scores enable row level security;
 
+-- Explicit Data API access for fresh installs (Supabase removes automatic
+-- grants on new public tables on 2026-10-30). Policies below still decide rows.
+-- Account writes go through the RC-02 RPCs after that migration is replayed.
+grant select on table public.resident_user_roles, public.resident_profiles,
+  public.resident_template_definitions, public.resident_template_criteria,
+  public.resident_evaluator_assignments, public.resident_assessments,
+  public.resident_assessment_scores to authenticated;
+-- Admin template sync and assignment upsert are the remaining browser writes.
+grant insert, update on table public.resident_template_definitions,
+  public.resident_template_criteria, public.resident_evaluator_assignments to authenticated;
+-- resident-admin and resident-assessment-notifier read these through PostgREST.
+-- A service-role key bypasses RLS, but does not bypass missing table grants.
+grant select on table public.resident_user_roles, public.resident_profiles,
+  public.resident_template_definitions to service_role;
+
 create policy resident_roles_select on public.resident_user_roles for select to authenticated
   using (user_id = (select auth.uid()) or (select private.resident_role_is('admin')));
 create policy resident_profiles_select on public.resident_profiles for select to authenticated
