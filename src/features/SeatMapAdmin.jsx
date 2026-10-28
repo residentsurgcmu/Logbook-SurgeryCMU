@@ -27,7 +27,7 @@ export function SeatAdminPanel({ session, config, canConfigure, onChanged }) {
     </>}
     {config && <>
       <p>เปิดผัง <strong>{config.layout_name}</strong> · นั่งแล้ว {config.seated} คน · คำขอรอตรวจ {config.pending_requests}</p>
-      {canConfigure && <details><summary>ปรับเกณฑ์ตรงเวลา (กรณีพิเศษ)</summary><div className="seatmap-filters">
+      {canConfigure && <details><summary>ปรับเกณฑ์ตรงเวลา (กรณีพิเศษ)</summary><div className="seatmap-filters round-seat-time">
         <label>เวลา "ตรงเวลา" (น.)<input type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
         <button type="button" className="secondary-button" disabled={Boolean(busy) || !time} onClick={saveTime}>{busy === "time" ? "กำลังบันทึก…" : "บันทึกเวลา"}</button>
       </div></details>}

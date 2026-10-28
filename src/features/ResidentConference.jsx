@@ -112,12 +112,15 @@ export default function ResidentConference({ user, initialCase = null }) {
   return (
     <section className="resident-panel case-present">
       <div className="case-weekbar">
+        <div className="case-week-navigation">
         <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, -7))}>สัปดาห์ก่อน</button>
-        <strong>{label}</strong>
+        <strong className="case-week-label">{label}</strong>
         <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, 7))}>สัปดาห์ถัดไป</button>
         <button type="button" className="link-button" onClick={() => setWeekStart(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
+        </div><div className="case-week-actions">
         {canManage && <button type="button" className="secondary-button" disabled={!cases} onClick={() => setEditing(true)}>จัดรายการประชุม</button>}
         <button type="button" className="primary-button" disabled={exporting || !included.length} onClick={exportWeek}>{exporting ? "กำลังสร้างไฟล์…" : `Export PowerPoint ตามรายการ (${included.length})`}</button>
+        </div>
       </div>
       <small className="case-muted">
         รวมเคสที่รับตั้งแต่ {thaiDate(range.from)} ถึง {thaiDate(range.to)}
