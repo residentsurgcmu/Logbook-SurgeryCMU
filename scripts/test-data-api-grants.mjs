@@ -53,7 +53,7 @@ try {
   // has_table_privilege. Everything (including synthetic fixtures) rolls back.
   await run('tests/data-api-grants-behavior.sql');
   console.log('PASS SQL role / RLS behavior probes'); checks++;
-  for (const file of ['tests/rc04-managed-exams-behavior.sql', 'tests/rc04-managed-exams-b002.sql', 'tests/round-workflow-behavior.sql', 'tests/seat-map-behavior.sql', 'tests/real-room-64-behavior.sql']) {
+  for (const file of ['tests/rc04-managed-exams-behavior.sql', 'tests/rc04-managed-exams-b002.sql', 'tests/round-workflow-behavior.sql', 'tests/seat-map-behavior.sql', 'tests/real-room-64-behavior.sql', 'tests/calendar-behavior.sql', 'tests/resident-accounts-behavior.sql']) {
     let sql = await read(file);
     if (file.endsWith('rc04-managed-exams-behavior.sql')) {
       // T18k/l/n/o deliberately exercise the trigger EVEN IF an old service
@@ -65,6 +65,14 @@ try {
         grant select, update, delete on public.resident_exam_events to service_role;
         grant insert on public.resident_exam_results to service_role;`);
       console.log('FIXTURE ONLY: legacy service grants to exercise RC04 trigger defense in depth');
+    }
+    if (file.endsWith('resident-accounts-behavior.sql')) {
+      // Historical service-role default grants are needed only by the late Z/G
+      // old-Edge trigger probes. Earlier privilege/classifier checks run first.
+      const marker = "select t.err_as('service_role', format($$insert into public.resident_profiles";
+      assert.ok(sql.includes(marker));
+      sql = sql.replace(marker, () => "grant select, insert, update, delete, truncate on all tables in schema public to service_role;\n" + marker);
+      console.log('FIXTURE ONLY: legacy service privileges for old-Edge trigger probes; rollback removes them');
     }
     try { await db.exec(sql); } catch (error) { throw new Error(`${file}: ${error.code}: ${error.message}`); }
     console.log(`PASS regression ${file}`); checks++;

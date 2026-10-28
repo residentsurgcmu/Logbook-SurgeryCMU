@@ -1,3 +1,4 @@
+import ResidentCalendar from "./ResidentCalendar";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteResidentAssessment,
@@ -750,6 +751,7 @@ const navIcons = {
   home: HomeIcon,
   videos: BookIcon,
   schedule: CalendarIcon,
+  calendar: CalendarIcon,
   accounts: KeyIcon,
   request: PlusIcon,
   pending: ClipboardIcon,
@@ -804,7 +806,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
     nav.push(["attendance", "เช็คชื่อประชุม"]);
   nav.push(["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"]);
-  nav.push(["notifications", "Notification"]);
+  nav.push(["calendar", "ปฏิทินกิจกรรม"], ["notifications", "Notification"]);
   // Counts that need action are badges, not part of the label.
   const badges = {
     notifications: unreadCount,
@@ -823,6 +825,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
     home: "Resident Corner",
     myspace: "My space",
     videos: "คลังวิดีโอ",
+    calendar: "ปฏิทินสอบและกิจกรรม",
     schedule: "ตารางเวร / ตาราง OR",
     accounts: "บัญชีที่เชื่อมต่อ",
     dashboard: "Dashboard การประเมิน",
@@ -925,6 +928,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
         </div>}
         {tab === "home" ? (
           <ResidentCornerHome workspace={workspace} onNavigate={navigate} onOpenRequest={openScannedRequest} />
+        ) : tab === "calendar" ? (
+          <ResidentCalendar key={workspace.user.id} user={workspace.user} onNavigate={navigate} />
         ) : tab === "schedule" ? (
           <ResidentSchedule user={workspace.user} onNavigate={navigate} />
         ) : ["videos", "accounts"].includes(tab) ? (
@@ -941,6 +946,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           />
         ) : tab === "myspace" && workspace.user.role === "resident" ? (
           <ResidentMySpace
+            onNavigate={navigate}
             workspace={workspace}
             onOpenHistory={() => goTo("history")}
             onOpenRequest={() => goTo("request")}
