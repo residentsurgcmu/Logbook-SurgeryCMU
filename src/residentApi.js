@@ -739,3 +739,11 @@ export async function grantExtraAttempt({ residentId, templateId, reason }) {
   fail(error);
   return data;
 }
+
+export async function confirmPasswordLink(confirmation) {
+  if (!["invite", "recovery"].includes(confirmation?.type) || !/^[A-Za-z0-9_-]{20,256}$/.test(confirmation?.token_hash || "")) throw new Error("ลิงก์ยืนยันไม่ถูกต้อง");
+  const { data, error } = await supabase.auth.verifyOtp(confirmation);
+  fail(error);
+  if (!data.session) throw new Error("ไม่พบข้อมูลยืนยัน กรุณาขอลิงก์ใหม่");
+  return data.session;
+}

@@ -45,7 +45,7 @@ export function hasPasswordRecoveryLink(location) {
 }
 
 export function isPasswordSetupRoute(location) {
-  return location.pathname === "/reset-password" || hasPasswordRecoveryLink(location);
+  return location.pathname === "/confirm-password" || location.pathname === "/reset-password" || hasPasswordRecoveryLink(location);
 }
 
 export function shouldLoadResidentWorkspace(location) {
@@ -61,4 +61,13 @@ export function keepWorkspaceOnRefreshError(currentWorkspace, error) {
   const message = String(error?.message || "");
   if (/jwt expired|invalid jwt|refresh token|not authenticated|auth session missing/i.test(message)) return false;
   return true;
+}
+
+// The hash is never sent in an HTTP request or exchanged on page load.
+export function passwordConfirmation(location) {
+  if (location.pathname !== "/confirm-password") return null;
+  const params = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  const token_hash = params.get("token_hash"), type = params.get("type");
+  if (!["invite", "recovery"].includes(type) || !/^[A-Za-z0-9_-]{20,256}$/.test(token_hash || "") || params.getAll("token_hash").length !== 1 || params.getAll("type").length !== 1) return null;
+  return { token_hash, type };
 }

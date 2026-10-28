@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { hasPasswordRecoveryLink, isJwtIssuedInFutureError, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, residentSessionClockErrorMessage, retryResidentClockSkew, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
+import { passwordConfirmation, hasPasswordRecoveryLink, isJwtIssuedInFutureError, isPasswordSetupRoute, normalizeResidentEmail, passwordResetRedirect, residentRoles, residentSessionClockErrorMessage, retryResidentClockSkew, shouldLoadResidentWorkspace } from "../src/residentAuth.js";
 
 test("Resident authentication exposes exactly Resident, Staff, and Admin roles", () => {
   assert.deepEqual(residentRoles, ["resident", "staff", "admin"]);
@@ -95,4 +95,16 @@ test("Admin can provision Staff with a unit without overwriting existing Residen
   assert.match(platformSource, /account\.role === "staff"[\s\S]*?minLength="2"[\s\S]*?maxLength="80"[\s\S]*?required/);
   assert.match(apiSource, /\{ fullName, email, role, pgy, unitName \}/);
   assert.match(apiSource, /email: normalizeResidentEmail\(email\)/);
+});
+
+test("confirmation links only accept invitation or recovery hashes, never auto-login data", () => {
+  for (const type of ["invite", "recovery"]) {
+    const location = { pathname: "/confirm-password", hash: `#token_hash=${"a".repeat(64)}&type=${type}`, search: "" };
+    assert.deepEqual(passwordConfirmation(location), { token_hash: "a".repeat(64), type });
+    assert.equal(shouldLoadResidentWorkspace(location), false);
+  }
+  for (const hash of ["", "#token_hash=x&type=invite", `#token_hash=${"a".repeat(64)}&type=signup`, `#token_hash=${"a".repeat(64)}&type=invite&type=recovery`, `#token_hash=${"a".repeat(64)}&token_hash=${"b".repeat(64)}&type=invite`]) {
+    assert.equal(passwordConfirmation({ pathname: "/confirm-password", hash }), null);
+  }
+  assert.equal(passwordConfirmation({ pathname: "/reset-password", hash: `#token_hash=${"a".repeat(64)}&type=invite` }), null);
 });
