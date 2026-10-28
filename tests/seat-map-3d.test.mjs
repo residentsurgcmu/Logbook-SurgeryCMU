@@ -130,12 +130,12 @@ test("the gate falls back to 2D when the chunk fails or WebGL is missing", async
   assert.match(gate, /getDerivedStateFromError/);
   assert.match(gate, /componentDidCatch/);
   assert.match(gate, /<Suspense/);
-  const scene = await read("src/features/SeatMap3D.jsx");
+  const scene = await read("src/features/SeatMap3DLegacy.jsx");
   assert.match(scene, /try \{[\s\S]*new THREE\.WebGLRenderer[\s\S]*\} catch[\s\S]*onUnavailable\(\)/);
 });
 
 test("the scene is built once, draws on demand, and cleans up after itself", async () => {
-  const scene = await read("src/features/SeatMap3D.jsx");
+  const scene = await read("src/features/SeatMap3DLegacy.jsx");
   assert.equal(scene.match(/new THREE\.WebGLRenderer/g).length, 1, "renderer created once, not per data refresh");
   assert.match(scene, /requestAnimationFrame/);
   assert.doesNotMatch(scene, /setAnimationLoop/, "no continuous loop");
@@ -151,7 +151,7 @@ test("the scene is built once, draws on demand, and cleans up after itself", asy
 });
 
 test("the 3D code reads nothing a Resident does not already get from the 2D map", async () => {
-  const scene = await read("src/features/SeatMap3D.jsx");
+  const scene = await read("src/features/SeatMap3DLegacy.jsx");
   assert.doesNotMatch(scene, /\.people|checked_in_at|on_time|\.counts|seatMapApi|supabase/);
   assert.match(scene, /seatAriaLabel\(/);
 });
@@ -185,7 +185,7 @@ test("the 3D stage never forces the page wider than a phone (no aspect-ratio wit
 });
 
 test("final review #1: everything the scene creates is registered for teardown before anything else can throw, and old browsers get 3D or a clean fallback", async () => {
-  const scene = await read("src/features/SeatMap3D.jsx");
+  const scene = await read("src/features/SeatMap3DLegacy.jsx");
   const at = (needle) => { const i = scene.indexOf(needle); assert.ok(i >= 0, `${needle} is present`); return i; };
   assert.ok(at("undo.push(() => renderer.dispose())") < at("new ResizeObserver"), "renderer teardown is registered before the observer exists");
   assert.ok(at("undo.push(() => renderer.dispose())") < at("syncSeats(mapRef.current)"));
