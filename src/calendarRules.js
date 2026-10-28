@@ -22,3 +22,24 @@ export function calendarError(error) {
   if (text.includes('CALENDAR_INVALID')) return 'ตรวจวันเวลา รายละเอียด และผู้เข้าร่วม (ต้องมี Resident ที่ใช้งาน 1–200 คน)';
   return 'ทำรายการไม่สำเร็จ หากขาดการเชื่อมต่อระหว่างบันทึก ให้โหลดตรวจรายการก่อนส่งใหม่';
 }
+
+// Day keys and month arithmetic stay in Bangkok regardless of browser timezone.
+export function calendarMonthDays(month) {
+  calendarRange(month);
+  const [y,m]=month.split('-').map(Number), first=new Date(Date.UTC(y,m-1,1));
+  const count=new Date(Date.UTC(y,m,0)).getUTCDate();
+  return Array.from({length:Math.ceil((first.getUTCDay()+count)/7)*7},(_,i)=>{
+    const day=i-first.getUTCDay()+1;
+    return day<1||day>count?null:`${month}-${String(day).padStart(2,'0')}`;
+  });
+}
+export function calendarEventsForDay(events,day) {
+  const start=new Date(`${day}T00:00:00+07:00`).getTime(),end=start+86400000;
+  return events.filter(e=>new Date(e.starts_at).getTime()<end&&new Date(e.ends_at).getTime()>start);
+}
+export function shiftCalendarMonth(month,delta) {
+  calendarRange(month);const [y,m]=month.split('-').map(Number);
+  return new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);
+}
+export const calendarDayLabel = day=>new Intl.DateTimeFormat('th-TH',{dateStyle:'full',timeZone:'Asia/Bangkok'}).format(new Date(`${day}T12:00:00+07:00`));
+export const calendarMonthLabel = month=>new Intl.DateTimeFormat('th-TH',{month:'long',year:'numeric',timeZone:'Asia/Bangkok'}).format(new Date(`${month}-01T12:00:00+07:00`));
