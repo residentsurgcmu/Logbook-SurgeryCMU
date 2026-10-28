@@ -421,7 +421,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
     {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} /></>}
+    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
     {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} />}
