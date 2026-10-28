@@ -2,8 +2,8 @@ import {createRequire} from 'node:module';import assert from 'node:assert/strict
 const {chromium}=createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,executablePath:process.env.RC04_CHROME||'/tmp/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});
 try{
- for(const width of [390,768,1280]){
-  const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage();let saved=null,events=[];const errors=[];page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ for(const width of [390,768,1280]) for(const colorScheme of ['light','dark']){
+  const context=await browser.newContext({viewport:{width,height:900},colorScheme}),page=await context.newPage();let saved=null,events=[];const errors=[];page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await context.route('**/*',async route=>{
    const u=new URL(route.request().url());if(u.hostname==='127.0.0.1')return route.continue();
    const name=u.pathname.split('/').at(-1),body=route.request().postDataJSON();
@@ -33,8 +33,10 @@ try{
   await page.locator('[data-calendar-day="2027-01-02"]').press('ArrowRight');
   assert.equal(await page.locator('[data-calendar-day="2027-01-03"]').getAttribute('aria-pressed'),'true');
   await page.locator('[data-calendar-day="2027-01-02"]').click();
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));assert.deepEqual(errors,[]);await page.screenshot({path:`/tmp/rc-calendar-${width}.png`,fullPage:true});
-  await context.close();console.log(`PASS Admin publish selected resident, Thai time and viewport ${width}`);
+  const styles=await page.evaluate(()=>{const selected=document.querySelector('.calendar-day-button[aria-pressed="true"] .calendar-day-number'), input=document.querySelector('.calendar-toolbar input'),nav=document.querySelector('.calendar-month-nav button');const c=getComputedStyle(selected);return {color:c.color,bg:c.backgroundColor,inputTop:input.getBoundingClientRect().top,navTop:nav.getBoundingClientRect().top,headBg:getComputedStyle(document.querySelector('.calendar-month-table th')).backgroundColor,noteColor:getComputedStyle(document.querySelector('.calendar-grid-note')).color};});
+  assert.equal(styles.color,'rgb(255, 255, 255)');assert.equal(styles.bg,'rgb(36, 79, 115)');assert.equal(styles.headBg,'rgb(234, 241, 248)');assert.equal(styles.noteColor,'rgb(82, 102, 123)');assert.ok(Math.abs(styles.inputTop-styles.navTop)<=1,JSON.stringify(styles));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));assert.deepEqual(errors,[]);await page.screenshot({path:`/tmp/rc-calendar-${width}-${colorScheme}.png`,fullPage:true});
+  await context.close();console.log(`PASS Admin publish selected resident, Thai time and viewport ${width}, OS ${colorScheme}`);
  }
  const context=await browser.newContext({viewport:{width:390,height:844}}),page=await context.newPage();
  await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.fulfill({json:[{id:'fixture',title:'Published exam',kind:'exam',status:'published',starts_at:'2027-01-02T02:00:00Z',ends_at:'2027-01-02T05:00:00Z',location:'Room A',description:'Instructions',exam_id:null}]}));
