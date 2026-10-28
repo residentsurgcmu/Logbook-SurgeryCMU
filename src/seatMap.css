@@ -108,3 +108,4 @@
 .seatmap-occupant { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .seatmap-scroll-hint { display: none; }
 @media (max-width: 900px) { .seatmap-scroll-hint { display: block; color: var(--text-muted); margin-bottom: 6px; } }
+.seatmap3d-detail{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--surface);min-width:0}.seatmap3d-detail label{display:grid;gap:6px;max-width:100%}.seatmap3d-detail select{max-width:100%;min-height:44px;padding:8px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font:inherit}.seatmap3d-detail p{overflow-wrap:anywhere;flex:1 1 220px;margin:0;color:var(--text)}
