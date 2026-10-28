@@ -58,14 +58,20 @@ function RevisionMetadata({ snapshot, action }) {
     <label>เหตุผล (จำเป็นเมื่อนำผู้สอบออก)<textarea maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} /></label><button className="primary-button">บันทึกรายละเอียดฉบับร่าง</button>
   </fieldset>{error && <p role="alert" className="form-error">{error}</p>}</form>;
 }
+function ResultStatus({ cell, overall }) {
+  const tone = overall ? ({ all_passed: "pass", failed_some: "fail", incomplete: "pending" }[overall] || "neutral")
+    : cell?.value_state === "scored" && ["pass", "fail"].includes(cell.outcome) ? cell.outcome
+    : ["absent", "awaiting"].includes(cell?.value_state) ? "pending" : "neutral";
+  return <span className={`rc04-result-status rc04-result-status--${tone}`}>{overall ? OVERALL_LABELS[overall] : cell ? managedCellLabel(cell) : "ข้อมูลไม่ครบ"}</span>;
+}
 function ResultTable({ rows }) {
   const groups = useMemo(() => groupManagedRows(rows), [rows]);
   return groups.map((exam) => <section className="resident-panel" key={exam.revision_id}>
     <h3>{exam.title}</h3><p>ปีการศึกษา {exam.academic_year} · {exam.exam_date}</p>
     <div className="resident-table-wrap"><table className="rc04-table"><thead><tr><th>ผู้สอบ / ชั้นปี ณ วันสอบ</th>{exam.parts.map((p) => <th key={p.id}>{p.name}</th>)}<th>ภาพรวม</th></tr></thead>
       <tbody>{exam.residents.map((r) => <tr key={r.id}><th>{r.name}<br /><small>PGY {r.pgy}</small></th>{exam.parts.map((p) => {
-        const c = r.cells.get(p.id); return <td key={p.id}>{c ? <><strong>{managedCellLabel(c)}</strong>{c.value_state === "scored" && <div>{c.score} / {c.max_score}</div>}<small>MPL {c.mpl ?? "ยังไม่ตั้งเกณฑ์"}</small></> : "ข้อมูลไม่ครบ"}</td>;
-      })}<td>{OVERALL_LABELS[r.overall.status]}{r.overall.failed_part_ids.length > 0 && <small>ส่วนที่ไม่ผ่าน: {exam.parts.filter((p) => r.overall.failed_part_ids.includes(p.id)).map((p) => p.name).join(", ")}</small>}</td></tr>)}</tbody>
+        const c = r.cells.get(p.id); return <td key={p.id}>{c ? <><ResultStatus cell={c} />{c.value_state === "scored" && <div>{c.score} / {c.max_score}</div>}<small>MPL {c.mpl ?? "ยังไม่ตั้งเกณฑ์"}</small></> : "ข้อมูลไม่ครบ"}</td>;
+      })}<td><ResultStatus overall={r.overall.status} />{r.overall.failed_part_ids.length > 0 && <small>ส่วนที่ไม่ผ่าน: {exam.parts.filter((p) => r.overall.failed_part_ids.includes(p.id)).map((p) => p.name).join(", ")}</small>}</td></tr>)}</tbody>
     </table></div>
   </section>);
 }
@@ -75,8 +81,8 @@ function PersonalResultCards({ rows }) {
     <h3>{exam.title}</h3><p className="ms-exam-meta">ปีการศึกษา {exam.academic_year} · {exam.exam_date}</p>
     {exam.residents.map((resident) => <div key={resident.id}>
       <p className="ms-exam-meta">{resident.name} · PGY {resident.pgy} ณ วันสอบ</p>
-      <div className="ms-exam-overall">{OVERALL_LABELS[resident.overall.status]}{resident.overall.failed_part_ids.length > 0 && <small>ส่วนที่ไม่ผ่าน: {exam.parts.filter((part) => resident.overall.failed_part_ids.includes(part.id)).map((part) => part.name).join(", ")}</small>}</div>
-      {exam.parts.map((part) => { const cell = resident.cells.get(part.id); return <div className="ms-exam-cell" key={part.id}><strong>{part.name}</strong><span>{cell ? managedCellLabel(cell) : "ข้อมูลไม่ครบ"}</span><small>{cell?.value_state === "scored" && <>{cell.score} / {cell.max_score} · </>}MPL {cell?.mpl ?? "ยังไม่ตั้งเกณฑ์"}</small></div>; })}
+      <div className="ms-exam-overall"><ResultStatus overall={resident.overall.status} />{resident.overall.failed_part_ids.length > 0 && <small>ส่วนที่ไม่ผ่าน: {exam.parts.filter((part) => resident.overall.failed_part_ids.includes(part.id)).map((part) => part.name).join(", ")}</small>}</div>
+      {exam.parts.map((part) => { const cell = resident.cells.get(part.id); return <div className="ms-exam-cell" key={part.id}><strong>{part.name}</strong><ResultStatus cell={cell} /><small>{cell?.value_state === "scored" && <>{cell.score} / {cell.max_score} · </>}MPL {cell?.mpl ?? "ยังไม่ตั้งเกณฑ์"}</small></div>; })}
     </div>)}
   </section>);
 }
@@ -221,7 +227,7 @@ function RevisionEditor({ snapshot, publishedId, onDone }) {
     {error && <p role="alert" className="form-error">{error}</p>}{action.feedback}
     <details><summary>ดูคะแนนและเกณฑ์ที่บันทึก ({snapshot.cells.length} ช่อง)</summary><PageControls page={cellPage} setPage={setCellPage} count={snapshot.cells.length} /><div className="resident-table-wrap"><table className="rc04-table"><thead><tr><th>ผู้สอบ</th><th>PGY ณ วันสอบ</th><th>ส่วนสอบ</th><th>คะแนน</th><th>เต็ม / MPL</th><th>ผล</th></tr></thead><tbody>{snapshot.cells.slice(cellPage * 100, (cellPage + 1) * 100).map((c) => {
       const r = snapshot.roster.find((x) => x.resident_id === c.resident_id), p = snapshot.parts.find((x) => x.part_id === c.part_id);
-      return <tr key={`${c.resident_id}/${c.part_id}`}><td>{r?.reference_name}</td><td>{r?.pgy_at_exam}</td><td>{p?.name}</td><td>{c.score ?? "—"}</td><td>{p?.max_score} / {p?.mpl[String(r?.pgy_at_exam)] ?? "ยังไม่ตั้งเกณฑ์"}</td><td>{managedCellLabel(c)}</td></tr>;
+      return <tr key={`${c.resident_id}/${c.part_id}`}><td>{r?.reference_name}</td><td>{r?.pgy_at_exam}</td><td>{p?.name}</td><td>{c.score ?? "—"}</td><td>{p?.max_score} / {p?.mpl[String(r?.pgy_at_exam)] ?? "ยังไม่ตั้งเกณฑ์"}</td><td><ResultStatus cell={c} /></td></tr>;
     })}</tbody></table></div></details>
   </section>;
 }
