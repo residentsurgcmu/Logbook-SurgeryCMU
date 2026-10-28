@@ -25,7 +25,7 @@ Scope: independent monthly agenda and next-90-days My Space card. No automatic e
 ## Validation performed by C0
 
 - npm test: 551/551; production build passed, existing large-chunk warning.
-- Offline DB harness: 58 checks; strict 48-name grants matrix; 77 migrations replayed with four documented legacy/platform skips unchanged. PGlite PG18 WASM, not Supabase runtime.
+- Offline DB harness: 58 checks; strict 48-name grants matrix; 78 migrations replayed with four documented legacy/platform skips unchanged. PGlite PG18 WASM, not Supabase runtime.
 - Calendar SQL probes cover Admin/Resident/Staff, draft visibility, own vs other recipients, inactive flag, anonymous denial, no direct table/audit access, stale conflict, replay/no-op, input rollback, PGY snapshot, cancellation, and real RC04 create/preview/commit/review/publish link isolation.
 - Existing RC04/B002, round workflow, seat-map/64-seat and account behavior suites run too. Account classifier recognizes the new private guard. Historical service grants are supplied ONLY inside the account fixture after catalog checks for old-Edge trigger tests, and rolled back. No migration adds those privileges. Catalog and fixture rollback checks remain mandatory.
 - Browser mocked HTTP: Admin selected-recipient publication at 390/768/1280, Bangkok request timestamps, list readback and no page overflow; Resident has no editing/unpublished-result action; upcoming card. Screenshots inspected by C0. Not native iOS/camera or real JWT acceptance.
@@ -40,3 +40,13 @@ Check authorization/recipient snapshot, version/replay behavior, calendar-vs-sco
 After independent review and explicit release approval: verify exact base/head and migration checksum; apply additive migration on production, verify effective table/column/PUBLIC/inherited rights and function grants/owner/search_path; deploy the reviewed frontend; run short real JWT Admin/Resident/Staff read/write checks on synthetic schedule without score publication. Do not ask Sense to repeat full RC04 acceptance.
 
 Rollback frontend can hide this new feature while preserving the new tables/rosters/audit. Revoke the two new public RPC grants if writes must stop. Never drop data tables or restore historical migrations on a populated database. Existing QR, accounts and exam functions are unchanged.
+
+## G33-B01 targeted correction (2026-10-28)
+
+G0 R001 found that v1 selected recipient IDs and then re-read their PGYs in a later statement. Fixed in additive migration `20261028092332_calendar_roster_snapshot_fix.sql`; the already-applied initial staging migration is preserved. Release MUST apply both migrations in order.
+
+The audience SELECT now aggregates user_id and pgy into parallel arrays ordered by the same unique user_id, from the same statement snapshot. Participant INSERT consumes only those captured pairs using multi-array unnest; it does not read profiles again. Existing unchanged-audience detail edits still retain saved participants and PGYs. No new participant locks or lock order are introduced; a concurrent profile edit may affect a subsequent scheduling request, but cannot split the captured identity/PGY pair of this request.
+
+Regression installs a transaction-only BEFORE INSERT event trigger that changes a selected Resident from PGY1 to PGY2 precisely between capture and participant insertion. It asserts the injection occurred, captured PGY remains1, and a subsequent location edit retains1. The old implementation (new regression, fix migration omitted in an isolated temporary copy) fails with `G33-B01: mixed roster/PGY snapshot`, exit1. Fixed offline harness passes58 checks /78 migrations /same4 skips. npm551/551 and build/diff checks pass. Frontend unchanged; browser suite not rerun for this SQL-only fix.
+
+Staging PG17.11: forward fix applied; full calendar fixture plus deterministic interleave passed and rolled back. SQL claims are stand-ins, not real JWT. This is deterministic account-edit interleaving on the native engine, NOT a two-session concurrency test. No production schema/merge/deploy. Request G0 targeted recheck of G33-B01 only; previous other findings remain as in R001.

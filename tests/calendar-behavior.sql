@@ -92,4 +92,29 @@ do $$ begin
  begin perform public.list_resident_calendar_events('2027-01-01','2027-02-01');raise exception 'anonymous call allowed';exception when insufficient_privilege then null;end;
 end $$;
 reset role;
+
+-- G33-B01 deterministic interleaving: event INSERT is between audience capture
+-- and participants INSERT. Change account data at that exact boundary.
+set local request.jwt.claim.sub='c0000000-0000-4000-8000-000000000001';
+update public.resident_profiles set pgy=1 where user_id='c0000000-0000-4000-8000-000000000003';
+create function pg_temp.calendar_interleave() returns trigger language plpgsql as $$
+begin
+ if new.id='c1000000-0000-4000-8000-000000000099' then
+  update public.resident_profiles set pgy=2 where user_id='c0000000-0000-4000-8000-000000000003';
+ end if;
+ return new;
+end $$;
+create trigger calendar_test_interleave before insert on public.resident_calendar_events
+ for each row execute function pg_temp.calendar_interleave();
+do $$
+declare v_id uuid:='c1000000-0000-4000-8000-000000000099'; p jsonb:='{"title":"Snapshot interleave","kind":"activity","starts_at":"2027-02-02T09:00:00+07:00","ends_at":"2027-02-02T10:00:00+07:00","location":"A","description":"","status":"published","audience_mode":"pgy","pgys":[1],"user_ids":[],"exam_id":null}';
+begin
+ perform public.save_resident_calendar_event(v_id,0,p);
+ if (select pgy from public.resident_profiles where user_id='c0000000-0000-4000-8000-000000000003')<>2 then raise exception 'G33 fault did not execute';end if;
+ if not exists(select 1 from public.resident_calendar_participants where event_id=v_id and user_id='c0000000-0000-4000-8000-000000000003' and pgy_at_schedule=1) then raise exception 'G33-B01: mixed roster/PGY snapshot';end if;
+ perform public.save_resident_calendar_event(v_id,1,p||'{"location":"B"}');
+ if not exists(select 1 from public.resident_calendar_participants where event_id=v_id and user_id='c0000000-0000-4000-8000-000000000003' and pgy_at_schedule=1) then raise exception 'G33 detail edit changed snapshot';end if;
+ raise notice 'PASS G33-B01 identity/PGY captured together despite intervening account edit; details preserve snapshot';
+end $$;
+drop trigger calendar_test_interleave on public.resident_calendar_events;
 rollback;
