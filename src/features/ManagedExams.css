@@ -10,7 +10,7 @@
 .rc04-callout { padding: 1rem; border: 1px solid #c6a461; border-radius: .7rem; background: #fffbef; display: grid; gap: .8rem; }
 .rc04-table { border-collapse: collapse; width: 100%; min-width: 620px; }
 .rc04-table th, .rc04-table td { text-align: left; vertical-align: top; padding: .75rem; border-bottom: 1px solid #d8e2dc; }
-.rc04-table thead { background: #edf4ef; }
+.rc04-table thead th { background: #eaf1f8; color: #294761; }
 .rc04-table small { display: block; padding-top: .3rem; }
 .rc04-roster { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; }
 .rc04-roster label { display: flex; align-items: center; }
@@ -18,3 +18,9 @@
 .rc04-area summary { cursor: pointer; padding: .8rem 0; font-weight: 600; }
 .rc04-area .button-row { flex-wrap: wrap; }
 @media (max-width: 600px) { .rc04-grid { grid-template-columns: 1fr; } .rc04-roster { flex-wrap: wrap; } }
+
+.rc04-result-status { display: inline-block; padding: .2rem .55rem; border-radius: .4rem; font-weight: 700; line-height: 1.5; }
+.rc04-result-status--pass { color: #166534; background: #dcfce7; }
+.rc04-result-status--fail { color: #991b1b; background: #fee2e2; }
+.rc04-result-status--pending { color: #854d0e; background: #fef3c7; }
+.rc04-result-status--neutral { color: #475569; background: #f1f5f9; }
