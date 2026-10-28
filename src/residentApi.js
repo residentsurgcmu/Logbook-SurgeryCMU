@@ -388,7 +388,7 @@ export async function loadRoundAdminData() {
   const attendance = [];
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase.from("resident_round_attendance")
-      .select("session_id,user_id,role_at_check_in,checked_in_at,resident_profiles(full_name,email,pgy)")
+      .select("session_id,user_id,role_at_check_in,checked_in_at,resident_profiles(full_name,email,pgy),resident_round_attendance_adjustments(reason,recorded_at,actor_id)")
       .order("checked_in_at", { ascending: true }).order("session_id", { ascending: true })
       .order("user_id", { ascending: true }).range(offset, offset + pageSize - 1);
     fail(error);
@@ -469,26 +469,28 @@ export async function clearRoundCmeQr(sessionId) {
   if (storagePath) await removeCmeQrImage(storagePath);
 }
 
-export async function openRound(meetingDate, startTime, endTime, activityStart = "", activityEnd = "") {
-  const { data, error } = await supabase.rpc("open_resident_round", {
+export async function openRound(meetingDate, startTime, endTime, activityStart = "", activityEnd = "", enableSeats = true) {
+  const { data, error } = await supabase.rpc("schedule_resident_round", {
     p_meeting_date: meetingDate,
     p_start_time: startTime,
     p_end_time: endTime,
     p_activity_start: activityStart || null,
     p_activity_end: activityEnd || null,
+    p_enable_seats: enableSeats,
   });
   fail(error);
   return data;
 }
 
-export async function updateRoundSession(sessionId, meetingDate, startTime, endTime, activityStart = "", activityEnd = "") {
-  const { error } = await supabase.rpc("update_resident_round_session", {
+export async function updateRoundSession(sessionId, meetingDate, startTime, endTime, activityStart = "", activityEnd = "", enableSeats = true) {
+  const { error } = await supabase.rpc("reschedule_resident_round", {
     p_session_id: sessionId,
     p_meeting_date: meetingDate,
     p_start_time: startTime,
     p_end_time: endTime,
     p_activity_start: activityStart || null,
     p_activity_end: activityEnd || null,
+    p_enable_seats: enableSeats,
   });
   fail(error);
 }
@@ -746,4 +748,13 @@ export async function confirmPasswordLink(confirmation) {
   fail(error);
   if (!data.session) throw new Error("ไม่พบข้อมูลยืนยัน กรุณาขอลิงก์ใหม่");
   return data.session;
+}
+
+export async function recordMissingRoundAttendance(sessionId, userId, checkedInAt, reason) {
+ const { error } = await supabase.rpc("admin_record_missing_round_attendance", {p_session_id:sessionId,p_user_id:userId,p_checked_in_at:checkedInAt,p_reason:reason});
+ fail(error);
+}
+export async function loadRoundAttendanceAdjustments(sessionId) {
+ const { data,error } = await supabase.from("resident_round_attendance_adjustments").select("user_id,actor_id,recorded_at,checked_in_at,reason").eq("session_id",sessionId).order("recorded_at",{ascending:false}).limit(500);
+ fail(error);return data || [];
 }

@@ -78,7 +78,7 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
   const line = rgb(0.82, 0.87, 0.83);
   const soft = rgb(0.95, 0.98, 0.96);
   const columns = [30, 170, 70, 220, 90, 160];
-  const headers = ["ลำดับ", "ชื่อ", "PGY", "อีเมล", "บทบาท", "Timestamp scan QR (Asia/Bangkok)"];
+  const headers = ["ลำดับ", "ชื่อ", "PGY", "อีเมล", "บทบาท", "เวลาเช็คชื่อ / แหล่งข้อมูล (Asia/Bangkok)"];
   let page;
   let y;
 
@@ -144,7 +144,7 @@ export async function createRoundAttendancePdf(sessions, attendance, label) {
         row.resident_profiles?.pgy ? `PGY ${row.resident_profiles.pgy}` : "—",
         row.resident_profiles?.email || "—",
         row.role_at_check_in === "staff" ? "Staff" : "Resident",
-        thaiTime(row.checked_in_at),
+        `${thaiTime(row.checked_in_at)}${row.resident_round_attendance_adjustments?.length ? ` · Admin บันทึกย้อนหลัง: ${row.resident_round_attendance_adjustments[0].reason}` : " · QR"}`,
       ];
       const lineGroups = cells.map((cell, cellIndex) =>
         wrapText(cell, font, 8, columns[cellIndex] - 8),

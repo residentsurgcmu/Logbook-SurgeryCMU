@@ -126,3 +126,17 @@ export function roundCheckInErrorMessage(error) {
   if (/Active Resident or Staff account required/i.test(message)) return "บัญชีนี้ไม่ใช่ Resident หรือ Staff ที่เปิดใช้งาน จึงเช็คชื่อไม่ได้";
   return message || "เช็คชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง";
 }
+
+// Default scan window follows the activity; special windows stay explicit.
+export function roundSchedulePayload(form) {
+  return { start: form.customScan ? form.scanStart : form.start, end: form.customScan ? form.scanEnd : form.end,
+    activityStart: form.start, activityEnd: form.end, enableSeats: form.enableSeats !== false };
+}
+export function roundArrivalLabel(session, checkedInAt) {
+  const start = session?.activity_start_time ? `${session.meeting_date}T${String(session.activity_start_time).slice(0,8)}+07:00` : session?.starts_at;
+  const diff = new Date(checkedInAt).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(diff)) return "—";
+  if (diff < 0) return "ก่อนเริ่มประชุม";
+  if (diff === 0) return "ตรงเวลา";
+  return diff < 60000 ? "สายไม่ถึง 1 นาที" : `สาย ${Math.floor(diff / 60000)} นาที`;
+}

@@ -71,7 +71,7 @@ test("reports and filenames carry the session time", async () => {
   assert.match(ui, /formatRoundTimeRange\(session\)/);
   assert.match(ui, /"เวลา"/);
   assert.match(ui, /activityStart/);
-  assert.match(ui, /เวลาจัดกิจกรรม/);
+  assert.match(ui, /เวลาเริ่มประชุม/);
 });
 
 // 30-9-69 note, item 1: no camera picker, scan immediately.
