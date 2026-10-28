@@ -1,0 +1,386 @@
+[
+  {
+    "seat_code": "M1",
+    "zone": "M",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "M2",
+    "zone": "M",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L1",
+    "zone": "L",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "L2",
+    "zone": "L",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L3",
+    "zone": "L",
+    "row_no": 2,
+    "col_no": 1
+  },
+  {
+    "seat_code": "L4",
+    "zone": "L",
+    "row_no": 2,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L5",
+    "zone": "L",
+    "row_no": 2,
+    "col_no": 3
+  },
+  {
+    "seat_code": "L6",
+    "zone": "L",
+    "row_no": 3,
+    "col_no": 1
+  },
+  {
+    "seat_code": "L7",
+    "zone": "L",
+    "row_no": 3,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L8",
+    "zone": "L",
+    "row_no": 3,
+    "col_no": 3
+  },
+  {
+    "seat_code": "L9",
+    "zone": "L",
+    "row_no": 4,
+    "col_no": 1
+  },
+  {
+    "seat_code": "L10",
+    "zone": "L",
+    "row_no": 4,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L11",
+    "zone": "L",
+    "row_no": 4,
+    "col_no": 3
+  },
+  {
+    "seat_code": "L12",
+    "zone": "L",
+    "row_no": 5,
+    "col_no": 1
+  },
+  {
+    "seat_code": "L13",
+    "zone": "L",
+    "row_no": 5,
+    "col_no": 2
+  },
+  {
+    "seat_code": "L14",
+    "zone": "L",
+    "row_no": 5,
+    "col_no": 3
+  },
+  {
+    "seat_code": "C1",
+    "zone": "C",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C2",
+    "zone": "C",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "C3",
+    "zone": "C",
+    "row_no": 2,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C4",
+    "zone": "C",
+    "row_no": 2,
+    "col_no": 2
+  },
+  {
+    "seat_code": "C5",
+    "zone": "C",
+    "row_no": 3,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C6",
+    "zone": "C",
+    "row_no": 3,
+    "col_no": 2
+  },
+  {
+    "seat_code": "C7",
+    "zone": "C",
+    "row_no": 4,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C8",
+    "zone": "C",
+    "row_no": 4,
+    "col_no": 2
+  },
+  {
+    "seat_code": "C9",
+    "zone": "C",
+    "row_no": 5,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C10",
+    "zone": "C",
+    "row_no": 5,
+    "col_no": 2
+  },
+  {
+    "seat_code": "C11",
+    "zone": "C",
+    "row_no": 6,
+    "col_no": 1
+  },
+  {
+    "seat_code": "C12",
+    "zone": "C",
+    "row_no": 6,
+    "col_no": 2
+  },
+  {
+    "seat_code": "R1",
+    "zone": "R",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "R2",
+    "zone": "R",
+    "row_no": 1,
+    "col_no": 3
+  },
+  {
+    "seat_code": "R3",
+    "zone": "R",
+    "row_no": 2,
+    "col_no": 1
+  },
+  {
+    "seat_code": "R4",
+    "zone": "R",
+    "row_no": 2,
+    "col_no": 2
+  },
+  {
+    "seat_code": "R5",
+    "zone": "R",
+    "row_no": 2,
+    "col_no": 3
+  },
+  {
+    "seat_code": "R6",
+    "zone": "R",
+    "row_no": 3,
+    "col_no": 1
+  },
+  {
+    "seat_code": "R7",
+    "zone": "R",
+    "row_no": 3,
+    "col_no": 2
+  },
+  {
+    "seat_code": "R8",
+    "zone": "R",
+    "row_no": 3,
+    "col_no": 3
+  },
+  {
+    "seat_code": "R9",
+    "zone": "R",
+    "row_no": 4,
+    "col_no": 1
+  },
+  {
+    "seat_code": "R10",
+    "zone": "R",
+    "row_no": 4,
+    "col_no": 2
+  },
+  {
+    "seat_code": "R11",
+    "zone": "R",
+    "row_no": 4,
+    "col_no": 3
+  },
+  {
+    "seat_code": "H1",
+    "zone": "H",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "H2",
+    "zone": "H",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "S1",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "S2",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "S3",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 3
+  },
+  {
+    "seat_code": "S4",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 4
+  },
+  {
+    "seat_code": "S5",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 7
+  },
+  {
+    "seat_code": "S6",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 8
+  },
+  {
+    "seat_code": "S7",
+    "zone": "S",
+    "row_no": 1,
+    "col_no": 9
+  },
+  {
+    "seat_code": "S8",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 1
+  },
+  {
+    "seat_code": "S9",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 2
+  },
+  {
+    "seat_code": "S10",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 3
+  },
+  {
+    "seat_code": "S11",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 4
+  },
+  {
+    "seat_code": "S12",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 5
+  },
+  {
+    "seat_code": "S13",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 7
+  },
+  {
+    "seat_code": "S14",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 8
+  },
+  {
+    "seat_code": "S15",
+    "zone": "S",
+    "row_no": 2,
+    "col_no": 9
+  },
+  {
+    "seat_code": "B1",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 1
+  },
+  {
+    "seat_code": "B2",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 2
+  },
+  {
+    "seat_code": "B3",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 3
+  },
+  {
+    "seat_code": "B4",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 4
+  },
+  {
+    "seat_code": "B5",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 5
+  },
+  {
+    "seat_code": "B6",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 6
+  },
+  {
+    "seat_code": "B7",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 7
+  },
+  {
+    "seat_code": "B8",
+    "zone": "B",
+    "row_no": 1,
+    "col_no": 8
+  }
+]

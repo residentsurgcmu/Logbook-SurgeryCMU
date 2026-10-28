@@ -10,11 +10,16 @@ export const ZONE_INFO = [
   { zone: "C", name: "โต๊ะกลาง", hint: "แนะนำ PGY 4" },
   { zone: "R", name: "โซนขวา", hint: "แนะนำ PGY 3" },
 ];
+export const REAR_ZONE_INFO = [
+  { zone: "H", name: "Chairman", hint: "2 ที่นั่ง" },
+  { zone: "S", name: "Staff ด้านหลัง", hint: "แถวหน้า 7 · แถวหลัง 8 ที่" },
+  { zone: "B", name: "เก้าอี้เสริมท้ายห้อง", hint: "8 ที่นั่ง · เลือกและยืนยันที่นั่ง" },
+];
 export const MODERATOR_ZONE = { zone: "M", name: "Moderator", hint: "ที่นั่ง 1–2 ที่ (ไม่ต้องเต็ม)" };
 export const STATUS_LABELS = {
   seat: "นั่งที่นั่งแล้ว",
   reserve: "ที่นั่งเสริม",
-  staff: "อาจารย์ในห้อง",
+  staff: "อาจารย์ · ยังไม่ได้เลือกที่นั่ง",
   room: "ในห้อง · ยังไม่มีที่นั่ง",
   urgent: "ภารกิจจำเป็น",
   absent: "ยังไม่เข้าร่วม",
@@ -92,7 +97,7 @@ export function seatCell(seat, map) {
 
 export const seatAriaLabel = (seat, cell) => `ที่นั่ง ${seat.seat_code} ${cell.label}${seat.occupant ? ` · ${seat.occupant.name}` : ""}`;
 
-export const canPickSeat = (map) => Boolean(map && map.me.role === "resident" && map.me.in_room && map.session.open && !map.session.ended);
+export const canPickSeat = (map) => Boolean(map && ["resident", "staff"].includes(map.me.role) && map.me.in_room && map.session.open && !map.session.ended);
 
 export const canManageSeats = (map) => Boolean(map && map.session.open && !map.session.ended
   && (map.me.role === "admin" || (map.me.role === "staff" && map.me.in_room)));
@@ -108,7 +113,6 @@ export function sessionPhase(map) {
   if (role === "admin") return map.session.open ? "admin" : "not-open-yet";
   if (!map.session.open) return "not-open-yet";
   if (!inRoom) return "not-in-room";
-  if (role === "staff") return "staff";
   if (seat) return "seated";
   return reserve ? "reserve" : "pick";
 }

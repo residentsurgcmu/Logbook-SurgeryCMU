@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  CORRECTION_NOTE_MAX, ENDED_NOTE, MODERATOR_ZONE, STATUS_LABELS, URGENT_NOTE_MAX, URGENT_REASONS, ZONE_INFO,
+  CORRECTION_NOTE_MAX, ENDED_NOTE, MODERATOR_ZONE, REAR_ZONE_INFO, STATUS_LABELS, URGENT_NOTE_MAX, URGENT_REASONS, ZONE_INFO,
   bangkokHm, canManageSeats, canPickSeat, eventText, filterPeople, hnHint, holdSecondsLeft, seatAriaLabel, seatCell,
   seatableResidents, seatsByZone, sessionPhase, statusLabel, zoneColumns,
 } from "../seatMap";
@@ -27,7 +27,7 @@ export function Modal({ title, onClose, error, children }) {
 // A seat is a real button (44 px); its state is a symbol and a label as well as a colour. Which seats are enabled depends on the role.
 export function SeatButton({ seat, map, onSeat, showName = true }) {
   const cell = seatCell(seat, map);
-  const enabled = canManageSeats(map) || (canPickSeat(map) && (cell.state === "free" || cell.state === "myhold"));
+  const enabled = (canManageSeats(map) && (map.me.role === "admin" || map.manage_seats)) || (canPickSeat(map) && (cell.state === "free" || cell.state === "myhold"));
   return <button type="button" className={`seatmap-seat seatmap-seat-${cell.state}`} style={{ gridColumn: seat.col_no, gridRow: seat.row_no }}
     data-seat={seat.seat_code} disabled={!enabled} aria-label={seatAriaLabel(seat, cell)} onClick={() => onSeat(seat)}>
     <strong><span aria-hidden="true">{cell.symbol}</span> {seat.seat_code}</strong>
@@ -38,9 +38,9 @@ export function SeatButton({ seat, map, onSeat, showName = true }) {
 
 export function ZoneGrid({ zone, map, onSeat, showName = true }) {
   const seats = seatsByZone(map.seats)[zone] || [];
-  return <div className={`seatmap-grid seatmap-grid-${zone}`} style={{ gridTemplateColumns: `repeat(${zoneColumns(seats)}, minmax(0, 1fr))` }}>
+  return <div className="seatmap-zone-scroll">{["S", "B"].includes(zone) && <small className="seatmap-scroll-hint">เลื่อนซ้าย–ขวาเพื่อดูที่นั่งครบทั้งแถว</small>}<div className={`seatmap-grid seatmap-grid-${zone}`} style={{ gridTemplateColumns: `repeat(${zoneColumns(seats)}, minmax(0, 1fr))` }}>
     {seats.map((seat) => <SeatButton key={seat.seat_code} seat={seat} map={map} onSeat={onSeat} showName={showName} />)}
-  </div>;
+  </div></div>;
 }
 
 function MiniSeat({ seat, map }) {
@@ -66,6 +66,7 @@ export function MiniRoom({ map, activeZone, onZone }) {
         </span>
       </button>)}
     </div>
+    <div className="seatmap-mini-rear">{REAR_ZONE_INFO.filter(({zone}) => groups[zone]?.length).map(({zone,name,hint}) => <button type="button" key={zone} className="seatmap-zone-button" aria-pressed={activeZone === zone} onClick={() => onZone(zone)} aria-label={`เปิด${name} ว่าง ${free(zone)} ที่`}><span>{name}</span><small>{hint}</small><span className="seatmap-mini-grid" style={{ gridTemplateColumns: `repeat(${zoneColumns(groups[zone])}, minmax(0, 1fr))` }}>{groups[zone].map(seat => <MiniSeat key={seat.seat_code} seat={seat} map={map} />)}</span></button>)}</div>
     <p className="seatmap-hint">แตะโซนเพื่อดูชื่อและเลือกที่นั่ง · เลือกได้ทุกโซน ไม่จำกัดชั้นปี</p>
   </div>;
 }
@@ -81,6 +82,7 @@ export function DesktopRoom({ map, onSeat }) {
         <ZoneGrid zone={zone} map={map} onSeat={onSeat} />
       </div>)}
     </div>
+    <div className="seatmap-rear">{REAR_ZONE_INFO.filter(({zone}) => map.seats.some(seat => seat.zone === zone)).map(({zone,name,hint}) => <section key={zone} className={`seatmap-rear-${zone}`}><h3>{name}</h3><small>{hint}</small><ZoneGrid zone={zone} map={map} onSeat={onSeat} /></section>)}</div>
   </div>;
 }
 
@@ -102,14 +104,15 @@ export function PersonalCard({ map, busy, onRelease, onReserve, onUrgent, onCorr
     {me.checked_in_at && <p>เข้าห้องเวลา {bangkokHm(me.checked_in_at)} น.</p>}
     {me.urgent_state === "pending" && <p className="seatmap-note">แจ้งภารกิจจำเป็นแล้ว · รออาจารย์ตรวจสอบ</p>}
     {me.urgent_state === "approved" && <p className="seatmap-note">อาจารย์อนุมัติภารกิจจำเป็นของคุณแล้ว</p>}
+    {map.seats.some(seat => seat.zone === "B") && <p className="seatmap-hint">ยังไม่ได้เลือกที่นั่งไม่ใช่ที่นั่งเสริม · หากนั่งเก้าอี้เสริมให้เลือก B1–B8 และยืนยัน</p>}
     <div className="seatmap-actions">
       {phase === "seated" && <button type="button" className="secondary-button" disabled={busy} onClick={onRelease}>คืนที่นั่ง</button>}
-      {me.role === "resident" && ["seated", "pick"].includes(phase) && <button type="button" className="secondary-button" disabled={busy} onClick={onReserve}>ใช้พื้นที่นั่งเสริม</button>}
+      {["resident", "staff"].includes(me.role) && !map.seats.some(seat => seat.zone === "B") && ["seated", "pick"].includes(phase) && <button type="button" className="secondary-button" disabled={busy} onClick={onReserve}>ใช้พื้นที่นั่งเสริม</button>}
       {me.role === "resident" && phase !== "not-open-yet" && <button type="button" className="secondary-button" onClick={onUrgent}>แจ้งภารกิจจำเป็น</button>}
-      {me.role === "staff" && phase === "staff" && <button type="button" className="secondary-button" disabled={busy} onClick={onCertify}>รับรองผังที่นั่ง</button>}
+      {me.role === "staff" && me.in_room && session.open && !session.ended && <button type="button" className="secondary-button" disabled={busy} onClick={onCertify}>รับรองผังที่นั่ง</button>}
       {me.role !== "admin" && <button type="button" className="link-button" onClick={onCorrection}>ขอแก้ไขข้อมูลการเข้าร่วม</button>}
     </div>
-    {me.role === "staff" && phase === "staff" && <p className="seatmap-hint">ยืนยันว่าผังตรงกับสิ่งที่คุณเห็นในขณะนี้ ไม่ใช่การรับรองว่าอยู่ครบทั้งการประชุม</p>}
+    {me.role === "staff" && me.in_room && session.open && !session.ended && <p className="seatmap-hint">ยืนยันว่าผังตรงกับสิ่งที่คุณเห็นในขณะนี้ ไม่ใช่การรับรองว่าอยู่ครบทั้งการประชุม</p>}
     {me.role === "resident" && phase === "not-in-room" && <p className="seatmap-hint">แจ้งภารกิจจำเป็นได้แม้ยังไม่ได้เข้าห้อง (ไม่ใส่ข้อมูลผู้ป่วยหรือ HN)</p>}
   </section>;
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ENDED_NOTE, MODERATOR_ZONE, SEAT_POLL_MS, ZONE_INFO, bangkokHm, canManageSeats, canPickSeat, canReviewRequests, pickDefaultSession, seatCell, seatErrorMessage, serverOffsetMs, shouldPoll,
+  ENDED_NOTE, MODERATOR_ZONE, REAR_ZONE_INFO, SEAT_POLL_MS, ZONE_INFO, bangkokHm, canManageSeats, canPickSeat, canReviewRequests, pickDefaultSession, seatCell, seatErrorMessage, serverOffsetMs, shouldPoll,
 } from "../seatMap";
 import {
   certifySeatMap, confirmSeat, holdSeat, listSeatSessions, loadMySeatEvents, loadSeatMap, moveToReserveArea, releaseSeat,
@@ -25,6 +25,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
   const [dialogError, setDialogError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("map");
+  const [manageSeats, setManageSeats] = useState(false);
   const [view, setView] = useState("2d");
   const [note3d, setNote3d] = useState("");
   const [zone, setZone] = useState("L");
@@ -104,7 +105,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
 
   async function onSeat(seat) {
     if (!map) return;
-    if (canManageSeats(map)) { setDialogError(""); setDialog({ type: "manage", seat }); return; }
+    if (canManageSeats(map) && (map.me.role === "admin" || manageSeats)) { setDialogError(""); setDialog({ type: "manage", seat }); return; }
     const cell = seatCell(seat, map);
     if (!canPickSeat(map) || !(cell.state === "free" || cell.state === "myhold")) return;
     setBusy(true); setError(""); setNotice("");
@@ -121,7 +122,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
   const session = sessions.find((item) => item.session_id === sessionId) || sessions[0];
   const pendingRequests = requests.filter((request) => request.state === "pending" && request.user_id !== map?.me?.user_id).length;
   const tabs = map && canReviewRequests(map) ? [...TABS, ["requests", pendingRequests ? `คำขอรอตรวจ (${pendingRequests})` : "คำขอ"]] : TABS;
-  const zoneName = zone === "M" ? MODERATOR_ZONE.name : ZONE_INFO.find((item) => item.zone === zone)?.name;
+  const zoneName = zone === "M" ? MODERATOR_ZONE.name : [...ZONE_INFO, ...REAR_ZONE_INFO].find((item) => item.zone === zone)?.name;
   return <section className="resident-panel seatmap" aria-labelledby="seatmap-title">
     <div className="seatmap-head">
       <h2 id="seatmap-title">ผังที่นั่งประชุม</h2>
@@ -144,6 +145,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
         {tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}
       </div>
       {tab === "map" && <>
+        {map.me.role === "staff" && <div className="seatmap-viewswitch" role="group" aria-label="การเลือกที่นั่ง"><button type="button" aria-pressed={!manageSeats} onClick={() => setManageSeats(false)}>เลือกที่นั่งของฉัน</button><button type="button" aria-pressed={manageSeats} onClick={() => setManageSeats(true)}>จัดที่นั่งให้ Resident</button></div>}
         <div className="seatmap-viewswitch" role="group" aria-label="รูปแบบผัง">
           <button type="button" aria-pressed={view === "2d"} onClick={() => setView("2d")}>ผัง 2D</button>
           <button type="button" aria-pressed={view === "3d"} onClick={() => { setNote3d(""); setView("3d"); }}>ผัง 3D</button>
@@ -154,9 +156,9 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
           : <>
             <div className="seatmap-mobile-view">
               <MiniRoom map={map} activeZone={zone} onZone={setZone} />
-              <div className="seatmap-zone-detail"><h3>{zoneName} <span className="muted">· {canManageSeats(map) ? "แตะที่นั่งเพื่อจัดที่" : "เลือกที่นั่ง"}</span></h3><ZoneGrid zone={zone} map={map} onSeat={onSeat} /></div>
+              <div className="seatmap-zone-detail"><h3>{zoneName} <span className="muted">· {(canManageSeats(map) && (map.me.role === "admin" || manageSeats)) ? "แตะที่นั่งเพื่อจัดที่" : "เลือกที่นั่ง"}</span></h3><ZoneGrid zone={zone} map={{...map,manage_seats:manageSeats}} onSeat={onSeat} /></div>
             </div>
-            <div className="seatmap-desktop-view"><DesktopRoom map={map} onSeat={onSeat} /></div>
+            <div className="seatmap-desktop-view"><DesktopRoom map={{...map,manage_seats:manageSeats}} onSeat={onSeat} /></div>
           </>}
       </>}
       {tab === "people" && <PeopleTab map={map} query={query} onQuery={setQuery} status={status} onStatus={setStatus} />}

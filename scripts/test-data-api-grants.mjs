@@ -53,7 +53,7 @@ try {
   // has_table_privilege. Everything (including synthetic fixtures) rolls back.
   await run('tests/data-api-grants-behavior.sql');
   console.log('PASS SQL role / RLS behavior probes'); checks++;
-  for (const file of ['tests/rc04-managed-exams-behavior.sql', 'tests/rc04-managed-exams-b002.sql', 'tests/round-workflow-behavior.sql', 'tests/seat-map-behavior.sql']) {
+  for (const file of ['tests/rc04-managed-exams-behavior.sql', 'tests/rc04-managed-exams-b002.sql', 'tests/round-workflow-behavior.sql', 'tests/seat-map-behavior.sql', 'tests/real-room-64-behavior.sql']) {
     let sql = await read(file);
     if (file.endsWith('rc04-managed-exams-behavior.sql')) {
       // T18k/l/n/o deliberately exercise the trigger EVEN IF an old service
