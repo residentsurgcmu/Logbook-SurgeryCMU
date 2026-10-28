@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import LegacySeatMap3D from './SeatMap3DLegacy';
-import {mountRoom3d} from '../room3dScene';
+import {seatCell} from '../seatMap';
+import {mountRoom3d,ROOM_STATUS_SYMBOLS} from '../room3dScene';
 import {seatSummary,summaryText} from '../seatMap3d';
 
 const COUNTS={M:2,L:14,C:12,R:11,H:2,S:15,B:8};
@@ -29,8 +30,9 @@ function ApprovedRoom({map,paused=false,onUnavailable}) {
  const choose=id=>{setPreset(id);view.current?.setPreset(id);};
  return <div className="seatmap3d">
   <div className="seatmap3d-presets" role="group" aria-label="มุมมองผัง 3D">{[['oblique','มุมเฉียง'],['top','มุมบน'],['front','จากหน้าห้อง'],['back','จากหลังห้อง']].map(([id,label])=><button type="button" key={id} aria-pressed={preset===id} onClick={()=>choose(id)}>{label}</button>)}<button type="button" onClick={()=>choose('oblique')}>รีเซ็ตมุมมอง</button><button type="button" aria-label="ซูมเข้า" onClick={()=>view.current?.zoom(.83)}>+</button><button type="button" aria-label="ซูมออก" onClick={()=>view.current?.zoom(1.2)}>−</button></div>
+  <p className="seatmap-hint">○ ว่าง · ● มีผู้นั่ง · ★ ที่นั่งของคุณ · ◇ คุณกำลังถือ · … ผู้อื่นกำลังยืนยัน</p>
   <div className="seatmap3d-stage" ref={stage}/>
-  <div className="seatmap3d-detail"><label>ดูข้อมูลที่นั่ง<select aria-label="ดูข้อมูลที่นั่ง" value={seat?.seat_code||''} onChange={e=>view.current?.select(e.target.value)}><option value="">เลือกที่นั่งเพื่อดูข้อมูล</option>{map.seats.map(s=><option key={s.seat_code} value={s.seat_code}>{s.seat_code}</option>)}</select></label><p role="status">{seat?.ariaLabel||'แตะเก้าอี้เพื่อดูชื่อและสถานะ'}</p></div>
+  <div className="seatmap3d-detail"><label>ดูข้อมูลที่นั่ง<select aria-label="ดูข้อมูลที่นั่ง" value={seat?.seat_code||''} onChange={e=>view.current?.select(e.target.value)}><option value="">เลือกที่นั่งเพื่อดูข้อมูล</option>{map.seats.map(s=><option key={s.seat_code} value={s.seat_code}>{ROOM_STATUS_SYMBOLS[seatCell(s,map).state]} {s.seat_code} · {seatCell(s,map).label}</option>)}</select></label><p role="status">{seat?.ariaLabel||'แตะเก้าอี้เพื่อดูชื่อและสถานะ'}</p></div>
   <p className="seatmap-hint" role="status">{summaryText(seatSummary(map))}</p><p className="seatmap-hint">ลากเพื่อหมุน · ซูมด้วยล้อเมาส์หรือสองนิ้ว · แตะที่นั่งเพื่อดูสถานะ · เลือกที่นั่งในผัง 2D</p>
  </div>;
 }

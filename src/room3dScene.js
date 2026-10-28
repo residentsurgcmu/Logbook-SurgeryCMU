@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 import {buildRoomGeometry,roomGeometryKey} from './room3dGeometry.js';
 import {seatCell,seatAriaLabel} from './seatMap.js';
+export const ROOM_STATUS_SYMBOLS={free:'○',taken:'●',mine:'★',myhold:'◇',held:'…'};
 const COLORS={free:{token:'--success',fallback:0x51886b},taken:{token:'--text-muted',fallback:0x596660},mine:{token:'--accent',fallback:0x247fa0},myhold:{token:'--accent',fallback:0x247fa0},held:{token:'--warning',fallback:0xc79944}};
 export function mountRoom3d(container,map,{onSeat=()=>{},onError=()=>{},paused=false}={}) {
  const geometry=buildRoomGeometry(map?.seats||[]),{room}=geometry,key=roomGeometryKey(map);
@@ -54,8 +55,9 @@ export function mountRoom3d(container,map,{onSeat=()=>{},onError=()=>{},paused=f
   const ring=new THREE.Mesh(trackGeometry(new THREE.RingGeometry(.29,.34,24)),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.65,side:THREE.DoubleSide}));materials.push(ring.material);ring.rotation.x=-Math.PI/2;ring.position.set(chair.x,.005,chair.z);scene.add(ring);rings.set(chair.seat_code,ring);
   const badge=new THREE.Mesh(trackGeometry(new THREE.SphereGeometry(.055,8,6)),mat(color,.6));badge.position.set(0,.72,.23);group.add(badge);badges.set(chair.seat_code,badge);
   group.traverse(o=>{if(o.isMesh)pickMeshes.push(o);});
-  const c=document.createElement('canvas');c.width=128;c.height=64;const ctx=c.getContext('2d');ctx.fillStyle='#fcfcf3';ctx.fillRect(2,5,124,54);ctx.fillStyle='#243d33';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(chair.seat_code,64,34);const texture=new THREE.CanvasTexture(c);textures.push(texture);const material=new THREE.SpriteMaterial({map:texture,depthTest:true});materials.push(material);const sprite=new THREE.Sprite(material);sprite.scale.set(.49,.245,1);sprite.position.set(chair.x,1.03,chair.z);scene.add(sprite);labels.push({code:chair.seat_code,sprite});
+  const c=document.createElement('canvas');c.width=192;c.height=64;const ctx=c.getContext('2d');const texture=new THREE.CanvasTexture(c);textures.push(texture);const material=new THREE.SpriteMaterial({map:texture,depthTest:true});materials.push(material);const sprite=new THREE.Sprite(material);sprite.scale.set(.69,.23,1);sprite.position.set(chair.x,1.03,chair.z);scene.add(sprite);const label={code:chair.seat_code,sprite,ctx,texture,state:null};labels.push(label);updateLabel(label,state);
  }
+ function updateLabel(item,state){if(item.state===state)return;item.state=state;const ctx=item.ctx;ctx.clearRect(0,0,192,64);ctx.fillStyle='#fcfcf3';ctx.fillRect(2,5,188,54);ctx.fillStyle='#243d33';ctx.font='bold 30px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(`${ROOM_STATUS_SYMBOLS[state]||ROOM_STATUS_SYMBOLS.free} ${item.code}`,96,34);item.texture.needsUpdate=true;}
  function declutter(){const used=[];for(const item of [...labels].sort((a,b)=>(a.code===selected?-1:b.code===selected?1:camera.position.distanceTo(a.sprite.position)-camera.position.distanceTo(b.sprite.position)))){const p=item.sprite.position.clone().project(camera);const x=(p.x+1)*container.clientWidth/2,y=(1-p.y)*container.clientHeight/2;const visible=p.z<1&&p.z>-1&&!used.some(q=>Math.abs(q.x-x)<24&&Math.abs(q.y-y)<13);item.sprite.visible=visible;if(visible)used.push({x,y});}}
  function draw(){frame=0;if(disposed||pausedNow||document.hidden)return;try{for(const object of cutawayArchitecture)object.visible=camera.position.z>=-2.8;declutter();renderer.render(scene,camera);}catch(error){fail(error);}}
  function request(){if(!frame&&!disposed&&!pausedNow&&!document.hidden)frame=requestAnimationFrame(draw);}
@@ -66,7 +68,7 @@ export function mountRoom3d(container,map,{onSeat=()=>{},onError=()=>{},paused=f
  function emitSelection(){const seat=currentMap?.seats?.find(s=>s.seat_code===selected);if(!seat){selected=null;onSeat(null);return;}const cell=seatCell(seat,currentMap);onSeat({...seat,...cell,ariaLabel:seatAriaLabel(seat,cell)});}
  function select(code){if(disposed)return;const chair=geometry.chairs.find(s=>s.seat_code===code);if(!chair)return;selected=code;for(const [id,ring]of rings){ring.material.opacity=id===code?1:.5;ring.scale.setScalar(id===code?1.2:1);}emitSelection();request();}
  function syncMap(nextMap){if(disposed)return;if(roomGeometryKey(nextMap)!==key)throw new Error('Room geometry changed; rebuild the scene');currentMap=nextMap;
-  for(const seat of currentMap.seats){const visual=seatCell(seat,currentMap),color=liveColor(visual.state);rings.get(seat.seat_code)?.material.color.set(color);badges.get(seat.seat_code)?.material.color.set(color);}
+  for(const seat of currentMap.seats){const visual=seatCell(seat,currentMap),color=liveColor(visual.state);rings.get(seat.seat_code)?.material.color.set(color);badges.get(seat.seat_code)?.material.color.set(color);const label=labels.find(item=>item.code===seat.seat_code);if(label)updateLabel(label,visual.state);}
   if(selected)emitSelection();request();
  }
  function setPaused(value){if(disposed)return;pausedNow=Boolean(value);controls.enabled=!pausedNow&&!document.hidden;pointers.clear();multi=false;if(pausedNow){cancelAnimationFrame(frame);frame=0;}else request();}

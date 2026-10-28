@@ -26,3 +26,13 @@ Review renderer integration, live refresh/actor reset, resource/pause/gesture li
 ## Release
 
 After review and explicit Sense approval: verify expected head, merge/frontend deploy, check live bundle. No migration needed. Short visual read-only confirmation is sufficient; do not repeat RC04/QR tests. Frontend rollback toPR35 preserves all seating data because this feature performs no writes.
+
+## G36-B01 targeted correction (2026-10-28)
+
+G0 R001 found the new renderer communicated per-seat status by colour alone until selection. The revised renderer draws a monochrome symbol beside each seat code: ○ free, ● occupied by another person, ★ own seat, ◇ own hold, … another person's hold. A text legend explains all five. The dropdown also includes the same symbol and the current Thai status label for every seat, without needing selection.
+
+Canvas labels are drawn on creation and redrawn in syncMap only when that seat's state changes; existing textures are reused and marked for upload. Rings/badges retain their colour cues. No geometry, data/API/authorization, booking, or legacy renderer changes.
+
+Validation: npm test 557/557; build passed (existing chunk warning); git diff --check passed. The actual Chromium/SwiftShader WebGL suite passed at 390 and 1280. New regression instruments canvas fillText in the test browser and exercises mountRoom3d directly, verifying all five initial status labels and transitions between mine/taken/myhold/held without rebuilding. Wrapper checks verify dropdown labels and canvas text change on free→own-hold refresh. Existing name refresh, actor reset, controls, pause/context loss, legacy fallback and unavailable-WebGL probes still pass. No native iOS, hardware GPU, production signed-in or database test claimed.
+
+Next: targeted G0 recheck of G36-B01 only. Not merged or deployed.
