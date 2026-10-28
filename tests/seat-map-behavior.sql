@@ -9,6 +9,8 @@ do $$ begin
   end if;
 end $$;
 
+update public.resident_maintenance_pause set paused=false where scope='accounts';
+
 create schema t;
 create table t.users (name text primary key, id uuid not null default gen_random_uuid());
 create table t.sess (name text primary key, id uuid not null);

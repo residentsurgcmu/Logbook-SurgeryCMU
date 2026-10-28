@@ -1,0 +1,66 @@
+begin;
+do $$ begin if exists(select 1 from public.resident_profiles) then raise exception 'Refusing fixtures on a nonempty database'; end if; end $$;
+update public.resident_maintenance_pause set paused=false where scope='accounts';
+insert into auth.users(id,email) values ('e0000000-0000-4000-8000-000000000001','round-admin@fixture.test'),('e0000000-0000-4000-8000-000000000002','round-resident@fixture.test');
+insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000000-0000-4000-8000-000000000001','Round Admin','round-admin@fixture.test',null),('e0000000-0000-4000-8000-000000000002','Round Resident','round-resident@fixture.test',1);
+insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident');
+select set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
+do $$
+declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz;
+begin
+ v_id := public.schedule_resident_round(v_day+30,'09:00','12:00','09:00','12:00',true);
+ if not exists(select 1 from public.resident_round_seat_config where session_id=v_id and on_time_at=((v_day+30+time '09:00') at time zone 'Asia/Bangkok')) then raise exception 'default seating/cutoff missing';end if;
+ raise notice 'PASS atomic default QR + seat config';
+ v_plain := public.schedule_resident_round(v_day+31,'09:00','12:00','09:00','12:00',false);
+ if exists(select 1 from public.resident_round_seat_config where session_id=v_plain) then raise exception 'QR only ignored';end if;
+ raise notice 'PASS explicit QR only';
+ select count(*) into v_n from public.resident_round_sessions;
+ update public.resident_room_layouts set active=false;
+ begin
+   perform public.schedule_resident_round(v_day+32,'09:00','12:00','09:00','12:00',true);
+   raise exception 'expected layout error';
+ exception when others then if sqlerrm not like '%Layout not found%' then raise;end if;end;
+ if (select count(*) from public.resident_round_sessions)<>v_n then raise exception 'partial schedule survived';end if;
+ update public.resident_room_layouts set active=true;
+ raise notice 'PASS missing layout rolls back entire schedule';
+ perform public.reschedule_resident_round(v_id,v_day+30,'10:00','13:00','10:00','13:00',true);
+ if not exists(select 1 from public.resident_round_seat_config where session_id=v_id and on_time_at=((v_day+30+time '10:00') at time zone 'Asia/Bangkok')) then raise exception 'cutoff not moved';end if;
+ raise notice 'PASS reschedule moves default cutoff';
+ begin perform public.reschedule_resident_round(v_id,v_day+30,'10:00','13:00','10:00','13:00',false);raise exception 'disabled map';exception when others then if sqlerrm not like '%Cannot disable%' then raise;end if;end;
+ raise notice 'PASS existing map cannot be silently disabled';
+ -- A live window independent of midnight and time-of-day.
+ insert into public.resident_round_sessions(meeting_date,starts_at,ends_at,opened_at,opened_by) values(v_day,clock_timestamp()-interval '30 minutes',clock_timestamp()+interval '30 minutes',clock_timestamp(),auth.uid()) returning id into v_live;
+ insert into public.resident_round_qr_tokens(session_id,minute_start) values(v_live,date_trunc('minute',clock_timestamp())) returning token into v_tok;
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000002',true);
+ begin perform public.schedule_resident_round(v_day+33,'09:00','12:00');raise exception 'resident created session';exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
+ raise notice 'PASS Resident cannot schedule';
+ perform public.check_in_resident_round(v_tok);
+ select checked_in_at into v_before from public.resident_round_attendance where session_id=v_live;
+ perform public.check_in_resident_round(v_tok);
+ if (select checked_in_at from public.resident_round_attendance where session_id=v_live)<>v_before then raise exception 'duplicate scan changed time';end if;
+ raise notice 'PASS late scan accepted and original timestamp preserved';
+ update public.resident_round_sessions set ends_at=v_before where id=v_live;
+ begin perform public.check_in_resident_round(v_tok);raise exception 'after end accepted';exception when others then if sqlerrm not like '%expired or is invalid%' then raise;end if;end;
+ raise notice 'PASS after end rejected without manual close';
+ begin perform public.admin_record_missing_round_attendance(v_live,'e0000000-0000-4000-8000-000000000002',v_before,'confirmed attendance');raise exception 'resident corrected attendance';exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
+ raise notice 'PASS Resident cannot record missing attendance';
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
+ begin perform public.admin_record_missing_round_attendance(v_live,'e0000000-0000-4000-8000-000000000002',v_before,'confirmed attendance');raise exception 'overwrite allowed';exception when others then if sqlerrm not like '%Attendance already exists%' then raise;end if;end;
+ raise notice 'PASS Admin cannot overwrite QR timestamp';
+ -- Another past session supports an explicitly audited forgotten scan.
+ v_plain := public.schedule_resident_round(v_day-2,'09:00','12:00','09:00','12:00',false);
+ begin perform public.admin_record_missing_round_attendance(v_plain,'e0000000-0000-4000-8000-000000000002',((v_day-2+time '09:17') at time zone 'Asia/Bangkok'),'');raise exception 'blank reason';exception when others then if sqlerrm not like '%Reason must%' then raise;end if;end;
+ raise notice 'PASS correction requires reason';
+ begin perform public.admin_record_missing_round_attendance(v_plain,'e0000000-0000-4000-8000-000000000002',((v_day-2+time '13:00') at time zone 'Asia/Bangkok'),'confirmed attendance');raise exception 'outside activity';exception when others then if sqlerrm not like '%inside the activity%' then raise;end if;end;
+ raise notice 'PASS correction bounded by activity';
+ perform public.admin_record_missing_round_attendance(v_plain,'e0000000-0000-4000-8000-000000000002',((v_day-2+time '09:17') at time zone 'Asia/Bangkok'),'confirmed by meeting organizer');
+ if (select count(*) from public.resident_round_attendance_adjustments where session_id=v_plain and actor_id=auth.uid() and reason='confirmed by meeting organizer')<>1 then raise exception 'audit missing';end if;
+ raise notice 'PASS missing attendance has actor/time/reason audit';
+ if has_table_privilege('authenticated','public.resident_round_attendance_adjustments','INSERT') or has_table_privilege('service_role','public.resident_round_attendance_adjustments','UPDATE') or has_function_privilege('anon','public.schedule_resident_round(date,time,time,time,time,boolean)','EXECUTE') then raise exception 'grant leak';end if;
+ raise notice 'PASS no direct audit writes or anonymous scheduler';
+end $$;
+set local request.jwt.claim.sub='e0000000-0000-4000-8000-000000000002';
+set local role authenticated;
+do $$ begin if exists(select 1 from public.resident_round_attendance_adjustments) then raise exception 'audit RLS leak';end if;raise notice 'PASS Resident cannot read Admin audit';end $$;
+reset role;
+rollback;

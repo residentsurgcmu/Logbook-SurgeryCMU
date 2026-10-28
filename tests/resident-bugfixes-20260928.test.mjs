@@ -93,7 +93,7 @@ test("round 2 fixes: ended sessions editable, invite links existing accounts, ex
   const round = await readFile(new URL("../src/features/RoundAttendance.jsx", import.meta.url), "utf8");
   const ended = round.slice(round.indexOf('className="round-ended-sessions"'));
   assert.match(ended, /onClick=\{\(\) => startEdit\(session\)\}/);
-  assert.match(ended, /onClick=\{\(\) => stop\(session\)\}/);
+  assert.doesNotMatch(ended, /onClick=\{\(\) => stop\(session\)\}/);
   assert.match(ended, /renderEditForm\(\)/);
   const fn = await readFile(new URL("../supabase/functions/resident-admin/index.ts", import.meta.url), "utf8");
   assert.match(fn, /admin_find_auth_user_id/);

@@ -22,15 +22,15 @@ export function SeatAdminPanel({ session, config, canConfigure, onChanged }) {
   return <section className="round-seat-admin" aria-label="ผังที่นั่ง">
     <h4>ผังที่นั่งของรอบนี้</h4>
     {!config && <>
-      <p>ยังไม่ได้เปิดผังที่นั่ง รอบนี้เช็คชื่อด้วย QR อย่างเดียวเหมือนเดิม</p>
+      <p>รอบเดิมนี้ยังไม่มีผังที่นั่ง สามารถเปิดเพิ่มได้ ส่วนรอบใหม่จะเปิดพร้อม QR โดยอัตโนมัติ</p>
       {canConfigure && <button type="button" className="primary-button" disabled={Boolean(busy)} onClick={open}>{busy === "open" ? "กำลังเปิด…" : "เปิดผังที่นั่งของรอบนี้"}</button>}
     </>}
     {config && <>
       <p>เปิดผัง <strong>{config.layout_name}</strong> · นั่งแล้ว {config.seated} คน · คำขอรอตรวจ {config.pending_requests}</p>
-      {canConfigure && <div className="seatmap-filters">
+      {canConfigure && <details><summary>ปรับเกณฑ์ตรงเวลา (กรณีพิเศษ)</summary><div className="seatmap-filters">
         <label>เวลา "ตรงเวลา" (น.)<input type="time" value={time} onChange={(event) => setTime(event.target.value)} /></label>
         <button type="button" className="secondary-button" disabled={Boolean(busy) || !time} onClick={saveTime}>{busy === "time" ? "กำลังบันทึก…" : "บันทึกเวลา"}</button>
-      </div>}
+      </div></details>}
       <p className="seatmap-hint">"ตรงเวลา" คือเช็คชื่อเข้าห้องก่อนเวลานี้ ใช้เป็นข้อมูลประกอบ ไม่ใช่เกณฑ์ลงโทษ</p>
       <button type="button" className="secondary-button" disabled={Boolean(busy)} onClick={loadReport}>{busy === "report" ? "กำลังโหลด…" : report ? "โหลดรายงานใหม่" : "ดูรายงานผังที่นั่ง"}</button>
       {report && <AdminReportView report={report} />}

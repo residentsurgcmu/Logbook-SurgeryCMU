@@ -43,8 +43,8 @@ test("Admin can download combined or one-PDF-per-date MM & Grand Round reports",
   assert.match(exporter, /splitByDate/);
   assert.match(exporter, /application\/pdf/);
   assert.match(exporter, /NotoSansThai\.ttf/);
-  assert.match(ui, /Timestamp scan QR \(Asia\/Bangkok\)/);
-  assert.match(exporter, /Timestamp scan QR \(Asia\/Bangkok\)/);
+  assert.match(ui, /เวลาเช็คชื่อ/);
+  assert.match(exporter, /เวลาเช็คชื่อ/);
 });
 
 test("combined MM & Grand Round report builds a readable PDF with Thai font and per-date sections", async () => {
