@@ -71,14 +71,14 @@ insert into public.resident_round_attendance(session_id, user_id, role_at_check_
 
 -- B1: layout seed
 select t.ok((select count(*) from public.resident_room_seats s join public.resident_room_layouts l on l.id = s.layout_id where l.name = 'ห้องประชุมวันศุกร์ (38 ที่)') = 38, 'seed layout has 38 seats (second moderator seat added by the follow-up migration)');
-select t.ok((select count(*) from public.resident_room_seats where zone = 'L') = 12 and (select count(*) from public.resident_room_seats where zone = 'C') = 12
-            and (select count(*) from public.resident_room_seats where zone = 'R') = 12 and (select count(*) from public.resident_room_seats where zone = 'M') = 2, 'zones: M1+M2, 12 left, 12 centre, 12 right');
-select t.ok((select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C1') = '1,1'
-            and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C2') = '1,2'
-            and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C11') = '6,1'
-            and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'C12') = '6,2', 'central table is 2 sides x 6 rows');
-select t.ok((select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'L12') = '4,3'
-            and (select row_no || ',' || col_no from public.resident_room_seats where seat_code = 'R4') = '2,1', 'side zones are 4 rows x 3 columns');
+select t.ok((select count(*) from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and zone = 'L') = 12 and (select count(*) from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and zone = 'C') = 12
+            and (select count(*) from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and zone = 'R') = 12 and (select count(*) from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and zone = 'M') = 2, 'zones: M1+M2, 12 left, 12 centre, 12 right');
+select t.ok((select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'C1') = '1,1'
+            and (select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'C2') = '1,2'
+            and (select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'C11') = '6,1'
+            and (select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'C12') = '6,2', 'central table is 2 sides x 6 rows');
+select t.ok((select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'L12') = '4,3'
+            and (select row_no || ',' || col_no from public.resident_room_seats where layout_id=(select id from public.resident_room_layouts where name='ห้องประชุมวันศุกร์ (38 ที่)') and seat_code = 'R4') = '2,1', 'side zones are 4 rows x 3 columns');
 
 -- B1: the HN guard
 select t.ok(private.resident_seat_text_ok('ผ่าตัดห้อง 3') and private.resident_seat_text_ok(null) and private.resident_seat_text_ok('room 12, 3 cases'), 'ordinary notes pass the HN guard');
@@ -174,7 +174,9 @@ select t.expect_error(format($q$select public.request_seat_correction(%L, 'x')$q
 
 -- B2: roles, windows and the database guarantees
 select t.as_user('s1');
-select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('live')), 'Active Resident account required', 'Staff do not pick seats');
+select public.hold_resident_seat(t.sid('live'),'C5');
+select t.ok(exists(select 1 from public.resident_seat_holds where session_id=t.sid('live') and user_id=t.uid('s1')), 'Staff may hold their own seat after QR');
+delete from public.resident_seat_holds where session_id=t.sid('live') and user_id=t.uid('s1');
 select t.as_user('r1');
 select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('ended')), 'Seat map is closed', 'no seat changes after the session ended');
 select t.expect_error(format($q$select public.hold_resident_seat(%L, 'C5')$q$, t.sid('noconfig')), 'not open for this session', 'a session without a seat map is untouched');
@@ -220,7 +222,7 @@ select t.expect_error(format($q$select * from public.admin_configure_seat_sessio
 select * from public.admin_configure_seat_session(t.sid('fresh'));
 select t.ok(exists (select 1 from public.resident_round_seat_config c join public.resident_round_sessions s on s.id = c.session_id
                     where c.session_id = t.sid('fresh') and c.on_time_at between s.starts_at and s.ends_at
-                      and c.layout_id = (select id from public.resident_room_layouts where name = 'ห้องประชุมวันศุกร์ (38 ที่)')), 'defaults: the existing layout and an on-time time inside the window');
+                      and c.layout_id = (select id from public.resident_room_layouts where name = 'ห้องประชุมจริง · 64 ที่ (2569-10)')), 'defaults: the active layout and an on-time time inside the window');
 select t.ok(exists (select 1 from public.resident_seat_events where kind = 'configure' and session_id = t.sid('fresh')), 'configuration is logged');
 select * from public.admin_configure_seat_session(t.sid('live'), null, (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')));
 select t.ok((select on_time_at from public.resident_round_seat_config where session_id = t.sid('live')) = (select starts_at + interval '20 minutes' from public.resident_round_sessions where id = t.sid('live')), 'Admin can change the on-time time');

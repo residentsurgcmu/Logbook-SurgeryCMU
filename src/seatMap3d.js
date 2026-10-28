@@ -12,13 +12,14 @@ const C_X = 3 * PITCH + ZONE_GAP;
 const C_WIDTH = SEAT + TABLE_PAD + TABLE_W + TABLE_PAD + SEAT;
 const R_X = C_X + C_WIDTH + ZONE_GAP;
 const WIDTH = R_X + 2 * PITCH + SEAT;
-const DEPTH = 5 * PITCH + SEAT;
+const MAIN_DEPTH = 5 * PITCH + SEAT;
+const DEPTH = 11.8;
 
 export const ROOM_3D = {
   seat: SEAT,
   width: WIDTH,
   depth: DEPTH,
-  table: { x: C_X + SEAT + TABLE_PAD, z: -0.1, w: TABLE_W, d: DEPTH + 0.2 },
+  table: { x: C_X + SEAT + TABLE_PAD, z: -0.1, w: TABLE_W, d: MAIN_DEPTH + 0.2 },
   screen: { x: WIDTH / 2, z: -3, w: 4, h: 1.4 },
   moderator: { x: WIDTH / 2, z: -1.6 },
 };
@@ -31,13 +32,16 @@ export function seatPosition(seat) {
   // Two moderator seats side by side, centred on the room; M1 left of M2. A layout that only has M1 shows it just left of centre.
   if (zone === "M") return row === 1 && col <= 2 ? { x: ROOM_3D.moderator.x + (col === 1 ? -1 : 1) * (SEAT / 2 + 0.1), z: ROOM_3D.moderator.z } : null;
   if (zone === "L" || zone === "R") {
-    if (col > 3 || row > 4) return null;
+    if (col > 3 || row > (zone === "L" ? 5 : 4)) return null;
     return { x: (zone === "L" ? 0 : R_X) + (col - 1) * PITCH + SEAT / 2, z };
   }
   if (zone === "C") {
     if (col > 2 || row > 6) return null;
     return { x: C_X + (col === 1 ? SEAT / 2 : SEAT + 2 * TABLE_PAD + TABLE_W + SEAT / 2), z };
   }
+  if (zone === "H") return row === 1 && col <= 2 ? {x: WIDTH / 2 + (col === 1 ? -.45 : .45), z: 6.7} : null;
+  if (zone === "S") return row <= 2 && col <= 9 ? {x: (WIDTH - 8 * 1.1) / 2 + (col - 1) * 1.1, z: 8 + (row - 1) * 1.0} : null;
+  if (zone === "B") return row === 1 && col <= 8 ? {x: (WIDTH - 7 * 1.2) / 2 + (col - 1) * 1.2, z: 10.7} : null;
   return null;
 }
 
@@ -65,7 +69,7 @@ export const summaryText = ({ free, taken, held, total }) => `ว่าง ${fre
 
 const CX = WIDTH / 2;
 export const CAMERA_PRESETS = [
-  { id: "oblique", label: "มุมเฉียง", position: [CX + 5, 8, 11], target: [CX, 0.3, 2] },
-  { id: "top", label: "มุมบน", position: [CX, 16, 2.7], target: [CX, 0, 2.2] },
-  { id: "back", label: "มองจากหลังห้อง", position: [CX, 3.4, 11.5], target: [CX, 0.6, 0] },
+  { id: "oblique", label: "มุมเฉียง", position: [CX + 9, 14, 20], target: [CX, 0.3, 4.5] },
+  { id: "top", label: "มุมบน", position: [CX, 24, 4.5], target: [CX, 0, 4.5] },
+  { id: "back", label: "มองจากหลังห้อง", position: [CX, 7, 23], target: [CX, 0.6, 4.2] },
 ];

@@ -164,7 +164,7 @@ test("the seat-map tab has a 2D | 3D switch, 2D by default, with the fixed fallb
   assert.match(panel, /ผัง 3D/);
   assert.match(panel, /แสดงผัง 3D ไม่ได้บนอุปกรณ์นี้ ใช้ผัง 2D แทน/);
   assert.match(panel, /<SeatMap3DGate map=\{map\} paused=\{Boolean\(dialog\)\}/);
-  assert.match(panel, /<DesktopRoom map=\{map\} onSeat=\{onSeat\} \/>/, "2D is still rendered");
+  assert.match(panel, /<DesktopRoom map=\{\{\.\.\.map,manage_seats:manageSeats\}\} onSeat=\{onSeat\} \/>/, "2D is still rendered");
 });
 
 test("2D files are untouched by the 3D work", async () => {

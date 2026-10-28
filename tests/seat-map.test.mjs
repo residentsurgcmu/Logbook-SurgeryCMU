@@ -86,7 +86,7 @@ test("who may pick and who may manage seats", () => {
   assert.equal(canPickSeat(mapOf({ in_room: false })), false);
   assert.equal(canPickSeat(mapOf({ open: false })), false);
   assert.equal(canPickSeat(mapOf({ ended: true, open: false })), false);
-  assert.equal(canPickSeat(mapOf({ role: "staff" })), false);
+  assert.equal(canPickSeat(mapOf({ role: "staff" })), true);
   assert.equal(canManageSeats(mapOf({ role: "staff" })), true);
   assert.equal(canManageSeats(mapOf({ role: "staff", in_room: false })), false);
   assert.equal(canManageSeats(mapOf({ role: "admin", in_room: false })), true);
@@ -110,7 +110,7 @@ test("the phase decides what the personal card says", () => {
   assert.equal(sessionPhase(mapOf()), "pick");
   assert.equal(sessionPhase(mapOf({ reserve: true })), "reserve");
   assert.equal(sessionPhase(mapOf({ seat: "C1" })), "seated");
-  assert.equal(sessionPhase(mapOf({ role: "staff" })), "staff");
+  assert.equal(sessionPhase(mapOf({ role: "staff" })), "pick");
   assert.equal(sessionPhase(mapOf({ role: "staff", in_room: false })), "not-in-room");
   assert.equal(sessionPhase(mapOf({ role: "admin", in_room: false })), "admin");
 });
