@@ -26,6 +26,6 @@ export const supabase = createClient(supabaseUrl || "https://local-demo.invalid"
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: window.location.pathname !== "/confirm-password",
   },
 });

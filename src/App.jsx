@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { getResidentSession, onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
+import { confirmPasswordLink, getResidentSession, onAuthChange, loadResidentWorkspace, requestPasswordReset, signIn, signOut, updatePassword } from "./residentApi";
 import ResidentPlatform from "./features/ResidentPlatform";
-import { isPasswordSetupRoute, keepWorkspaceOnRefreshError, residentRoleLabels, residentRoles, retryResidentClockSkew, shouldLoadResidentWorkspace } from "./residentAuth";
+import { passwordConfirmation, isPasswordSetupRoute, keepWorkspaceOnRefreshError, residentRoleLabels, residentRoles, retryResidentClockSkew, shouldLoadResidentWorkspace } from "./residentAuth";
 
 function Login({ onLogin, onRequestReset, onRetrySession, recoverable, error, initialMessage }) {
   const [role, setRole] = useState("resident"); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [mode, setMode] = useState("login"); const [busy, setBusy] = useState(false); const [localError, setLocalError] = useState(""); const [message, setMessage] = useState(initialMessage || "");
@@ -34,7 +34,22 @@ function PasswordSetupUnavailable({ onReturnToLogin }) {
   return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>ลิงก์ตั้งรหัสผ่านใช้ไม่ได้</h1><p>ลิงก์อาจหมดอายุ ถูกใช้งานแล้ว หรือเปิดในเบราว์เซอร์อื่น</p><small>เพื่อความปลอดภัย กรุณาขอลิงก์ตั้งรหัสผ่านใหม่</small></section><div className="resident-recovery-unavailable"><h2>ไม่พบ session สำหรับตั้งรหัสผ่าน</h2><p>กลับไปหน้าเข้าสู่ระบบ แล้วเลือก “ลืมรหัสผ่าน?” เพื่อส่งลิงก์ใหม่ไปยังอีเมลของคุณ</p><button className="primary-button" type="button" onClick={onReturnToLogin}>กลับไปหน้าเข้าสู่ระบบ</button></div></main>;
 }
 
+function PasswordLinkConfirmation({ confirmation, onConfirm, onReturn }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const inFlight = useRef(false);
+  async function confirm() {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError("");
+    try { await onConfirm(confirmation); }
+    catch { setError("ยืนยันลิงก์ไม่สำเร็จ ลิงก์อาจหมดอายุหรือถูกใช้แล้ว กรุณาขอลิงก์ใหม่จากหน้าเข้าสู่ระบบ"); }
+    finally { inFlight.current = false; setBusy(false); }
+  }
+  return <main className="resident-login"><section><img src="/surgery-cmu-logo.png" alt="Surgery CMU" /><h1>{confirmation.type === "invite" ? "ยินดีต้อนรับสู่ Resident Corner" : "ตั้งรหัสผ่านใหม่"}</h1><p>กดปุ่มยืนยันเพื่อไปตั้งรหัสผ่านของคุณ</p></section><div className="resident-recovery-unavailable"><h2>ยืนยันการตั้งรหัสผ่าน</h2><p>เปิดหน้านี้อย่างเดียวยังไม่ใช้สิทธิ์ในลิงก์ กรุณากดยืนยันเมื่อพร้อม</p><button className="primary-button" type="button" disabled={busy} onClick={confirm}>{busy ? "กำลังยืนยัน…" : "ยืนยันและตั้งรหัสผ่าน"}</button>{error && <p className="form-error" role="alert">{error}</p>}<button className="secondary-button" type="button" disabled={busy} onClick={onReturn}>กลับไปหน้าเข้าสู่ระบบ / ขอลิงก์ใหม่</button></div></main>;
+}
+
 export default function App() {
+  const [confirmation, setConfirmation] = useState(() => passwordConfirmation(window.location));
+  const confirmRoute = useRef(window.location.pathname === "/confirm-password");
   const [workspace, setWorkspace] = useState(undefined); const [error, setError] = useState(""); const [recoverable, setRecoverable] = useState(false); const [authMessage, setAuthMessage] = useState(""); const [needsPassword, setNeedsPassword] = useState(() => isPasswordSetupRoute(window.location)); const [passwordSession, setPasswordSession] = useState(() => isPasswordSetupRoute(window.location) ? undefined : null);
   const refreshInFlight = useRef(null);
   const refreshQueued = useRef(null);
@@ -84,9 +99,14 @@ export default function App() {
     let active = true;
     const startPasswordSetup = (session) => { if (!active) return; setNeedsPassword(true); setPasswordSession(session || null); };
     const setupRoute = isPasswordSetupRoute(window.location);
-    if (setupRoute) getResidentSession().then(startPasswordSetup).catch(() => startPasswordSetup(null));
+    if (confirmRoute.current) {
+      // Drop the secret from browser history before rendering; no network exchange.
+      window.history.replaceState({}, document.title, "/confirm-password");
+    }
+    else if (setupRoute) getResidentSession().then(startPasswordSetup).catch(() => startPasswordSetup(null));
     else refresh();
     const { data: listener } = onAuthChange((event, session) => {
+      if (confirmRoute.current) return;
       if (event === "PASSWORD_RECOVERY") { startPasswordSetup(session); return; }
       if (isPasswordSetupRoute(window.location)) { if (session) startPasswordSetup(session); return; }
       if (session && shouldLoadResidentWorkspace(window.location)) refresh();
@@ -94,6 +114,15 @@ export default function App() {
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
+  const returnToLogin = () => { window.history.replaceState({}, document.title, "/"); confirmRoute.current = false; setConfirmation(null); setNeedsPassword(false); setPasswordSession(null); setWorkspace(null); };
+  if (confirmRoute.current) {
+    if (!confirmation) return <PasswordSetupUnavailable onReturnToLogin={returnToLogin} />;
+    return <PasswordLinkConfirmation confirmation={confirmation} onReturn={returnToLogin} onConfirm={async (value) => {
+      const session = await confirmPasswordLink(value);
+      window.history.replaceState({}, document.title, "/reset-password");
+      confirmRoute.current = false; setConfirmation(null); setNeedsPassword(true); setPasswordSession(session);
+    }} />;
+  }
   if (needsPassword) {
     if (passwordSession === undefined) return <div className="resident-loading">กำลังตรวจสอบลิงก์ตั้งรหัสผ่าน…</div>;
     if (!passwordSession) return <PasswordSetupUnavailable onReturnToLogin={() => { window.history.replaceState({}, document.title, "/"); setNeedsPassword(false); setPasswordSession(null); setWorkspace(null); }} />;
