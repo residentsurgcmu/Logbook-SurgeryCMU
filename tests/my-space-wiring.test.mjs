@@ -82,8 +82,8 @@ test("mobile rules: 44px targets, no horizontal page scroll, wrapped long titles
   assert.doesNotMatch(css, /overflow-x:\s*scroll/);
 });
 
-test("navGroups: myspace sits right after home in the first group; nothing else moved; BOTTOM_NAV untouched", () => {
-  assert.deepEqual(NAV_GROUPS[0], ["พื้นที่ทำงาน", ["home", "myspace", "cases", "conference", "schedule"]]);
+test("navGroups: myspace sits right after home in the first group; calendar included; BOTTOM_NAV untouched", () => {
+  assert.deepEqual(NAV_GROUPS[0], ["พื้นที่ทำงาน", ["home", "myspace", "cases", "conference", "calendar", "schedule"]]);
   assert.deepEqual(NAV_GROUPS.slice(1), [
     ["การเรียนรู้และกิจกรรม", ["videos", "attendance", "round-admin"]],
     ["การประเมิน", ["request", "pending", "scan", "dashboard", "qr", "history", "exams"]],

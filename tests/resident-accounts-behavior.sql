@@ -178,7 +178,7 @@ select n.nspname as schema, p.proname as fn, p.prosecdef as definer, pg_get_user
          'is_active_enrollment','staff_can_access_curriculum','staff_can_access_enrollment','staff_can_access_student')
       then 'legacy helper (retired Year 4/Breast tables; boolean/role only; private schema)'
     when n.nspname = 'public' and p.proname in ('resident_accounts_paused', 'resident_account_direct_writes_blocked') then 'pause status (boolean only)'
-    when pg_get_functiondef(p.oid) ~ 'resident_role_is|resident_account_active|resident_case_member|resident_can_[a-z_]+|resident_seat_context|resident_seat_actor|r\.user_id = auth\.uid\(\) and r\.active and p\.active|private\.rc04_require_admin\(\)'
+    when pg_get_functiondef(p.oid) ~ 'resident_role_is|resident_account_active|resident_case_member|resident_can_[a-z_]+|resident_seat_context|resident_seat_actor|r\.user_id = auth\.uid\(\) and r\.active and p\.active|private\.rc04_require_admin\(\)|private\.calendar_require_actor\('
       then 'guarded function'
     else 'UNCLASSIFIED' end as class
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace

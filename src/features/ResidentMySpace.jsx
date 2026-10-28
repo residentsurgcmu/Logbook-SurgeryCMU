@@ -1,3 +1,4 @@
+import { UpcomingCalendar } from "./ResidentCalendar";
 import React, { useEffect, useId, useMemo, useState } from "react";
 import { buildMySpace, PBA_TARGET, PBA_YEAR_TARGET, STUCK_TEXT } from "../mySpace";
 import { assessmentDisplayName, assessmentTopic } from "../mySpacePresentation";
@@ -38,7 +39,7 @@ function Progress({ label, count, total, unit, children }) {
   </div>;
 }
 
-export default function ResidentMySpace({ workspace, onOpenHistory, onOpenRequest }) {
+export default function ResidentMySpace({ workspace, onOpenHistory, onOpenRequest, onNavigate }) {
   const yearStart = academicYearStart(new Date());
   const [tab, setTab] = useState("overview"), [filter, setFilter] = useState("all"), [allPba, setAllPba] = useState(false);
   const [attendance, setAttendance] = useState({ rows: null, error: "", loading: true });
@@ -85,7 +86,7 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
         <Progress label="EPA ถึงเกณฑ์" count={counters.epaReached} total={counters.epaTotal} unit="ข้อ"><span>ประเมินเสร็จปีนี้ (EPA) <b>{counters.finishedEpaThisYear}</b> ครั้ง</span><span>รอประเมิน (EPA) <b>{counters.waitingEpa}</b> ครั้ง</span></Progress>
         <Progress label="PBA เสร็จแล้ว" count={counters.pbaFinished} total={counters.pbaTarget} unit="เรื่อง"><span>ประเมินเสร็จปีนี้ (PBA) <b>{counters.finishedPbaThisYear}</b> เรื่อง</span><span>รอประเมิน (PBA) <b>{counters.waitingPba}</b> เรื่อง</span></Progress>
         <button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("assessment")}>ดูเกณฑ์และรายการทั้งหมด →</button>
-      </section>{waiting}</div><div className="ms-stack"><section className="ms-card ms-private-summary"><div><h2>ผลการสอบของฉัน</h2><p className="ms-muted">ซ่อนคะแนนอยู่ · เปิดดูเมื่อพร้อม</p></div><button type="button" className="ms-link" onClick={() => changeTab("exams")}>เปิดดู</button></section>{recent}<section className="ms-card"><h2>การเข้าร่วมประชุมของฉัน</h2>{attendanceSummary}<p className="ms-muted">ข้อมูลประกอบ ไม่ใช่คะแนน</p><button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("attendance")}>ดูประวัติประชุม →</button></section></div></div>}
+      </section><UpcomingCalendar key={workspace.user.id} userId={workspace.user.id} onOpenCalendar={() => onNavigate?.("calendar")} onExams={() => onNavigate?.("exams")} />{waiting}</div><div className="ms-stack"><section className="ms-card ms-private-summary"><div><h2>ผลการสอบของฉัน</h2><p className="ms-muted">ซ่อนคะแนนอยู่ · เปิดดูเมื่อพร้อม</p></div><button type="button" className="ms-link" onClick={() => changeTab("exams")}>เปิดดู</button></section>{recent}<section className="ms-card"><h2>การเข้าร่วมประชุมของฉัน</h2>{attendanceSummary}<p className="ms-muted">ข้อมูลประกอบ ไม่ใช่คะแนน</p><button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("attendance")}>ดูประวัติประชุม →</button></section></div></div>}
       {tab === "assessment" && <><div className="ms-filters" aria-label="กรองสถานะแบบประเมิน">{[["all", "ทั้งหมด"], ["waiting", "รอประเมิน"], ["unfinished", "ยังไม่เสร็จ"], ["finished", "เสร็จ / ถึงเกณฑ์"]].map(([key, label]) => <button type="button" key={key} className="ms-link" aria-pressed={filter === key} onClick={() => { setFilter(key); setAllPba(false); }}>{label}</button>)}</div>
         <div className="ms-assessment-grid"><section className="ms-card" aria-labelledby={`${id}-board`}><div className="ms-card-heading"><h2 id={`${id}-board`}>เช็กลิสต์ก่อนสอบบอร์ด</h2><span className="ms-muted">EPA {counters.epaReached == null ? "—" : counters.epaReached}/{counters.epaTotal} ข้อ</span></div>
           {epa.map((item) => <FormRow key={item.code} item={item} epa />)}{epa.length === 0 && <p className="ms-empty">ไม่มีแบบ EPA ในสถานะที่เลือก</p>}
