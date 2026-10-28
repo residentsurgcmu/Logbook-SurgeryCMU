@@ -40,7 +40,7 @@ test("RoundCheckIn offers the in-app scanner and reuses the existing token path"
   assert.match(page, /setScannedToken\(""\)/);
   assert.match(page, /submittedToken\.current = ""/);
   assert.match(scanner, /import\("html5-qrcode"\)/);
-  assert.match(scanner, /import \{ isInAppBrowser, parseRoundTokenInput \} from "\.\.\/roundSchedule"/);
+  assert.match(scanner, /import \{ qrDestination \} from "\.\.\/qrRouting"/);
   assert.match(scanner, /เปิดด้วย Safari|เปิดด้วย Chrome/);
   assert.match(scanner, /วางลิงก์/);
   assert.doesNotMatch(scanner, /supabase|rpc\(/);

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ScanIcon } from "../components/Icons";
-import { isInAppBrowser, parseRoundTokenInput } from "../roundSchedule";
+import { isInAppBrowser } from "../roundSchedule";
+
+import { qrDestination } from "../qrRouting";
 
 // stop() on a camera that is still starting leaves the stream running; always wait for `ready` first.
 function stopScanner(scanner) {
@@ -10,7 +12,7 @@ function stopScanner(scanner) {
   });
 }
 
-export function RoundQrScanner({ onToken, disabled = false }) {
+export function RoundQrScanner({ onToken, disabled = false, role, onNavigate = (path) => window.location.assign(path) }) {
   const [camera, setCamera] = useState(false);
   const [manual, setManual] = useState("");
   const [error, setError] = useState("");
@@ -20,8 +22,13 @@ export function RoundQrScanner({ onToken, disabled = false }) {
   const inApp = isInAppBrowser();
 
   function accept(value) {
-    const token = parseRoundTokenInput(value);
-    if (!token) { setError("QR นี้ไม่ใช่ QR เช็คชื่อประชุม กรุณาสแกน QR ที่แสดงในห้องประชุมหรือวางลิงก์เต็ม"); return false; }
+    const target = qrDestination(value, "attendance");
+    if (!target) { setError("QR นี้ไม่ใช่ QR ประชุมหรือ QR ประเมินของ Resident Corner กรุณาสแกนใหม่หรือวางลิงก์เต็ม"); return false; }
+    if (target.kind === "assessment") {
+      if (role !== "staff") { setError("QR ประเมินนี้ใช้สำหรับ Staff กรุณาเข้าสู่ระบบด้วยบัญชี Staff"); return false; }
+      setError(""); setCamera(false); onNavigate(target.path); return true;
+    }
+    const token = target.token;
     setError("");
     setCamera(false);
     setManual("");
@@ -52,13 +59,14 @@ export function RoundQrScanner({ onToken, disabled = false }) {
   }, [camera]);
 
   return <section className="round-scanner" aria-label="สแกน QR เช็คชื่อ">
+    <p>สแกน QR ประชุมหรือ QR ประเมินจากหน้านี้ได้ ระบบจะพาไปหน้าที่ตรงกับ QR</p>
     <button className={camera ? "secondary-button icon-button" : "primary-button icon-button"} type="button" disabled={disabled} onClick={() => { setError(""); setCamera((value) => !value); }}>
       <ScanIcon />{camera ? "ปิดกล้อง" : "สแกน QR เช็คชื่อ"}
     </button>
     {inApp && <p className="form-error" role="note">คุณเปิดเว็บนี้จากแอปแชต กล้องอาจถูกบล็อก กรุณาเปิดด้วย Safari หรือเปิดด้วย Chrome ของเครื่อง หรือวางลิงก์จาก QR ในช่องด้านล่าง</p>}
     {camera && <div id="round-qr-reader" className="qr-reader" />}
     <div className="manual-qr">
-      <label>วางลิงก์จาก QR<input value={manual} onChange={(event) => setManual(event.target.value)} placeholder="วางลิงก์ /attendance/..." /></label>
+      <label>วางลิงก์จาก QR<input value={manual} onChange={(event) => setManual(event.target.value)} placeholder="วางลิงก์ QR ประชุมหรือ QR ประเมิน" /></label>
       <button className="secondary-button" type="button" disabled={disabled || !manual.trim()} onClick={() => accept(manual)}>ใช้ลิงก์นี้</button>
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}

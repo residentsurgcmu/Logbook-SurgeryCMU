@@ -1,0 +1,4 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import {StaffQrScanner,parseResidentQrToken} from '../src/features/ResidentQr';import {RoundCheckIn} from '../src/features/RoundAttendance';import {parseRoundToken} from '../src/roundSchedule';
+import '../src/tokens.css';import '../src/styles.css';import '../src/resident.css';import '../src/residentCorner.css';import '../src/seatMap.css';
+const role=new URLSearchParams(location.search).get('role')||'staff',user={id:'fixture-user',role};const round=parseRoundToken(location.pathname),assessment=parseResidentQrToken(location.pathname),screen=new URLSearchParams(location.search).get('screen');
+createRoot(document.getElementById('root')).render(round||screen==='attendance'?<RoundCheckIn user={user} token={round} onTokenUsed={()=>history.replaceState({},'','/')} />:<StaffQrScanner workspace={{user,requests:[]}} initialToken={assessment} onOpenRequest={()=>{}} />);
