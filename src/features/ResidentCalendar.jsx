@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {loadCalendar,saveCalendar} from '../residentCalendar';
 import {listAdminAccounts,managedExamsApi} from '../residentApi';
-import {bangkokInput,bangkokIso,calendarRange,calendarTime,calendarError,CALENDAR_KINDS,CALENDAR_STATUSES} from '../calendarRules';
+import {bangkokInput,bangkokIso,calendarRange,calendarTime,calendarError,calendarMonthDays,calendarEventsForDay,shiftCalendarMonth,calendarDayLabel,calendarMonthLabel,CALENDAR_KINDS,CALENDAR_STATUSES} from '../calendarRules';
 
 function EventCard({event,onEdit,onExams}) {
  return <article className={`calendar-event calendar-${event.status}`}>
@@ -26,17 +26,36 @@ export function UpcomingCalendar({userId,onOpenCalendar,onExams}) {
 export default function ResidentCalendar({user,onNavigate}) {
  const admin=user.role==='admin';const [month,setMonth]=useState(()=>bangkokInput(new Date()).slice(0,7));
  const [state,setState]=useState({rows:[],loading:true,error:''}),[reload,setReload]=useState(0),[editing,setEditing]=useState(null);
- const [notice,setNotice]=useState('');
+ const [notice,setNotice]=useState(''),[view,setView]=useState('month'),[selectedDay,setSelectedDay]=useState(()=>bangkokInput(new Date()).slice(0,10));
+ const changeMonth=(next)=>{setMonth(next);setSelectedDay(next===bangkokInput(new Date()).slice(0,7)?bangkokInput(new Date()).slice(0,10):`${next}-01`);};
  useEffect(()=>{const controller=new AbortController();setState({rows:[],loading:true,error:''});
   const range=calendarRange(month);loadCalendar(range.from,range.to,admin,controller.signal).then(rows=>{if(!controller.signal.aborted)setState({rows,loading:false,error:''});}).catch(e=>{if(!controller.signal.aborted)setState({rows:[],loading:false,error:calendarError(e)});});
   return()=>controller.abort();},[month,admin,user.id,reload]);
  return <section className="resident-panel calendar-page"><div className="panel-title-row"><div><h2>ปฏิทินสอบและกิจกรรม</h2><p>เวลาไทย · กำหนดการแยกจากการประกาศผลสอบ</p></div>{admin&&<button className="primary-button" onClick={()=>{setNotice('');setEditing({id:crypto.randomUUID(),version:0});}}>เพิ่มกำหนดการ</button>}</div>
- <div className="calendar-toolbar"><label>เดือน<input type="month" required value={month} min="2000-01" max="2100-12" onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label><button className="secondary-button" onClick={()=>setReload(x=>x+1)}>โหลดล่าสุด</button></div>
+ <div className="calendar-toolbar"><div className="calendar-month-nav"><button type="button" className="secondary-button" aria-label="เดือนก่อนหน้า" disabled={month<='2000-01'} onClick={()=>changeMonth(shiftCalendarMonth(month,-1))}>‹</button><button type="button" className="secondary-button" onClick={()=>changeMonth(bangkokInput(new Date()).slice(0,7))}>วันนี้</button><button type="button" className="secondary-button" aria-label="เดือนถัดไป" disabled={month>='2100-12'} onClick={()=>changeMonth(shiftCalendarMonth(month,1))}>›</button></div><label>เดือน<input type="month" required value={month} min="2000-01" max="2100-12" onChange={e=>{if(e.target.value)changeMonth(e.target.value);}}/></label><button className="secondary-button" onClick={()=>setReload(x=>x+1)}>โหลดล่าสุด</button><div className="calendar-view-switch" role="group" aria-label="มุมมองกำหนดการ"><button type="button" className="secondary-button" aria-pressed={view==='month'} onClick={()=>setView('month')}>ปฏิทิน</button><button type="button" className="secondary-button" aria-pressed={view==='list'} onClick={()=>setView('list')}>รายการ</button></div></div>
  {notice&&<p className="form-success" role="status">{notice}</p>}{state.error&&<p className="form-error" role="alert">{state.error}</p>}
- {editing&&<CalendarEditor key={editing.id} event={editing} onClose={()=>setEditing(null)} onSaved={date=>{setEditing(null);setMonth(bangkokInput(date).slice(0,7));setNotice('บันทึกกำหนดการแล้ว');setReload(x=>x+1);}}/>}
- {state.loading?<p role="status">กำลังโหลด…</p>:!state.error&&state.rows.length===0?<p>ยังไม่มีกำหนดการในเดือนนี้{admin?' กดเพิ่มกำหนดการเพื่อเริ่มต้น':''}</p>:<div className="calendar-list">{state.rows.map(e=><EventCard key={e.id} event={e} onEdit={admin?setEditing:null} onExams={()=>onNavigate('exams')}/>)}</div>}
+ {editing&&<CalendarEditor key={editing.id} event={editing} onClose={()=>setEditing(null)} onSaved={date=>{setEditing(null);setMonth(bangkokInput(date).slice(0,7));setSelectedDay(bangkokInput(date).slice(0,10));setNotice('บันทึกกำหนดการแล้ว');setReload(x=>x+1);}}/>}
+ {state.loading?<p role="status">กำลังโหลด…</p>:!state.error&&<>
+ {view==='month'&&<CalendarMonth month={month} events={state.rows} selected={selectedDay} onSelect={setSelectedDay}/>}
+ <div className="calendar-day-details" aria-live="polite"><h3>{view==='month'?calendarDayLabel(selectedDay):`รายการเดือน ${calendarMonthLabel(month)}`}</h3>
+ {(view==='month'?calendarEventsForDay(state.rows,selectedDay):state.rows).length===0?<p>{view==='month'?'ไม่มีกำหนดการในวันที่เลือก':'ยังไม่มีกำหนดการในเดือนนี้'}</p>:<div className="calendar-list">{(view==='month'?calendarEventsForDay(state.rows,selectedDay):state.rows).map(e=><EventCard key={e.id} event={e} onEdit={admin?setEditing:null} onExams={()=>onNavigate('exams')}/>)}</div>}</div>
+ </>}
+
  </section>;
 }
+function CalendarMonth({month,events,selected,onSelect}) {
+ const days=calendarMonthDays(month),today=bangkokInput(new Date()).slice(0,10);
+ function move(event,day){const offsets={ArrowLeft:-1,ArrowRight:1,ArrowUp:-7,ArrowDown:7};if(!(event.key in offsets))return;
+  const date=new Date(`${day}T12:00:00Z`);date.setUTCDate(date.getUTCDate()+offsets[event.key]);const next=date.toISOString().slice(0,10);
+  if(next.slice(0,7)!==month)return;event.preventDefault();onSelect(next);event.currentTarget.closest('table').querySelector(`[data-calendar-day="${next}"]`)?.focus();}
+ return <div className="calendar-month"><h3>{calendarMonthLabel(month)}</h3><p className="calendar-grid-note">เลือกวันที่เพื่อดูรายละเอียด · กิจกรรมหลายวันแสดงในทุกวันที่เกี่ยวข้อง</p>
+ <table className="calendar-month-table" aria-label={`ปฏิทิน ${calendarMonthLabel(month)}`}><thead><tr>{['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'].map(d=><th key={d} scope="col">{d}</th>)}</tr></thead><tbody>
+ {Array.from({length:days.length/7},(_,week)=><tr key={week}>{days.slice(week*7,week*7+7).map((day,i)=>{const items=day?calendarEventsForDay(events,day):[];return <td key={day||`blank-${i}`} className={day?'':'calendar-outside'}>{day&&<button type="button" data-calendar-day={day} className="calendar-day-button" aria-label={`${calendarDayLabel(day)} · ${items.length} กิจกรรม`} aria-pressed={selected===day} aria-current={today===day?'date':undefined} onClick={()=>onSelect(day)} onKeyDown={e=>move(e,day)}>
+ <span className="calendar-day-number">{Number(day.slice(-2))}</span>{items.length>0&&<><span className="calendar-day-count">{items.length}<span className="visually-hidden"> กิจกรรม</span></span><span className="calendar-cell-events" aria-hidden="true">{items.slice(0,2).map(e=><span key={e.id} className={`calendar-cell-event calendar-cell-${e.status}`}>{e.status==='cancelled'?'ยกเลิก · ':e.status==='draft'?'ร่าง · ':''}{e.title}</span>)}{items.length>2&&<span>อีก {items.length-2} รายการ</span>}</span></>}
+ </button>}</td>;})}</tr>)}
+ </tbody></table></div>;
+}
+
 function CalendarEditor({event,onClose,onSaved}) {
  const old=event.admin_payload;const [form,setForm]=useState(()=>old?{...old,starts_at:bangkokInput(old.starts_at),ends_at:bangkokInput(old.ends_at)}:{title:'',kind:'exam',starts_at:'',ends_at:'',location:'',description:'',status:'draft',audience_mode:'all',pgys:[],user_ids:[],exam_id:null});
  const [exams,setExams]=useState([]),[ready,setReady]=useState(false);
