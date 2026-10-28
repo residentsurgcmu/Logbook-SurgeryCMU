@@ -262,8 +262,8 @@ export function RoundAdmin({ user }) {
     <label>เวลาเริ่มประชุม<input type="time" required value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} /></label>
     <label>เวลาจบประชุม<input type="time" required value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} /></label>
     <details className="round-form-wide"><summary>ตัวเลือกเพิ่มเติม (กรณีพิเศษ)</summary>
-      <label><input type="checkbox" checked={form.enableSeats !== false} disabled={form === editForm && Boolean(seatConfigs?.[editingId])} onChange={(event) => setForm({ ...form, enableSeats: event.target.checked })} /> เปิดผังที่นั่งพร้อม QR</label>
-      <label><input type="checkbox" checked={Boolean(form.customScan)} onChange={(event) => setForm({ ...form, customScan: event.target.checked, scanStart: form.scanStart || form.start, scanEnd: form.scanEnd || form.end })} /> กำหนดช่วงรับสแกนต่างจากเวลาประชุม</label>
+      <label className="round-option-check"><input type="checkbox" checked={form.enableSeats !== false} disabled={form === editForm && Boolean(seatConfigs?.[editingId])} onChange={(event) => setForm({ ...form, enableSeats: event.target.checked })} /> เปิดผังที่นั่งพร้อม QR</label>
+      <label className="round-option-check"><input type="checkbox" checked={Boolean(form.customScan)} onChange={(event) => setForm({ ...form, customScan: event.target.checked, scanStart: form.scanStart || form.start, scanEnd: form.scanEnd || form.end })} /> กำหนดช่วงรับสแกนต่างจากเวลาประชุม</label>
       {form.customScan && <><label>เริ่มรับสแกน<input type="time" required value={form.scanStart} onChange={(event) => setForm({ ...form, scanStart: event.target.value })} /></label><label>สิ้นสุดรับสแกน<input type="time" required value={form.scanEnd} onChange={(event) => setForm({ ...form, scanEnd: event.target.value })} /></label><p>ตัวเลือกนี้เปลี่ยนเวลาเปิด–ปิดรับสแกน แต่เวลาสายยังเทียบกับเวลาเริ่มประชุม</p></>}
     </details>
   </>;
@@ -271,8 +271,8 @@ export function RoundAdmin({ user }) {
           <form className="round-schedule-form" onSubmit={saveEdit}>
             <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
             {timeFields(editForm, setEditForm)}
-            <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
-            <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button>
+            <div className="round-form-actions round-form-wide"><button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
+            <button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => setEditingId("")}>ยกเลิก</button></div>
           </form>
           {editDateError && <p className="form-error" role="alert">{editDateError}</p>}
   </>;

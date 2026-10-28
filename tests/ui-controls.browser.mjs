@@ -1,0 +1,26 @@
+import {createRequire} from 'node:module';import assert from 'node:assert/strict';
+const {chromium}=createRequire(import.meta.url)('playwright');
+const browser=await chromium.launch({headless:true,executablePath:process.env.RC04_CHROME||'/tmp/chromium',args:['--no-sandbox','--disable-dev-shm-usage']});
+const box=async l=>l.boundingBox();const aligned=(a,b)=>assert.ok(Math.abs(a.y+a.height-b.y-b.height)<2,'control bottoms align');
+try{for(const width of [390,768,1280])for(const kind of ['round','cases','conference']){
+ const page=await browser.newPage({viewport:{width,height:1100}}),errors=[],calls=[];page.on('pageerror',e=>errors.push(e.message));
+ const day=new Date(Date.now()+2*86400000).toISOString().slice(0,10),session={id:'a0000000-0000-4000-8000-000000000001',meeting_date:day,starts_at:`${day}T09:00:00+07:00`,ends_at:`${day}T12:00:00+07:00`,activity_start_time:'09:00',activity_end_time:'12:00'};
+ await page.route('**/*',async r=>{const u=new URL(r.request().url());if(u.hostname==='127.0.0.1')return r.continue();const name=u.pathname.split('/').at(-1);let data=[];calls.push({name,args:r.request().method()==='POST'?r.request().postDataJSON():null});if(name==='resident_round_sessions')data=[session];if(name==='admin_list_seat_configs')data=[{session_id:session.id,on_time_at:session.starts_at,layout_name:'Fixture Room',seated:1,pending_requests:0}];if(name==='resident_conference_sessions')return r.fulfill({json:null});return r.fulfill({json:data});});
+ await page.goto(`http://127.0.0.1:5184/tests/ui-controls-browser.html?page=${kind}`);
+ if(kind==='round'){
+  await page.getByText('Fixture Room',{exact:true}).waitFor();const form=page.locator('.round-schedule-form').first();await form.locator('summary').click();
+  for(const label of await form.locator('.round-option-check').all()){const input=label.locator('input'),b=await box(input),lb=await box(label);assert.equal(b.width,18);assert.equal(b.height,18);assert.ok(Math.abs(b.x-lb.x)<2);assert.ok(Math.abs(b.y+b.height/2-lb.y-lb.height/2)<2);}
+  const custom=form.getByLabel('กำหนดช่วงรับสแกนต่างจากเวลาประชุม');assert.equal(await custom.isChecked(),false);await form.getByText('กำหนดช่วงรับสแกนต่างจากเวลาประชุม',{exact:true}).click();assert.equal(await custom.isChecked(),true);await form.getByLabel('เริ่มรับสแกน',{exact:true}).fill('08:50');await form.getByLabel('สิ้นสุดรับสแกน',{exact:true}).fill('12:00');
+  await form.getByLabel('วันที่ประชุม (ใช้ปี ค.ศ.)',{exact:true}).fill(day);await form.getByLabel('เวลาเริ่มประชุม',{exact:true}).fill('09:00');await form.getByLabel('เวลาจบประชุม',{exact:true}).fill('12:00');
+  const time=page.locator('.round-seat-time');await page.locator('.round-seat-admin summary').click();aligned(await box(time.locator('input')),await box(time.locator('button')));assert.equal((await box(time.locator('button'))).height,46);
+  await page.getByRole('button',{name:'แก้ไขวันที่/เวลา',exact:true}).click();const actions=page.locator('.round-form-actions');aligned(await box(actions.locator('button').nth(0)),await box(actions.locator('button').nth(1)));assert.equal((await box(actions.locator('button').nth(0))).height,46);await actions.getByRole('button',{name:'ยกเลิก',exact:true}).click();assert.equal(await actions.count(),0);
+  await form.getByRole('button',{name:'สร้างรอบประชุม',exact:true}).click();await page.waitForTimeout(120);const call=calls.find(c=>c.name==='schedule_resident_round');assert.ok(call);assert.equal(call.args.p_start_time,'08:50');assert.equal(call.args.p_activity_start,'09:00');
+ }else if(kind==='cases'){
+  const filters=page.locator('.history-filters');await filters.waitFor();for(const c of await filters.locator('input:not([type=checkbox]),select,.case-view-switch').all())assert.equal((await box(c)).height,46);
+  const search=filters.getByLabel('ค้นหา',{exact:true});await search.fill('fixture');assert.equal(await search.inputValue(),'fixture');await filters.getByRole('button',{name:'Flashcards',exact:true}).click();assert.equal(await filters.getByRole('button',{name:'Flashcards',exact:true}).getAttribute('aria-pressed'),'true');await filters.getByLabel('แสดงเคสที่ถูกลบ').check();assert.equal(await filters.getByLabel('แสดงเคสที่ถูกลบ').isChecked(),true);
+ }else{
+  await page.locator('.conf-controls select').first().waitFor();for(const c of await page.locator('.conf-controls select,.conf-controls .case-view-switch,.case-weekbar button').all())assert.equal((await box(c)).height,46);
+  const old=await page.locator('.case-week-label').textContent();await page.getByRole('button',{name:'สัปดาห์ถัดไป',exact:true}).click();assert.notEqual(await page.locator('.case-week-label').textContent(),old);await page.getByRole('button',{name:'Deck',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Deck',exact:true}).getAttribute('aria-pressed'),'true');
+ }
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal page overflow');assert.deepEqual(errors,[]);await page.screenshot({path:`/tmp/ui-controls-${kind}-${width}.png`,fullPage:true});console.log(`PASS ${kind} ${width}: alignment, sizes, controls, no overflow/errors`);await page.close();
+}}finally{await browser.close();}

@@ -489,3 +489,60 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 @media (max-width:760px) { .exam-mpl-part { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:1100px) { .exam-standard-row,.exam-part-row-mpl { grid-template-columns:minmax(0,1fr); } }
 .exam-editor-table th:first-child,.exam-editor-table td:first-child { position:sticky; left:0; z-index:1; background:#fff; }.exam-result-table th:first-child,.exam-result-table td:first-child { position:sticky; left:0; z-index:1; background:#fff; }
+
+/* UI-POLISH-01: scoped meeting/case controls; native date/time and checkbox semantics retained. */
+.round-schedule-form label { min-width:0; margin:0; }
+.round-schedule-form input:not([type="checkbox"]),
+.round-seat-time input,
+.case-list-page .history-filters input:not([type="checkbox"]),
+.case-list-page .history-filters select,
+.case-present .conf-controls select {
+  box-sizing:border-box; width:100%; min-width:0; height:46px; padding:9px 12px; line-height:1.4;
+}
+.round-schedule-form details > summary { margin-bottom:8px; cursor:pointer; }
+.round-schedule-form .round-option-check {
+  display:flex; align-items:center; gap:10px; min-height:44px; line-height:1.5; cursor:pointer;
+}
+.round-schedule-form .round-option-check input,
+.case-list-page .case-check input {
+  box-sizing:border-box; flex:0 0 18px; width:18px !important; height:18px; min-height:0; margin:0; padding:0;
+}
+.round-schedule-form details > label:not(.round-option-check) { margin-top:10px; }
+.round-form-actions,.case-week-navigation,.case-week-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; }
+.round-form-actions > button,
+.round-schedule-form > button,
+.round-seat-admin > button,
+.round-seat-time > button,
+.case-list-page .panel-title-row .button-row > button,
+.case-weekbar button {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:46px; padding:9px 14px; line-height:1.4; max-width:100%;
+}
+.round-seat-admin .round-seat-time { grid-template-columns:minmax(0,1fr) auto; align-items:end; margin-top:8px; gap:10px; }
+.round-seat-time > label { min-width:0; margin:0; }
+.round-seat-time > button { align-self:end; }
+.case-list-page .panel-title-row { flex-wrap:wrap; gap:12px; align-items:center; }
+.case-list-page .panel-title-row .button-row { align-items:center; }
+.case-list-page .history-filters { align-items:flex-end; }
+.case-list-page .history-filters > label:not(.case-check) { min-width:160px; margin:0; }
+.case-list-page .history-filters > .case-check { flex:0 1 auto; min-width:0; min-height:46px; margin:0; }
+.case-list-page .case-view-switch,.case-present .conf-controls .case-view-switch { box-sizing:border-box; height:46px; flex-shrink:0; align-self:flex-end; }
+.case-list-page .case-view-switch > button,.case-present .conf-controls .case-view-switch > button { min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
+.case-weekbar { gap:12px 20px; margin-bottom:0; }
+.case-week-label { line-height:1.5; }
+.case-week-actions { margin-left:auto; }
+.case-present .conf-controls { gap:12px; margin:0; align-items:flex-end; }
+.case-present .conf-controls > label { min-width:140px; margin:0; }
+@media(max-width:600px) {
+  .round-seat-admin .round-seat-time { grid-template-columns:minmax(0,1fr) auto; }
+  .case-list-page .history-filters > label:not(.case-check) { flex:1 1 140px; min-width:0; }
+  .case-list-page .history-filters > label:first-child { flex-basis:100%; }
+  .case-list-page .panel-title-row .button-row { width:100%; }
+  .case-week-navigation,.case-week-actions { width:100%; margin-left:0; }
+  .case-week-label { order:-1; flex-basis:100%; }
+  .case-week-navigation { gap:8px; }
+  .case-week-navigation > button { flex:1 1 auto; }
+  .case-week-actions > button { flex:1 1 auto; }
+  .case-week-actions > .primary-button { flex-basis:100%; }
+  .case-present .conf-controls > label { flex:1 1 110px; min-width:0; }
+}

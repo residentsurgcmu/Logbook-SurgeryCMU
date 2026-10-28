@@ -384,7 +384,7 @@ export default function ResidentCases({ user, onPresent }) {
   const count = (key) => live.filter((row) => (key === "unset" ? !row.treatment_type : row.treatment_type === key)).length;
 
   return (
-    <section className="resident-panel">
+    <section className="resident-panel case-list-page">
       <div className="panel-title-row">
         <div><h2>เคสรับใหม่ของภาควิชา</h2><p>ทุกคนที่ active เห็นเคสร่วมกัน · ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</p></div>
         <div className="button-row">
