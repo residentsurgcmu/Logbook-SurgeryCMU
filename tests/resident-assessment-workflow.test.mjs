@@ -96,7 +96,10 @@ test("web notifications and one idempotent 24-hour email reminder are server-bac
   assert.match(sql, /unique \(request_id, delivery_type\)/);
   assert.match(sql, /'assessment_requested'/);
   assert.match(sql, /'assessment_completed'/);
-  assert.match(notifier, /24 \* 60 \* 60 \* 1000/);
+  // RC-NOTIF-V1: the 24-hour rule moved into the database work list / web reminder
+  const v1 = await read("../supabase/migrations/20261118090000_notification_preferences_v1.sql");
+  assert.match(v1, /r\.submitted_at <= private\.rc_notif_now\(\) - interval '24 hours' then 'reminder'/);
+  assert.match(notifier, /rc_notif_due_email_work/);
   assert.match(notifier, /deliveryType: "initial" \| "reminder"/);
   assert.doesNotMatch(notifier, /clinical_context/);
 });

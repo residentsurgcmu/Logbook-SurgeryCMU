@@ -60,10 +60,12 @@ test("deliver_due selects only requests whose due email is unsent", async () => 
   const fn = await read("supabase/functions/resident-assessment-notifier/index.ts");
   const block = fn.slice(fn.indexOf('payload.action === "deliver_due"'), fn.indexOf('payload.action !== "deliver_initial"'));
   assert.doesNotMatch(block, /\.limit\(200\)/);
-  assert.match(block, /resident_assessment_email_deliveries\(delivery_type,status,attempted_at\)/);
-  assert.match(block, /delivery\.delivery_type === type\);\s+if \(row\?\.status === "sent"\) continue;/);
-  assert.match(block, /\.range\(offset, offset \+ pageSize - 1\)/);
-  assert.match(block, /due\.slice\(0, MAX_DELIVERIES_PER_RUN\)/);
+  // RC-NOTIF-V1: the work list comes from the database; sent/suppressed/uncertain rows are filtered before the limit
+  assert.match(block, /admin\.rpc\("rc_notif_due_email_work", \{\s*p_limit: MAX_DELIVERIES_PER_RUN/);
+  const v1 = await read("supabase/migrations/20261118090000_notification_preferences_v1.sql");
+  const due = v1.slice(v1.indexOf("function public.rc_notif_due_email_work"));
+  assert.match(due, /where r\.status = 'pending'\s+and \(d\.id is null/);
+  assert.match(due, /order by r\.submitted_at, r\.id\s+limit/);
 });
 
 // 5) Linking a Staff account creates profile + Staff role together (RC-02a-1: in one database

@@ -112,7 +112,7 @@ test("round 2 fixes: ended sessions editable, invite links existing accounts, ex
 test("assessment notifier sends via Gmail SMTP on port 465 and is scheduled", async () => {
   const fn = await readFile(new URL("../supabase/functions/resident-assessment-notifier/index.ts", import.meta.url), "utf8");
   assert.match(fn, /npm:nodemailer/);
-  assert.match(fn, /const messageId = await sendMail\(/);
+  assert.match(fn, /messageId = await sendMail\(/);
   assert.match(fn, /secure: true/);
   assert.match(fn, /resident_reminder_secret_matches/);
   const sql = await readFile(new URL("../supabase/migrations/20260928130000_schedule_assessment_email_delivery.sql", import.meta.url), "utf8");

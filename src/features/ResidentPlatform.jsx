@@ -26,6 +26,7 @@ import {
   StaffEvaluationForm,
 } from "./ResidentAssessmentViews";
 import ResidentExams from "./ResidentExams";
+import NotificationPreferences from "./NotificationPreferences";
 import ResidentCases from "./ResidentCases";
 import ResidentConference from "./ResidentConference";
 import ResidentExportCenter from "./ResidentExportCenter";
@@ -1016,10 +1017,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
             </>
           )
         ) : tab === "notifications" ? (
-          <Notifications
-            notifications={workspace.notifications}
-            onRead={readNotification}
-          />
+          <>
+            <NotificationPreferences user={workspace.user} />
+            <Notifications
+              notifications={workspace.notifications}
+              onRead={readNotification}
+            />
+          </>
         ) : (
           <AssessmentHistory
             workspace={workspace}
