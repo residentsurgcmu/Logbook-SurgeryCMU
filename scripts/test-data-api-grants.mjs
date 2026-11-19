@@ -22,6 +22,7 @@ const run = async (path) => {
 const excluded = new Map([
   ['20260909123956_schedule_resident_web_reminders.sql', 'platform-only cron extension'],
   ['20260928130000_schedule_assessment_email_delivery.sql', 'platform-only Vault/cron/HTTP'],
+  ['20261118090100_schedule_notification_web_retry.sql', 'platform-only cron schedule (RC-NOTIF-V1 web retry)'],
   ['20260825030857_start_year5_2569_and_staff_management.sql', 'retired Year 5 seed precedes curricula CREATE in repository history'],
   ['20260825094000_multi_curriculum_advisor_fixes.sql', 'retired advisor migration drops a policy absent from preceding repository migrations'],
 ]);

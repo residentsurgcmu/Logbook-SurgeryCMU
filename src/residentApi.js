@@ -347,6 +347,31 @@ export async function cancelAssessmentRequest(requestId) {
   fail(error);
 }
 
+// RC-NOTIF-V1: own notification settings (the server always uses the logged-in account; no user id is sent).
+const NOTIFICATION_PREFERENCE_MESSAGES = {
+  RC_NOTIF_VERSION_CONFLICT: "การตั้งค่าถูกเปลี่ยนจากหน้าอื่น ระบบโหลดค่าล่าสุดให้แล้ว กรุณาตรวจและบันทึกอีกครั้ง",
+  RC_NOTIF_FORBIDDEN: "บัญชีนี้ใช้งานการตั้งค่าไม่ได้",
+};
+function notificationPreferenceError(error) {
+  const code = String(error?.message || "").split(":")[0];
+  const next = new Error(NOTIFICATION_PREFERENCE_MESSAGES[code] || "บันทึกการตั้งค่าไม่สำเร็จ กรุณาลองใหม่");
+  next.code = code;
+  return next;
+}
+export async function getMyNotificationPreferences() {
+  const { data, error } = await supabase.rpc("rc_notif_get_my_preferences");
+  if (error) throw notificationPreferenceError(error);
+  return data;
+}
+export async function saveMyNotificationPreferences(expectedVersion, changes) {
+  const { data, error } = await supabase.rpc("rc_notif_save_my_preferences", {
+    p_expected_version: expectedVersion,
+    p_preferences: changes,
+  });
+  if (error) throw notificationPreferenceError(error);
+  return data;
+}
+
 export async function markNotificationRead(notificationId) {
   const { error } = await supabase
     .from("resident_notifications")

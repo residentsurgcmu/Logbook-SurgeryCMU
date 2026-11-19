@@ -30,14 +30,14 @@ async function gmailAccessToken() {
   const clientId = Deno.env.get("GOOGLE_GMAIL_CLIENT_ID") || "";
   const clientSecret = Deno.env.get("GOOGLE_GMAIL_CLIENT_SECRET") || "";
   const refreshToken = Deno.env.get("GOOGLE_GMAIL_REFRESH_TOKEN") || "";
-  if (!clientId || !clientSecret || !refreshToken) throw new Error("Gmail OAuth is not configured");
+  if (!clientId || !clientSecret || !refreshToken) throw Object.assign(new Error("Gmail OAuth is not configured"), { notConfigured: true });
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.access_token) throw new Error(payload.error_description || payload.error || "Google OAuth token exchange failed");
+  if (!response.ok || !payload.access_token) throw new Error(payload?.error_description || payload?.error || "Google OAuth token exchange failed");
   return String(payload.access_token);
 }
 
@@ -54,7 +54,7 @@ function smtpConfig() {
 }
 
 async function sendSmtp(config: NonNullable<ReturnType<typeof smtpConfig>>, to: string, subject: string, html: string) {
-  if (config.port === 25 || config.port === 587) throw new Error("SMTP_PORT must be 465: Supabase Edge Functions block ports 25 and 587");
+  if (config.port === 25 || config.port === 587) throw Object.assign(new Error("SMTP_PORT must be 465: Supabase Edge Functions block ports 25 and 587"), { notConfigured: true });
   const transport = nodemailer.createTransport({
     host: config.host,
     port: config.port,
@@ -74,12 +74,15 @@ async function sendMail(to: string, subject: string, html: string) {
   const smtp = smtpConfig();
   if (smtp) return await sendSmtp(smtp, to, subject, html);
   if (Deno.env.get("GOOGLE_GMAIL_REFRESH_TOKEN")) return await sendGmail(to, subject, html);
-  throw new Error("Email is not configured: set SMTP_HOST, SMTP_USER and SMTP_PASS secrets");
+  throw Object.assign(new Error("Email is not configured: set SMTP_HOST, SMTP_USER and SMTP_PASS secrets"), { notConfigured: true });
 }
 
 async function sendGmail(to: string, subject: string, html: string) {
   const sender = Deno.env.get("GOOGLE_GMAIL_FROM_EMAIL") || "resident.surgcmu@gmail.com";
-  const accessToken = await gmailAccessToken();
+  const accessToken = await gmailAccessToken().catch((cause: unknown) => {
+    // No messages.send call has happened, so a token error is safe to retry.
+    throw Object.assign(new Error("Google OAuth token exchange failed", { cause }), { gmailBeforeSend: true });
+  });
   const raw = [
     `From: Resident Surgery Assessment <${sender}>`,
     `To: ${to}`,
@@ -95,9 +98,13 @@ async function sendGmail(to: string, subject: string, html: string) {
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ raw: base64Url(raw) }),
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.id) throw new Error(payload.error?.message || `Gmail API error ${response.status}`);
-  return String(payload.id);
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw Object.assign(new Error(payload?.error?.message || `Gmail API error ${response.status}`), { gmailHttpStatus: response.status });
+  if (typeof payload?.id !== "string" || !payload.id.trim()) {
+    // Gmail may have accepted the message. Do not attach a retryable HTTP failure marker.
+    throw new Error("Gmail returned success without a verifiable message ID");
+  }
+  return payload.id;
 }
 
 function emailHtml(staffName: string, residentName: string, templateCode: string, activity: string, reminder: boolean) {
@@ -119,6 +126,14 @@ type AdminClient = ReturnType<typeof createClient>;
 // Emails sent per cron run (every 15 minutes); anything left over is picked
 // up by the next run because only unsent deliveries are selected.
 const MAX_DELIVERIES_PER_RUN = 200;
+// RC-NOTIF-V1 (I03): the database only lets this version reserve e-mail; every run checks in first and does
+// nothing while e-mail is paused (resident_notification_mail_control).
+const WORKER_VERSION = "rc-notif-v1-impl-v3";
+async function checkIn(admin: AdminClient) {
+  const { data, error } = await admin.rpc("rc_notif_worker_checkin", { p_version: WORKER_VERSION });
+  if (error || typeof data?.paused !== "boolean") throw new Error("rc_notif_worker_checkin unavailable"); // fail closed
+  return data as { paused: boolean };
+}
 // Stop starting new sends after this long so the run returns before the Edge
 // Function wall-clock limit; the rest goes to the next run.
 const RUN_TIME_BUDGET_MS = 100_000;
@@ -126,87 +141,70 @@ const RUN_TIME_BUDGET_MS = 100_000;
 // long before it is retried, so failing rows cannot take every run's slots.
 const FAILED_RETRY_AFTER_MS = 6 * 60 * 60 * 1000;
 
-async function deliver(admin: AdminClient, requestId: string, deliveryType: "initial" | "reminder") {
-  const { data: request, error: requestError } = await admin.from("resident_assessment_requests")
-    .select("id,template_id,resident_id,staff_id,status,submitted_at,procedure_or_activity")
-    .eq("id", requestId).maybeSingle();
-  if (requestError) throw requestError;
-  if (!request || request.status !== "pending") return { sent: false, skipped: true };
+// RC-NOTIF-V1: every decision is made in the database.
+// 1. reminder: the web reminder is created first, independent of the e-mail claim and of SMTP;
+// 2. claim = reservation only (it already refuses suppressed/terminal deliveries);
+// 3. rc_notif_authorize_email_attempt = permission for ONE attempt, checked right before SMTP
+//    (request still pending, same active Staff, notification setting); any error = no send;
+// 4. the outcome is reported for that attempt only: sent | failed_before_smtp (SMTP never accepted the
+//    message → retried later) | uncertain (sending started, result unknown → never retried automatically).
+type Outcome = "sent" | "failed_before_smtp" | "uncertain";
 
-  const [{ data: template, error: templateError }, { data: resident, error: residentError }, { data: directory, error: directoryError }] = await Promise.all([
-    admin.from("resident_template_definitions").select("template_code").eq("id", request.template_id).single(),
-    admin.from("resident_profiles").select("full_name").eq("user_id", request.resident_id).single(),
-    admin.from("resident_staff_directory").select("email,full_name,active,auth_user_id").eq("auth_user_id", request.staff_id).maybeSingle(),
-  ]);
-  if (templateError || residentError || directoryError) throw templateError || residentError || directoryError;
-  if (!directory?.active || directory.auth_user_id !== request.staff_id) {
-    // Record the failure so deliver_due backs off for FAILED_RETRY_AFTER_MS
-    // instead of retrying this request (e.g. Staff deactivated) every run.
-    const reason = "Selected Staff is not an active registered account";
-    let email = directory?.email || "";
-    if (!email) {
-      const { data: staffProfile } = await admin.from("resident_profiles").select("email").eq("user_id", request.staff_id).maybeSingle();
-      email = staffProfile?.email || "";
-    }
-    if (email) {
-      const { data: failedId } = await admin.rpc("claim_resident_assessment_email_delivery", {
-        p_request_id: request.id, p_delivery_type: deliveryType, p_recipient_email: email,
-      });
-      if (failedId) await admin.from("resident_assessment_email_deliveries").update({ status: "failed", error_message: reason }).eq("id", failedId);
-    }
-    throw new Error(reason);
+// SMTP/Gmail errors where the server certainly did NOT accept the message.
+function failedBeforeAcceptance(error: unknown): boolean {
+  const e = error as { code?: string; command?: string; responseCode?: number; gmailHttpStatus?: number; gmailBeforeSend?: boolean; notConfigured?: boolean };
+  if (e?.notConfigured || e?.gmailBeforeSend) return true;
+  if (typeof e?.gmailHttpStatus === "number") return true;            // Gmail API answered with an error status
+  if (typeof e?.responseCode === "number" && e.responseCode >= 400) return true;  // SMTP answered with a rejection
+  if (["CONN", "EHLO", "HELO", "STARTTLS", "AUTH PLAIN", "AUTH LOGIN", "AUTH XOAUTH2", "MAIL FROM", "RCPT TO"].includes(String(e?.command || ""))) return true;
+  if (["ECONNECTION", "EDNS", "EAUTH", "ECONNREFUSED", "ENOTFOUND"].includes(String(e?.code || ""))) return true;
+  return false;                                                        // anything else: the result is unknown
+}
+
+async function finishAttempt(admin: AdminClient, attemptId: string, outcome: Outcome, messageId: string | null, errorText: string | null) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { data, error } = await admin.rpc("rc_notif_finish_email_attempt", {
+      p_attempt_id: attemptId, p_outcome: outcome, p_provider_message_id: messageId, p_error: errorText ? errorText.slice(0, 1000) : null,
+    });
+    if (!error) return data;
+    if (attempt === 1) throw new MarkSentError(`E-mail attempt ${outcome} but the outcome could not be recorded: ${error.message}`);
   }
+}
 
-  // Claim the row atomically: null means it was already sent or another run
-  // (browser deliver_initial vs. cron deliver_due) is sending it right now.
-  const { data: deliveryId, error: claimError } = await admin.rpc("claim_resident_assessment_email_delivery", {
-    p_request_id: request.id, p_delivery_type: deliveryType, p_recipient_email: directory.email,
+async function deliver(admin: AdminClient, requestId: string, deliveryType: "initial" | "reminder") {
+  let webError: string | null = null;
+  if (deliveryType === "reminder") {
+    const { error } = await admin.rpc("rc_notif_ensure_web_reminder", { p_request_id: requestId });
+    if (error) webError = `web reminder: ${error.message}`;
+  }
+  // reservation with an explicit reason; a database error means "unavailable" → no send, retried by a later run
+  const { data: reservation, error: claimError } = await admin.rpc("rc_notif_reserve_email", {
+    p_request_id: requestId, p_delivery_type: deliveryType,
   });
   if (claimError) throw claimError;
-  if (!deliveryId) return { sent: false, skipped: true };
-  const delivery = { id: deliveryId as string };
-
-  if (deliveryType === "reminder") {
-    const { error: notificationError } = await admin.from("resident_notifications").upsert({
-      recipient_id: request.staff_id,
-      request_id: request.id,
-      notification_type: "assessment_reminder",
-      title: "แบบประเมินรอเกิน 24 ชั่วโมง",
-      message: `${template.template_code} ของ ${resident.full_name} ยังรอการประเมิน`,
-    }, { onConflict: "request_id,recipient_id,notification_type" });
-    if (notificationError) throw notificationError;
-  }
-
+  if (!reservation?.delivery_id) return { sent: false, skipped: true, reason: reservation?.reason || "unknown", webError };
+  const deliveryId = reservation.delivery_id;
+  const { data: permission, error: authError } = await admin.rpc("rc_notif_authorize_email_attempt", { p_delivery_id: deliveryId });
+  if (authError) throw authError;                       // cannot decide → do not send
+  if (!permission?.allowed) return { sent: false, skipped: true, reason: permission?.reason, webError };
+  const reminder = deliveryType === "reminder";
+  let messageId: string;
   try {
-    const reminder = deliveryType === "reminder";
-    const messageId = await sendMail(
-      directory.email,
-      reminder ? `Reminder: ${template.template_code} รอการประเมินครบ 24 ชั่วโมง` : `${template.template_code}: มีแบบประเมินใหม่`,
-      emailHtml(directory.full_name, resident.full_name, template.template_code, request.procedure_or_activity, reminder),
+    messageId = await sendMail(
+      permission.to,
+      reminder ? `Reminder: ${permission.template_code} รอการประเมินครบ 24 ชั่วโมง` : `${permission.template_code}: มีแบบประเมินใหม่`,
+      emailHtml(permission.staff_name, permission.resident_name, permission.template_code, permission.activity, reminder),
     );
-    await markSent(admin, delivery.id, messageId);
-    return { sent: true, skipped: false };
   } catch (error) {
-    if (error instanceof MarkSentError) throw error;
     const message = error instanceof Error ? error.message : "Email delivery failed";
-    await admin.from("resident_assessment_email_deliveries").update({ status: "failed", error_message: message.slice(0, 1000) }).eq("id", delivery.id);
+    await finishAttempt(admin, permission.attempt_id, failedBeforeAcceptance(error) ? "failed_before_smtp" : "uncertain", null, message);
     throw error;
   }
+  await finishAttempt(admin, permission.attempt_id, "sent", messageId, null);
+  return { sent: true, skipped: false, webError };
 }
 
 class MarkSentError extends Error {}
-
-// The email is already out. Marking it 'sent' must not be skipped silently or
-// recorded as 'failed', or the same email would be sent again. Retry once; if
-// it still fails, the row stays 'sending' and is not reclaimed for 10 minutes.
-async function markSent(admin: AdminClient, deliveryId: string, messageId: string) {
-  const update = { status: "sent", provider_message_id: messageId, sent_at: new Date().toISOString(), error_message: null };
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { error } = await admin.from("resident_assessment_email_deliveries").update(update).eq("id", deliveryId);
-    if (!error) return;
-    if (attempt === 1) throw new MarkSentError(`Email sent but could not be marked as sent: ${error.message}`);
-  }
-}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -232,38 +230,23 @@ Deno.serve(async (request) => {
         authorized = matches === true;
       }
       if (!authorized) return json({ error: "Unauthorized" }, 401);
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      // Read every pending request with its delivery rows and keep only the ones
-      // whose due email has not been sent yet. Limiting the raw query to the
-      // oldest 200 pending rows starved newer requests once more than 200
-      // already-reminded requests stayed pending.
-      const due: { id: string; type: "initial" | "reminder" }[] = [];
-      const pageSize = 500;
-      for (let offset = 0; ; offset += pageSize) {
-        const { data: page, error } = await admin.from("resident_assessment_requests")
-          .select("id,submitted_at,resident_assessment_email_deliveries(delivery_type,status,attempted_at)")
-          .eq("status", "pending").order("submitted_at").order("id").range(offset, offset + pageSize - 1);
-        if (error) throw error;
-        for (const item of page || []) {
-          const type = item.submitted_at <= cutoff ? "reminder" : "initial";
-          const deliveries = (item.resident_assessment_email_deliveries || []) as { delivery_type: string; status: string; attempted_at: string }[];
-          const row = deliveries.find((delivery) => delivery.delivery_type === type);
-          if (row?.status === "sent") continue;
-          if (row?.status === "failed" && Date.now() - new Date(row.attempted_at).getTime() < FAILED_RETRY_AFTER_MS) continue;
-          due.push({ id: item.id, type });
-        }
-        if (!page || page.length < pageSize) break;
-      }
-      const batch = due.slice(0, MAX_DELIVERIES_PER_RUN);
+      const control = await checkIn(admin);
+      if (control.paused) return json({ ok: true, paused: true, workerVersion: WORKER_VERSION, processed: 0, sent: 0, failures: [] });
+      const { data: due, error: dueError } = await admin.rpc("rc_notif_due_email_work", {
+        p_limit: MAX_DELIVERIES_PER_RUN, p_failed_retry_after: `${FAILED_RETRY_AFTER_MS / 1000} seconds`,
+      });
+      if (dueError) throw dueError;
+      const work = ((due || []) as { request_id: string; delivery_type: "initial" | "reminder" }[]).map((row) => ({ id: row.request_id, type: row.delivery_type }));
+      const batch = work;
       let sent = 0; let processed = 0; const failures: string[] = [];
       const startedAt = Date.now();
       for (const item of batch) {
         if (Date.now() - startedAt > RUN_TIME_BUDGET_MS) break;
         processed += 1;
-        try { const result = await deliver(admin, item.id, item.type); if (result.sent) sent += 1; }
+        try { const result = await deliver(admin, item.id, item.type); if (result.sent) sent += 1; if (result.webError) failures.push(`${item.id}: ${result.webError}`); }
         catch (error) { failures.push(`${item.id}: ${error instanceof Error ? error.message : "delivery failed"}`); }
       }
-      return json({ ok: failures.length === 0, processed, remaining: due.length - processed, sent, failures });
+      return json({ ok: failures.length === 0, processed, remaining: work.length - processed, sent, failures });
     }
 
     if (payload.action !== "deliver_initial" || typeof payload.requestId !== "string") return json({ error: "Invalid action" }, 400);
@@ -280,10 +263,12 @@ Deno.serve(async (request) => {
     if (!callerRole?.active || !callerProfile?.active) return json({ error: "Active account required" }, 403);
     const { data: assessmentRequest } = await admin.from("resident_assessment_requests").select("resident_id").eq("id", payload.requestId).maybeSingle();
     if (!assessmentRequest || assessmentRequest.resident_id !== authData.user.id) return json({ error: "Request owner required" }, 403);
+    const control = await checkIn(admin);
+    if (control.paused) return json({ ok: true, paused: true, workerVersion: WORKER_VERSION });   // picked up by deliver_due after e-mail resumes
     const result = await deliver(admin, payload.requestId, "initial");
     return json({ ok: true, ...result });
   } catch (error) {
     console.error("Resident assessment notification failed", error);
-    return json({ error: error instanceof Error ? error.message : "Notification delivery failed" }, 500);
+    return json({ error: error instanceof Error ? error.message : "Notification delivery failed", workerVersion: WORKER_VERSION }, 500);
   }
 });

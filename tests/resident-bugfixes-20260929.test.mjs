@@ -51,16 +51,23 @@ test("workspace loads every profile but pickers get only active ones", async () 
 
 test("email worker claims a delivery atomically and never silently drops 'sent'", async () => {
   const fn = await read("supabase/functions/resident-assessment-notifier/index.ts");
-  assert.match(fn, /admin\.rpc\("claim_resident_assessment_email_delivery"/);
+  // RC-NOTIF-V1: the Edge reserves through rc_notif_reserve_email, which is the same atomic claim plus an explicit reason
+  assert.match(fn, /admin\.rpc\("rc_notif_reserve_email"/);
+  const v1claim = await read("supabase/migrations/20261118090000_notification_preferences_v1.sql");
+  assert.match(v1claim, /v_id := private\.rc_notif_claim\(p_request_id, p_delivery_type\);/);
+  // the legacy claim (old Edge) is retired after the v1 migration (C0 I03)
+  assert.match(v1claim, /RC_NOTIF_LEGACY_CLAIM_RETIRED/);
   assert.doesNotMatch(fn, /\.upsert\(attempt, \{ onConflict: "request_id,delivery_type" \}\)/);
-  const markSent = fn.slice(fn.indexOf("async function markSent"), fn.indexOf("Deno.serve"));
-  assert.match(markSent, /const \{ error \} = await admin\.from\("resident_assessment_email_deliveries"\)\.update\(update\)/);
-  assert.match(markSent, /throw new MarkSentError/);
-  assert.match(fn, /if \(error instanceof MarkSentError\) throw error;/);
+  // RC-NOTIF-V1: outcomes are recorded per authorized attempt through the database; an attempt whose outcome
+  // cannot be recorded is never retried silently (it becomes 'uncertain' after 10 minutes).
+  const finish = fn.slice(fn.indexOf("async function finishAttempt"), fn.indexOf("async function deliver("));
+  assert.match(finish, /admin\.rpc\("rc_notif_finish_email_attempt"/);
+  assert.match(finish, /throw new MarkSentError/);
   assert.match(fn, /if \(Date\.now\(\) - startedAt > RUN_TIME_BUDGET_MS\) break;/);
-  const inactive = fn.slice(fn.indexOf("if (!directory?.active"), fn.indexOf("throw new Error(reason)"));
-  assert.match(inactive, /update\(\{ status: "failed", error_message: reason \}\)/, "inactive Staff must record a failed row so the backoff applies");
-  assert.match(fn, /row\?\.status === "failed" && Date\.now\(\) - new Date\(row\.attempted_at\)\.getTime\(\) < FAILED_RETRY_AFTER_MS/);
+  const v1 = await read("supabase/migrations/20261118090000_notification_preferences_v1.sql");
+  const authorize = v1.slice(v1.indexOf("function public.rc_notif_authorize_email_attempt"));
+  assert.match(authorize, /status = 'failed', error_message = 'Selected Staff is not an active registered account'/, "inactive Staff must record a failed row so the backoff applies");
+  assert.match(v1, /d\.status = 'failed' and \(d\.attempted_at <= private\.rc_notif_now\(\) - p_failed_retry_after/);
   const sql = await migration();
   const claim = sql.slice(sql.indexOf("function public.claim_resident_assessment_email_delivery"));
   assert.match(claim, /where delivery\.status = 'failed'\s+or \(delivery\.status = 'sending'\s+and delivery\.attempted_at < clock_timestamp\(\) - interval '10 minutes'\)/);
