@@ -158,16 +158,18 @@ function Notifications({ notifications, onRead }) {
     try { await onRead(id); }
     catch (nextError) { setError(nextError.message || "ทำเครื่องหมายว่าอ่านแล้วไม่สำเร็จ กรุณาลองใหม่"); }
   }
-  if (!notifications.length)
-    return (
-      <section className="resident-panel empty">
-        <h2>ยังไม่มี notification</h2>
-      </section>
-    );
+  const unread = notifications.filter((item) => !item.read_at).length;
   return (
-    <section className="resident-panel">
-      <h2>Notification ในระบบ</h2>
+    <section className="resident-panel notification-inbox" aria-labelledby="notification-inbox-title">
+      <div className="notification-panel-heading">
+        <span className="notification-panel-icon" aria-hidden="true"><ClipboardIcon size={22} /></span>
+        <div>
+          <h2 id="notification-inbox-title">กล่องแจ้งเตือน</h2>
+          <p>{unread ? `ยังไม่ได้อ่าน ${unread} รายการ` : "ไม่มีรายการที่ยังไม่ได้อ่าน"}</p>
+        </div>
+      </div>
       {error && <p className="form-error" role="alert">{error}</p>}
+      {!notifications.length ? <p className="notification-empty">ยังไม่มีการแจ้งเตือน</p> : (
       <div className="notification-list">
         {notifications.map((item) => (
           <button
@@ -176,6 +178,7 @@ function Notifications({ notifications, onRead }) {
             className={
               item.read_at ? "notification-card read" : "notification-card"
             }
+            disabled={Boolean(item.read_at)}
             onClick={() => !item.read_at && read(item.id)}
           >
             <span>{item.title}</span>
@@ -189,6 +192,7 @@ function Notifications({ notifications, onRead }) {
           </button>
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -807,7 +811,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   if (workspace.user.role === "resident" || workspace.user.role === "staff")
     nav.push(["attendance", "เช็คชื่อประชุม"]);
   nav.push(["cases", "New admissions"], ["conference", "ประชุมวันศุกร์"]);
-  nav.push(["calendar", "ปฏิทินกิจกรรม"], ["notifications", "Notification"]);
+  nav.push(["calendar", "ปฏิทินกิจกรรม"], ["notifications", "การแจ้งเตือน"]);
   // Counts that need action are badges, not part of the label.
   const badges = {
     notifications: unreadCount,
@@ -838,7 +842,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
       workspace.user.role === "staff"
         ? "ประวัติการประเมิน"
         : "ผลการประเมินของฉัน",
-    notifications: "Notification",
+    notifications: "การแจ้งเตือน",
     export: "Export ข้อมูลการประเมิน",
     admin: "จัดการระบบ Resident",
     attendance: "เช็คชื่อ MM & Grand Round",
@@ -921,10 +925,11 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
         {tab !== "myspace" && <div className="page-heading">
           <div>
             <h1>{titles[tab]}</h1>
-            <p>
+            {tab === "notifications" && <p>จัดการช่องทางและติดตามแจ้งเตือนในระบบ</p>}
+            {tab !== "notifications" && <p>
               {workspace.user.name}
               {workspace.user.pgy ? ` · PGY ${workspace.user.pgy}` : ""}
-            </p>
+            </p>}
           </div>
         </div>}
         {tab === "home" ? (
@@ -1017,13 +1022,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
             </>
           )
         ) : tab === "notifications" ? (
-          <>
+          <div className="notification-workspace">
             <NotificationPreferences user={workspace.user} />
             <Notifications
               notifications={workspace.notifications}
               onRead={readNotification}
             />
-          </>
+          </div>
         ) : (
           <AssessmentHistory
             workspace={workspace}

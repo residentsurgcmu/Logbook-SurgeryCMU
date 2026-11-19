@@ -61,9 +61,42 @@
 @media (max-width:1100px) { .corner-columns { grid-template-columns:minmax(0,1fr); } .corner-welcome { flex-wrap:wrap; } }
 @media (max-width:900px) { .corner-shell .app-sidebar { background:#0e3036; } .corner-shell main { padding:0 4px; } }
 @media (max-width:560px) { .corner-home .resident-panel, .corner-conference { padding:18px; } .corner-service-grid { grid-template-columns:minmax(0,1fr); } .corner-panel-heading { flex-wrap:wrap; } .corner-metrics { gap:8px; } .corner-metrics button { padding:14px; } }
-/* Keep long menus scrollable instead of shrinking them underneath the footer. */
+/* Keep the brand and footer outside the sidebar's scroll area. */
+.corner-shell .app-sidebar { overflow:hidden; }
 .corner-shell .app-sidebar-brand, .corner-shell .app-sidebar-foot { flex-shrink:0; }
-.corner-shell .app-sidebar .app-nav { flex:1 0 auto; }
+.resident-app.corner-shell .app-sidebar .app-nav { flex:1 1 auto; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:#53777d transparent; padding:0 4px 5px; }
+.corner-shell .app-nav button:focus-visible { outline-offset:-3px; }
+
+.notification-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:20px; align-items:start; max-width:1200px; }
+.notification-workspace > .resident-panel { margin:0; padding:clamp(16px,2.1vw,26px); }
+.notification-panel-heading { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.notification-panel-heading h2 { margin:0; font-size:19px; }
+.notification-panel-heading p { margin:2px 0 0; color:#526970; font-size:13px; }
+.notification-panel-icon { display:grid; place-items:center; width:44px; height:44px; flex:0 0 44px; border-radius:12px; background:#e9f4f0; color:#0b675d; }
+.notification-preferences form { display:grid; gap:12px; }
+.notification-preferences fieldset { min-width:0; margin:0; padding:0 12px; border:1px solid #dce7e4; border-radius:10px; background:#f7faf9; }
+.notification-preferences legend { padding:0 5px; color:#18383d; font-size:14px; font-weight:800; }
+.notification-group-note { margin:0 0 2px; color:#526970; font-size:12px; }
+.notification-preferences .notification-switch-row { display:flex; align-items:center; justify-content:space-between; min-height:44px; gap:12px; cursor:pointer; }
+.notification-switch-row + .notification-switch-row { border-top:1px solid #e1eae7; }
+.notification-switch-control { position:relative; display:inline-flex; align-items:center; gap:8px; flex-shrink:0; }
+.notification-switch-state { font-size:12px; color:#3f595e; }
+.notification-switch-control input { position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0; opacity:0; cursor:inherit; }
+.notification-switch-track { display:block; width:42px; height:24px; border-radius:99px; background:#687c80; pointer-events:none; }
+.notification-switch-track::before { content:""; display:block; width:18px; height:18px; margin:3px; border-radius:50%; background:white; }
+.notification-switch-control input:checked + .notification-switch-track { background:#087469; }
+.notification-switch-control input:checked + .notification-switch-track::before { transform:translateX(18px); }
+.notification-switch-control input:focus-visible + .notification-switch-track { outline:3px solid #a35f0c; outline-offset:3px; }
+.notification-preferences fieldset:disabled .notification-switch-row { cursor:default; opacity:.7; }
+.notification-preferences-footer { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; }
+.notification-preferences-footer .primary-button { min-height:44px; }
+.notification-preferences-footer span, .notification-preferences-note { font-size:12px; color:#4d656a; }
+.notification-preferences-note { margin:0; line-height:1.6; }
+.notification-inbox .notification-card { line-height:1.6; overflow-wrap:anywhere; }
+.notification-inbox .notification-card:disabled { opacity:1; }
+.notification-inbox .notification-card:not(:disabled):hover { background:#eaf5f0; }
+.notification-empty { margin:0; padding:22px 16px; color:#526970; background:#f7faf9; border:1px dashed #dce7e4; border-radius:10px; text-align:center; }
+@media (max-width:1050px) { .notification-workspace { grid-template-columns:minmax(0,1fr); } }
 @font-face { font-family:'Corner Thai'; src:url('/fonts/NotoSansThai.ttf') format('truetype'); font-style:normal; font-weight:100 900; font-display:swap; }
 .corner-shell { font-family:'Corner Thai',system-ui,sans-serif; }
 .corner-conference .secondary-button { -webkit-backdrop-filter:none; backdrop-filter:none; box-shadow:none; }
