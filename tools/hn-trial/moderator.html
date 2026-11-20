@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="th"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LmvJ/8mCZkr2Ae1DtL1RsnxgOI3XDFiF4WVRnT5JogY='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Moderator · เปิด HN ออฟไลน์</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f1f6f4;color:#142d2b;font:16px/1.65 system-ui,sans-serif} header,main{max-width:710px;margin:auto;padding:24px}header{padding-bottom:0}small{font-weight:700;color:#13614c}h1,h2,p{margin:0 0 12px}h1{line-height:1.2;font-size:clamp(1.6rem,4vw,2.25rem)}h2{font-size:1.15rem}section{background:white;border:1px solid #d6e4df;border-radius:16px;padding:20px;margin-bottom:14px}label{display:block;margin-bottom:12px;font-weight:650}input{display:block;width:100%;font:inherit;border:1px solid #8aaca4;border-radius:8px;padding:8px;background:#fff;color:inherit}button{font:inherit;font-weight:650;border:1px solid #17624e;border-radius:8px;padding:8px 12px;background:#17624e;color:white;margin:3px 4px 3px 0;cursor:pointer}button.secondary{background:white;color:#164837}button:disabled{opacity:.55;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #ac550c;outline-offset:2px}#result:not(:empty){background:#e2f3ea;padding:12px;display:block;margin:8px 0;font-size:1.2rem;font-weight:700}#status{min-height:2em} .notice{color:#654511}
+</style>
+<header><small>RESIDENT CORNER · ต้นแบบทดสอบ</small><h1>Moderator · เปิด HN ออฟไลน์</h1><p class="notice">ใช้เฉพาะข้อมูลสมมติ · ไม่มีการเชื่อมต่อเว็บหรือฐานข้อมูลจริง</p></header>
+<main>
+<section><h2>1. สร้างคู่กุญแจทดสอบ</h2>
+<form id="create" autocomplete="off"><label>วลีรหัสผ่านทดสอบ<input id="new-pass" type="password" autocomplete="new-password" maxlength="128" required></label><button>สร้างคู่กุญแจ</button></form>
+<button class="secondary" id="get-public" disabled>ดาวน์โหลดกุญแจสาธารณะ</button>
+<button class="secondary" id="get-private" disabled>ดาวน์โหลดกุญแจส่วนตัวที่ล็อกแล้ว</button></section>
+<section><h2>2. เปิด HN ทีละเคส</h2>
+<form id="reveal" autocomplete="off">
+<label>รหัสเคสที่ต้องการเปิด<input id="expect" value="ADM-00001" maxlength="9" required></label>
+<label>ไฟล์ข้อมูลเข้ารหัสของรอบประชุม<input id="record-file" type="file" accept=".json" required></label>
+<label>ไฟล์กุญแจส่วนตัวที่ล็อกแล้ว<input id="private-file" type="file" accept=".json" required></label>
+<label>วลีรหัสผ่านของกุญแจทดสอบ<input id="unlock-pass" type="password" autocomplete="off" maxlength="128" required></label>
+<button>เปิด HN บนเครื่องนี้</button></form>
+<output id="result"></output><button class="secondary" id="hide" type="button">ซ่อน HN</button>
+<p class="notice">ใช้จอควบคุมที่ไม่ได้แชร์หรือ mirror จอประชุม</p></section><p id="status" role="status"></p></main><script>
+"use strict";
+const $ = id => document.getElementById(id);
+const s = crypto.subtle, utf = new TextEncoder(), decoder = new TextDecoder("utf-8",{fatal:true});
+const bytes = n => crypto.getRandomValues(new Uint8Array(n));
+const b64 = data => btoa(String.fromCharCode(...new Uint8Array(data)));
+const bin = (value,n) => {
+  if (typeof value !== "string" || value.length > 4500 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) throw Error();
+  const data = Uint8Array.from(atob(value), c => c.charCodeAt(0));
+  if ((n !== undefined && data.length !== n) || b64(data) !== value) throw Error();
+  return data;
+};
+const rsa = {name:"RSA-OAEP",hash:"SHA-256"};
+const format = "rc-hn-demo-v1";
+const kid = async spki => Array.from(new Uint8Array(await s.digest("SHA-256",spki)), b=>b.toString(16).padStart(2,"0")).join("");
+const validKid = value => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+const validCase = value => typeof value === "string" && /^ADM-[0-9]{5}$/.test(value);
+const validHN = value => /^DEMO-[0-9]{6}$/.test(value);
+const label = (caseId,keyId) => ({name:"RSA-OAEP",label:utf.encode([format,caseId,keyId].join(":"))});
+const read = async (id,limit=12000) => {
+  const file = $(id).files[0];
+  if (!file || file.size > limit) throw Error();
+  const data = JSON.parse(await file.text());
+  if (!data || data.format !== format || !validKid(data.keyId)) throw Error();
+  return data;
+};
+const save = (name,obj) => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)+"\n"],{type:"application/json"}));
+  const a = document.createElement("a");
+  a.href=url; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+const status = message => $("status").textContent=message;
+const action = (id, run, message) => $(id).addEventListener("submit", async e => {
+  e.preventDefault();
+  const button=e.currentTarget.querySelector("button");
+  button.disabled=true;
+  try { if (!s) throw Error(); await run(); } catch { status(message); }
+  finally { button.disabled=false; }
+});
+
+const rounds=600000;
+const derive = async (pass,salt) => {
+  const input=utf.encode(pass);
+  try {
+    const key=await s.importKey("raw",input,{name:"PBKDF2"},false,["deriveKey"]);
+    return await s.deriveKey({name:"PBKDF2",salt,iterations:rounds,hash:"SHA-256"},key,{name:"AES-GCM",length:256},false,["wrapKey","unwrapKey"]);
+  } finally {input.fill(0);}
+};
+const aes = (iv,id) => ({name:"AES-GCM",iv,additionalData:utf.encode(format+":private:"+id)});
+let publicFile, privateFile, generation=0, timer;
+const clear = () => { ++generation; clearTimeout(timer); $("result").textContent=""; };
+$("hide").onclick=clear;
+for (const id of ["expect","record-file","private-file","unlock-pass"]) $(id).addEventListener("input",clear);
+document.addEventListener("visibilitychange",()=>{if (document.hidden) clear();});
+window.addEventListener("pagehide",clear);
+action("create",async()=>{
+  publicFile=privateFile=undefined;
+  $("get-public").disabled=$("get-private").disabled=true;
+  const pass=$("new-pass").value;
+  $("new-pass").value="";
+  if (pass.length < 16 || pass.length > 128) {status("ใช้วลีรหัสผ่านทดสอบ 16–128 ตัวอักษร");return;}
+  status("กำลังสร้างกุญแจทดสอบ…");
+  const keys=await s.generateKey({...rsa,modulusLength:3072,publicExponent:new Uint8Array([1,0,1])},true,["encrypt","decrypt"]);
+  const spki=await s.exportKey("spki",keys.publicKey), keyId=await kid(spki), salt=bytes(16), iv=bytes(12);
+  const wrapped=await s.wrapKey("pkcs8",keys.privateKey,await derive(pass,salt),aes(iv,keyId));
+  publicFile={format,type:"public",keyId,spki:b64(spki)};
+  privateFile={format,type:"private",keyId,salt:b64(salt),iv:b64(iv),wrapped:b64(wrapped)};
+  $("get-public").disabled=$("get-private").disabled=false;
+  status("สร้างกุญแจทดสอบแล้ว · ดาวน์โหลดไฟล์ทั้งสองแยกกัน");
+},"สร้างกุญแจไม่สำเร็จ");
+$("get-public").onclick=()=>{if(publicFile) save("rc-demo-public.json",publicFile);};
+$("get-private").onclick=()=>{if(privateFile) save("rc-demo-private-locked.json",privateFile);};
+action("reveal",async()=>{
+  clear();
+  const turn=generation, expected=$("expect").value.trim(), pass=$("unlock-pass").value;
+  $("unlock-pass").value="";
+  if (!pass || !validCase(expected)) throw Error();
+  const [input,priv]=await Promise.all([read("record-file",65536),read("private-file")]);
+  let record=input;
+  if (input.type==="trial-bundle") {
+    if (input.keyId!==priv.keyId || !Array.isArray(input.records) || input.records.length<1 || input.records.length>50) throw Error();
+    const codes=new Set();
+    for (const entry of input.records) {
+      if (entry?.type!=="trial-record" || entry.format!==format || entry.keyId!==input.keyId || !validCase(entry.caseId) || codes.has(entry.caseId)) throw Error();
+      codes.add(entry.caseId);
+    }
+    record=input.records.find(entry=>entry.caseId===expected);
+    if (!record) throw Error();
+  }
+  if (!["record","trial-record"].includes(record.type) || priv.type!=="private" || record.caseId!==expected || record.keyId!==priv.keyId) throw Error();
+  const oaep = record.type==="trial-record"
+    ? {name:"RSA-OAEP",label:utf.encode("rc-hn-trial-v1:"+record.caseUuid+":"+expected+":"+priv.keyId)}
+    : label(expected,priv.keyId);
+  if (record.type==="trial-record" && (typeof record.caseUuid!=="string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(record.caseUuid))) throw Error();
+  const wrapping=await derive(pass,bin(priv.salt,16));
+  const key=await s.unwrapKey("pkcs8",bin(priv.wrapped),wrapping,aes(bin(priv.iv,12),priv.keyId),rsa,false,["decrypt"]);
+  const plain=new Uint8Array(await s.decrypt(oaep,key,bin(record.ciphertext,384)));
+  try {
+    const hn=decoder.decode(plain);
+    if (!validHN(hn)) throw Error();
+    if (turn!==generation || document.hidden) return;
+    $("result").textContent=expected+" · "+hn;
+    status("แสดงบนเครื่องนี้เท่านั้น · ซ่อนใน 20 วินาที");
+    timer=setTimeout(clear,20000);
+  } finally {plain.fill(0);}
+},"เปิดไม่ได้: ตรวจรหัสเคส ไฟล์ และวลีรหัสผ่าน");
+</script></html>

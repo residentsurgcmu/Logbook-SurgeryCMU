@@ -1,3 +1,4 @@
+import CaseHnTrial, { caseHnTrialEnabled } from "./CaseHnTrial";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "../components/Icons";
 import {
@@ -235,6 +236,9 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
       <p><CaseTypeChip type={row.treatment_type} /> <small className="case-muted">แก้ล่าสุด {thaiDateTime(row.updated_at)} โดย {personName(people, row.updated_by)}</small></p>
       {notice && <p className="form-error" role="status">{notice}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
+      {caseHnTrialEnabled && !row.deleted_at && (
+        <CaseHnTrial key={`${user.id}:${row.id}`} actorId={user.id} caseUuid={row.id} caseCode={row.case_code} />
+      )}
       <div className="case-split">
         <div>
           {fields.map(([label, value]) => <div className="case-field" key={label}><small>{label}</small>{value || "ยังไม่ระบุ"}</div>)}
