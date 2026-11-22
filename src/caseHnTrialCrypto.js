@@ -6,7 +6,7 @@ export function isCaseHnTrialEnabled(flag, url) {
 const idPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const kidPattern = /^[0-9a-f]{64}$/;
 const codePattern = /^ADM-[0-9]{5}$/;
-export const isSyntheticCaseHn = (value) => /^DEMO-[0-9]{6}$/.test(value);
+export const isSyntheticCaseHn = (value) => typeof value === "string" && value.length === 12 && /^DEMO-[0-9]{7}$/.test(value);
 const encoder = new TextEncoder();
 const toB64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 export async function sealTrialHn({ publicKey, configuredKey, caseUuid, caseCode, hn, cryptoApi = globalThis.crypto }) {

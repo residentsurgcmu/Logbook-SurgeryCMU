@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="th"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-LmvJ/8mCZkr2Ae1DtL1RsnxgOI3XDFiF4WVRnT5JogY='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-W9FiY+WsaSJVLz05LEhBEIEQ8j4MGClH0f5g9k1Xdks='; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
 <title>Moderator · เปิด HN ออฟไลน์</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f1f6f4;color:#142d2b;font:16px/1.65 system-ui,sans-serif} header,main{max-width:710px;margin:auto;padding:24px}header{padding-bottom:0}small{font-weight:700;color:#13614c}h1,h2,p{margin:0 0 12px}h1{line-height:1.2;font-size:clamp(1.6rem,4vw,2.25rem)}h2{font-size:1.15rem}section{background:white;border:1px solid #d6e4df;border-radius:16px;padding:20px;margin-bottom:14px}label{display:block;margin-bottom:12px;font-weight:650}input{display:block;width:100%;font:inherit;border:1px solid #8aaca4;border-radius:8px;padding:8px;background:#fff;color:inherit}button{font:inherit;font-weight:650;border:1px solid #17624e;border-radius:8px;padding:8px 12px;background:#17624e;color:white;margin:3px 4px 3px 0;cursor:pointer}button.secondary{background:white;color:#164837}button:disabled{opacity:.55;cursor:default}button:focus-visible,input:focus-visible{outline:3px solid #ac550c;outline-offset:2px}#result:not(:empty){background:#e2f3ea;padding:12px;display:block;margin:8px 0;font-size:1.2rem;font-weight:700}#status{min-height:2em} .notice{color:#654511}
 </style>
@@ -36,7 +36,7 @@ const format = "rc-hn-demo-v1";
 const kid = async spki => Array.from(new Uint8Array(await s.digest("SHA-256",spki)), b=>b.toString(16).padStart(2,"0")).join("");
 const validKid = value => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 const validCase = value => typeof value === "string" && /^ADM-[0-9]{5}$/.test(value);
-const validHN = value => /^DEMO-[0-9]{6}$/.test(value);
+const validHN = value => (value.length === 11 || value.length === 12) && /^DEMO-[0-9]{6,7}$/.test(value);
 const label = (caseId,keyId) => ({name:"RSA-OAEP",label:utf.encode([format,caseId,keyId].join(":"))});
 const read = async (id,limit=12000) => {
   const file = $(id).files[0];

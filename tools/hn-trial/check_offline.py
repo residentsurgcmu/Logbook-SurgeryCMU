@@ -34,8 +34,8 @@ with tempfile.TemporaryDirectory() as folder, sync_playwright() as playwright:
         assert hn not in raw
         return json.loads(raw)
 
-    first=make("DEMO-123456","ADM-00001","ac100000-0000-4000-8000-000000000001")
-    second=make("DEMO-654321","ADM-00002","ac100000-0000-4000-8000-000000000002")
+    first=make("DEMO-0123456","ADM-00001","ac100000-0000-4000-8000-000000000001")
+    second=make("DEMO-7654321","ADM-00002","ac100000-0000-4000-8000-000000000002")
     def bundle(*items):
         return {"format":first["format"],"type":"trial-bundle","keyId":first["keyId"],"records":items}
     def attempt(item,code,expected=None):
@@ -53,11 +53,11 @@ with tempfile.TemporaryDirectory() as folder, sync_playwright() as playwright:
             page.click("#hide")
             expect(page.locator("#result")).to_be_empty()
 
-    attempt(bundle(first,second),"ADM-00001","DEMO-123456")
-    attempt(bundle(first,second),"ADM-00002","DEMO-654321")
+    attempt(bundle(first,second),"ADM-00001","DEMO-0123456")
+    attempt(bundle(first,second),"ADM-00002","DEMO-7654321")
     attempt(bundle(first,second),"ADM-00003")
     attempt(bundle(first,first),"ADM-00001")
     attempt(bundle({**first,"caseUuid":second["caseUuid"]},second),"ADM-00001")
-    attempt(first,"ADM-00001","DEMO-123456")
+    attempt(first,"ADM-00001","DEMO-0123456")
     assert all(url.startswith("file:") for url in urls), urls
-    print("PASS: app encryptor → offline moderator: two-case bundle, correct selection, missing and duplicate codes rejected, UUID tamper rejected, no external requests")
+    print("PASS: app encryptor → offline moderator: seven-digit leading zero, two-case bundle, correct selection, missing and duplicate codes rejected, UUID tamper rejected, no external requests")

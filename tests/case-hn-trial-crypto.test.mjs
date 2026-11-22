@@ -17,12 +17,14 @@ test('the upload is ciphertext only, randomized and bound to the exact case and 
   const spki=await webcrypto.subtle.exportKey('spki',keys.publicKey);
   const kid=Buffer.from(await webcrypto.subtle.digest('SHA-256',spki)).toString('hex');
   const input={publicKey:{format:'rc-hn-demo-v1',type:'public',keyId:kid,spki:Buffer.from(spki).toString('base64')},
-    configuredKey:kid,caseUuid:'ac100000-0000-4000-8000-000000000001',caseCode:'ADM-00001',hn:'DEMO-654321'};
+    configuredKey:kid,caseUuid:'ac100000-0000-4000-8000-000000000001',caseCode:'ADM-00001',hn:'DEMO-0123456'};
   const result=await sealTrialHn(input);
   assert.deepEqual(Object.keys(result),['keyId','ciphertext']);
   assert.equal(result.ciphertext.length,512);
   assert.notEqual((await sealTrialHn(input)).ciphertext,result.ciphertext);
-  await assert.rejects(sealTrialHn({...input,hn:'654321'}));
+  for (const hn of ['0123456','DEMO-123456','DEMO-00123456','DEMO-01234x6','DEMO-0123456\n']) {
+    await assert.rejects(sealTrialHn({...input,hn}));
+  }
   await assert.rejects(sealTrialHn({...input,configuredKey:'0'.repeat(64)}));
   const open=(uuid,code)=>webcrypto.subtle.decrypt({name:'RSA-OAEP',label:new TextEncoder().encode(`rc-hn-trial-v1:${uuid}:${code}:${kid}`)},
     keys.privateKey,Buffer.from(result.ciphertext,'base64'));

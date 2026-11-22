@@ -47,7 +47,7 @@ export default function CaseHnTrial({ actorId, caseUuid, caseCode }) {
       const hn = hnRef.current.value.trim();
       hnRef.current.value = "";
       if (!isSyntheticCaseHn(hn)) {
-        setMessage("ใช้ HN สมมติรูปแบบ DEMO-123456");
+        setMessage("ใช้ HN สมมติรูปแบบ DEMO-0123456");
         return;
       }
       const publicKey = status.publicKey;
@@ -76,7 +76,7 @@ export default function CaseHnTrial({ actorId, caseUuid, caseCode }) {
     <strong>HN · ระบบซ้อม</strong>
     {status && <p>{status.saved ? "บันทึก HN แล้ว" : "ยังไม่ได้บันทึก HN"}</p>}
     {status?.canWrite && <>
-      <label>HN สมมติ<input ref={hnRef} placeholder="DEMO-123456" autoComplete="off" spellCheck={false} maxLength={11} disabled={busy} /></label>
+      <label>HN สมมติ<input ref={hnRef} placeholder="DEMO-0123456" autoComplete="off" spellCheck={false} disabled={busy} /></label>
       <button type="button" className="secondary-button" disabled={busy} onClick={save}>{status.saved ? "แทนที่ HN สมมติ" : "บันทึก HN สมมติ"}</button>
     </>}
     {message && <p role="status">{message}</p>}
