@@ -22,6 +22,9 @@ export const MY_SPACE_CARD_SIZES = [
   ["default", "ตามแม่แบบ"], ["compact", "กะทัดรัด"], ["large", "ขนาดใหญ่"], ["collapsed", "ย่อเหลือหัวข้อ"],
 ];
 
+export const RESIDENT_CARD_EDITIONS = [["ridge", "Ridgeline"], ["roster", "Roster"], ["match", "Matchday"]];
+export const RESIDENT_CARD_MOTIFS = [["chip", "ชิป + คลื่น"], ["wave", "คลื่น"], ["off", "ไม่แสดง"]];
+
 function preferenceKey(userId) {
   return userId ? `resident-corner:my-space-layout:v1:${userId}` : null;
 }
@@ -42,7 +45,9 @@ export function normalizeMySpacePreferences(raw) {
       }
     }
   }
-  return { layout, hideAwards: raw?.hideAwards === true, cards, expandedSizes };
+  const edition = RESIDENT_CARD_EDITIONS.some(([key]) => key === raw?.residentCard?.edition) ? raw.residentCard.edition : "ridge";
+  const motif = RESIDENT_CARD_MOTIFS.some(([key]) => key === raw?.residentCard?.motif) ? raw.residentCard.motif : "chip";
+  return { layout, hideAwards: raw?.hideAwards === true, cards, expandedSizes, residentCard: { edition, motif } };
 }
 
 export function loadMySpacePreferences(userId) {

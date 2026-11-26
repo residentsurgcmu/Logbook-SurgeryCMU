@@ -1,7 +1,9 @@
 import React, { useLayoutEffect, useRef } from "react";
-import { MY_SPACE_LAYOUTS, MY_SPACE_CARD_LABELS, MY_SPACE_CARD_ORDER, MY_SPACE_CARD_SIZES, withMySpaceCardSize } from "../mySpaceLayouts";
+import { MY_SPACE_LAYOUTS, MY_SPACE_CARD_LABELS, MY_SPACE_CARD_ORDER, MY_SPACE_CARD_SIZES, withMySpaceCardSize, RESIDENT_CARD_EDITIONS, RESIDENT_CARD_MOTIFS } from "../mySpaceLayouts";
 
-export default function MySpaceLayoutSettings({ draft, setDraft, radarAvailable, onClose, onSave }) {
+import ResidentStudioCard from "./ResidentStudioCard";
+
+export default function MySpaceLayoutSettings({ draft, setDraft, radarAvailable, name, pgy, onClose, onSave }) {
   const dialog = useRef(null);
   useLayoutEffect(() => {
     const element = dialog.current;
@@ -39,6 +41,15 @@ export default function MySpaceLayoutSettings({ draft, setDraft, radarAvailable,
             {MY_SPACE_CARD_SIZES.map(([size, label]) => <option key={size} value={size}>{label}</option>)}
           </select>
         </label>)}
+      </fieldset>}
+      {draft.layout === "achiever" && <fieldset className="ms-layout-options ms-layout-sizes ms-studio-settings">
+        <legend>แต่งการ์ด Resident</legend>
+        {[["edition", "รูปแบบการ์ด", RESIDENT_CARD_EDITIONS], ["motif", "ลายบนหน้าการ์ด", RESIDENT_CARD_MOTIFS]].map(([field, label, options]) =>
+          <label key={field}>{label}<select aria-label={label} value={draft.residentCard[field]}
+            onChange={(event) => { const value = event.target.value; setDraft((current) => ({ ...current, residentCard: { ...current.residentCard, [field]: value } })); }}>
+            {options.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+          </select></label>)}
+        <ResidentStudioCard card={draft.residentCard} name={name} pgy={pgy} hideAwards={draft.hideAwards} />
       </fieldset>}
       <p>การตั้งค่าจำไว้สำหรับบัญชีนี้ในเบราว์เซอร์เครื่องนี้</p>
     </div>

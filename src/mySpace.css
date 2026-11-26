@@ -126,8 +126,6 @@
 .ms-ring-unknown { stroke:var(--line-strong); stroke-dasharray:4 5; }
 .ms-ring-fill { stroke:var(--resident-green); stroke-linecap:round; }
 .ms-achiever-profile { display:flex; flex-wrap:wrap; align-items:center; gap:12px; overflow-wrap:anywhere; }
-.ms-layout-achiever .ms-achiever-profile { background:var(--brand-soft); }
-.ms-profile-initials { display:grid; place-items:center; flex:none; width:52px; height:52px; border-radius:10px; color:#fff; background:var(--resident-green); font-weight:800; }
 @container myspace (min-width:680px) {
   .ms-layout-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .ms-layout-card-large,.ms-layout-rings .ms-layout-card-progress:not(.ms-layout-card-compact),.ms-layout-achiever .ms-layout-card-progress:not(.ms-layout-card-compact) { grid-column:1 / -1; }
@@ -165,3 +163,21 @@
   .ms-layout-sizes label { grid-template-columns:minmax(0,1fr) minmax(0,8rem); }
   .ms-layout-card-large .ms-card { padding-block:22px; }
 }
+
+/* Resident Card editions. CMU-inspired colors stay inside the card. */
+.ms-layout-achiever .ms-achiever-profile { display:block; padding-inline-end:18px; background:var(--surface); }
+.ms-achiever-profile > h2 { margin-bottom:10px; }
+.ms-studio-card { display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; gap:14px; padding:clamp(12px,3cqi,22px); min-height:205px; border-radius:14px; color:#fff; overflow-wrap:anywhere; }
+.ms-studio-card-ridge { background:linear-gradient(90deg,#233c32 10%,transparent 100%),linear-gradient(157deg,#2a4239 45%,#819389 45% 51%,#007932 51% 57%,#496e60 57% 68%,#24483b 68%); }
+.ms-studio-card-roster { background:linear-gradient(112deg,#f8f6ed 76%,#dce8dd 76%); color:#173b2c; border-inline-start:5px solid #007932; }
+.ms-studio-card-match { background:linear-gradient(90deg,#30243d 12%,transparent 100%),linear-gradient(120deg,#30243d 66%,#9e76b4 66% 83%,#007932 83% 86%,#3e3150 86%); }
+.ms-studio-brand { width:100%; display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 10px; font-size:12px; letter-spacing:.06em; }
+.ms-studio-identity h3,.ms-studio-identity p { color:inherit; }
+.ms-studio-identity h3 { font-size:clamp(16px,3cqi,22px); }
+.ms-studio-identity p { font-size:13px; margin:2px 0 0; }
+.ms-studio-pgy { font-size:12px; font-weight:750; }
+.ms-studio-motif { display:flex; align-items:center; flex-wrap:wrap; gap:7px; font-size:11px; }
+.ms-studio-motif img { width:auto; height:27px; background:#f9f5e9; border-radius:5px; padding:2px; }
+.ms-layout-card-compact .ms-studio-card { min-height:0; gap:8px; }
+.ms-studio-settings { margin-top:14px; }
+.ms-studio-settings .ms-studio-card { margin-top:8px; }
