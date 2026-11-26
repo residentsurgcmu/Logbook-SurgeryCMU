@@ -36,7 +36,7 @@ export function caseFormForSave(form, initial) {
   return {
     ...form,
     operation: field === "operation" ? String(form.operation ?? "").trim() : (initial?.operation ?? ""),
-    management: field === "management" ? String(form.management ?? "").trim() : (initial?.management ?? ""),
+    management: field ? String(form.management ?? "").trim() : (initial?.management ?? ""),
   };
 }
 

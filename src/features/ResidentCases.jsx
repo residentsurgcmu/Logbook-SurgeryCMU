@@ -1,6 +1,7 @@
 import { isCaseHn, sealPilotHn } from "../caseHnPilotCrypto";
 import CaseHnExport from "./CaseHnExport";
 import CaseHnPilot, { caseHnPilotEnabled, pinnedKeyId } from "./CaseHnPilot";
+import CasePhoto from "./CasePhoto";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { admissionWeek, archiveRange, caseMatchesSearch, groupAdmissionWeeks } from "../admissionHistory";
 import { PlusIcon } from "../components/Icons";
@@ -205,7 +206,10 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit} value={unit}>{caseUnitLabel(unit)}</option>)}</select></label>
         <label className="case-full">Diagnosis<input maxLength={CASE_LIMITS.diagnosis} value={form.diagnosis} onChange={set("diagnosis")} required /></label>
         <label className="case-full">{initial ? "Type" : "Type (จำเป็น)"}<select value={form.treatment_type} onChange={set("treatment_type")} aria-required={!initial}><option value="">{initial ? "ยังไม่ระบุ" : "เลือก Type"}</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        {treatmentField === "operation" && <label className="case-full">Operation (จำเป็น)<input required maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>}
+        {treatmentField === "operation" && <>
+          <label className="case-full">Operation (จำเป็น)<input required maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>
+          <label className="case-full">Note / Management เพิ่มเติม (ไม่บังคับ)<textarea rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>
+        </>}
         {treatmentField === "management" && <label className="case-full">Management (จำเป็น)<textarea required rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>}
         <label>Owner (Resident)
           <select value={form.owner_id} onChange={set("owner_id")} disabled={hnRequired} required>
@@ -226,7 +230,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
           <div className="case-media">
             {pending.map((item, index) => (
               <figure key={item.url}>
-                <img src={item.url} alt={`ภาพที่ ${index + 1}`} />
+                <CasePhoto src={item.url} label={`ภาพที่ ${index + 1}`} />
                 <figcaption>ภาพที่ {index + 1} <button type="button" className="link-button" disabled={busy} onClick={() => removePending(index)}>เอาออก</button></figcaption>
               </figure>
             ))}
@@ -291,7 +295,7 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
   }
 
   const fields = [
-    ["Management", row.management],
+    [row.treatment_type === "operative" ? "Note / Management เพิ่มเติม" : "Management", row.management],
     ["Operation", row.operation],
   ];
   return (
@@ -339,7 +343,7 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
           <div className="case-media">
             {(media || []).map((item, index) => (
               <figure key={item.id}>
-                {item.url ? <img src={item.url} alt={item.caption || `ภาพ ${index + 1}`} /> : <div className="case-media-empty">โหลดภาพไม่สำเร็จ</div>}
+                <CasePhoto src={item.url} label={item.caption || `ภาพ ${index + 1}`} onRefresh={reloadMedia} />
                 <figcaption>{item.caption || `ภาพ ${index + 1}`}</figcaption>
                 {user.role === "admin" ? (
                   <button type="button" className="danger-button case-media-delete" disabled={busy} onClick={() => { if (window.confirm("ลบภาพนี้ถาวร? ไฟล์จะถูกลบออกจากระบบและกู้คืนไม่ได้")) run(async () => { await purgeCaseMedia(item.id); await reloadMedia(); await onChanged(); }); }}>ลบถาวร</button>

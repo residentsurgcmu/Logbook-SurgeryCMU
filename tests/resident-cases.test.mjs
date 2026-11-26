@@ -37,13 +37,14 @@ const good = {
   owner_id: "11111111-1111-4111-8111-111111111111",
 };
 
-test("typed admissions require the matching detail and omit other new drafts", () => {
+test("typed admissions require the matching detail, allow an operative note and omit hidden operations", () => {
   const options = { requireType: true, requireTreatmentDetail: true };
   const operative = { ...good, treatment_type: "operative", operation: "  " };
   assert.match(validateCaseForm(caseFormForSave(operative), NOW, options), /Operation/);
   const ready = caseFormForSave({ ...operative, operation: " Procedure " });
   assert.equal(ready.operation, "Procedure");
-  assert.equal(ready.management, "");
+  assert.equal(ready.management, good.management);
+  assert.equal(caseFormForSave({ ...ready, management: "" }).management, "");
   assert.equal(validateCaseForm(ready, NOW, options), "");
   const nonOperative = { ...ready, treatment_type: "conservative", management: "   " };
   assert.match(validateCaseForm(caseFormForSave(nonOperative), NOW, options), /Management/);

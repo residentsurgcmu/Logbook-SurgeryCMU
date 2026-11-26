@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { caseErrorMessage, caseSexLabel, caseUnitLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
+import { caseErrorMessage, caseSexLabel, caseTreatmentField, caseTypeLabel, caseUnitLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople, loadCasesByIds, loadConferenceSession, resetConferenceAgenda, saveConferenceAgenda } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
@@ -7,6 +7,22 @@ import { agendaCandidates, buildAgenda, canManageConference, conferenceRangeProb
 import ConferenceDateFilter from "../components/ConferenceDateFilter";
 import { includesConferenceDay } from "../conferenceDisplayDates";
 import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./CaseParts";
+
+const typeDots = { operative: "operative", conservative: "non-operative" };
+
+function ConferenceStatusDot({ variant }) {
+  return <span className="conf-status-dot" data-variant={variant || "unset"} aria-hidden="true" />;
+}
+function ConferenceTypeDot({ type }) {
+  const label = caseTypeLabel(type);
+  return <span title={label}><ConferenceStatusDot variant={typeDots[type]} /><span className="visually-hidden">{label}</span></span>;
+}
+function ConferenceTreatment({ row }) {
+  const field = caseTreatmentField(row.treatment_type);
+  if (!field) return "—";
+  return <div className="conf-treatment"><small>{field === "operation" ? "Operation" : "Management"}</small>
+    <span>{row[field]?.trim() || "—"}</span></div>;
+}
 
 // One Friday conference. The agenda = cases admitted in the date range (automatic) minus the cases an organiser
 // left out, plus older cases they added, in the order they chose. The organiser's changes are saved per meeting
@@ -161,17 +177,21 @@ export default function ResidentConference({ user, initialCase = null }) {
 
       {cases && view === "table" && shown.length > 0 && (
         <>
+          <div className="conf-type-legend" aria-label="ความหมายจุดสี Type">
+            {[...CASE_TYPES, ["", "ยังไม่ระบุ"]].map(([type, label]) => <span key={type}><ConferenceStatusDot variant={typeDots[type]} /> {label}</span>)}
+          </div>
           <div className="resident-table-wrap conf-desktop-table">
             <table className="case-table conf-table">
-              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
+              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Operation / Management</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
               <tbody>
                 {shown.map((row, position) => (
                   <tr key={row.id}>
                     <td data-label="ลำดับ">{position + 1}</td>
                     <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
                     <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
+                    <td data-label="Operation / Management"><ConferenceTreatment row={row} /></td>
                     <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                    <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} /></div></td>
+                    <td data-label="Type"><ConferenceTypeDot type={row.treatment_type} /></td>
                     <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
                   </tr>
                 ))}
@@ -194,7 +214,8 @@ export default function ResidentConference({ user, initialCase = null }) {
                           <dl>
                             <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
                             <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
-                            <dt>Type</dt><dd><CaseTypeChip type={row.treatment_type} /></dd>
+                            <dt>Type</dt><dd><ConferenceTypeDot type={row.treatment_type} /></dd>
+                            <dt>การรักษา</dt><dd><ConferenceTreatment row={row} /></dd>
                           </dl>
                           <button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button>
                         </div>

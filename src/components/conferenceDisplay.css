@@ -27,3 +27,13 @@
   .conf-mobile-details dt { font-weight:700; }
   .conf-mobile-details dd { margin:0 0 6px; }
 }
+
+.conf-type-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin:8px 0; font-size:12px; color:var(--resident-muted); }
+.conf-type-legend > span { display:inline-flex; align-items:center; gap:5px; }
+.conf-status-dot { display:inline-block; flex:none; width:.65rem; height:.65rem; border-radius:50%; background:#64748b; }
+.conf-status-dot[data-variant="operative"] { background:#7c3aed; }
+.conf-status-dot[data-variant="non-operative"] { background:#15803d; }
+.conf-treatment { min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.conf-treatment small { display:block; font-weight:700; color:var(--resident-muted); }
+.conf-table td { overflow-wrap:anywhere; }
+.conf-table td[data-label="Type"] { text-align:center; }
