@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { EMBED_LINKS, clearEmbedLink, embedAddressProblem, embedErrorMessage, embedHost, loadEmbedLinks, setEmbedLink } from "../residentEmbedLinks";
 
-// "ตารางเวร / OR": two outside web pages shown inside this page. Everyone signed in can look; only an Admin sets
+// "ตารางเวร / OR": outside web pages shown inside this page. Everyone signed in can look; only an Admin sets
 // the addresses. Nothing here talks to those sites except the browser frame itself.
+const DUTY_TODAY = EMBED_LINKS.find((item) => item.key === "duty_today");
+
 export default function ResidentSchedule({ user, onNavigate }) {
   const [links, setLinks] = useState(null);
   const [error, setError] = useState("");
@@ -16,15 +18,18 @@ export default function ResidentSchedule({ user, onNavigate }) {
     try {
       const rows = await loadEmbedLinks();
       setLinks(rows);
-      setActive((current) => (rows.some((row) => row.link_key === current) ? current : rows[0]?.link_key || ""));
+      setActive((current) => current === DUTY_TODAY.key || rows.some((row) => row.link_key === current)
+        ? current : rows.find((row) => row.link_key !== DUTY_TODAY.key)?.link_key || DUTY_TODAY.key);
     } catch (nextError) {
       setError(embedErrorMessage(nextError));
-      setLinks([]);
+      setLinks(null);
     }
   }, []);
   useEffect(() => { load(); }, [load]);
 
   const current = (links || []).find((row) => row.link_key === active) || null;
+  const tabs = [...(links || []).filter((row) => row.link_key !== DUTY_TODAY.key),
+    { link_key: DUTY_TODAY.key, title: DUTY_TODAY.defaultTitle }];
   return (
     <section className="resident-panel sched">
       <div className="panel-title-row">
@@ -39,21 +44,20 @@ export default function ResidentSchedule({ user, onNavigate }) {
         <EmbedSettings links={links} onSaved={async (message) => { setNotice(message); setError(""); await load(); setReloadKey((n) => n + 1); }} onError={setError} />
       )}
 
-      {links && links.length === 0 && (
-        <div className="sched-empty">
-          <strong>ยังไม่เปิดใช้งาน</strong>
-          <p>ยังไม่ได้ตั้งค่าที่อยู่ของตารางเวรและตาราง OR{isAdmin ? ' กด "ตั้งค่าที่อยู่" ด้านบนเพื่อวางที่อยู่เว็บ' : " กรุณาแจ้ง Admin"}</p>
-          <button type="button" className="secondary-button" onClick={() => onNavigate?.("home")}>กลับหน้าแรก</button>
-        </div>
-      )}
-
-      {links && links.length > 0 && (
+      {links && (
         <>
           <div className="lib-chips" role="tablist" aria-label="เลือกตาราง">
-            {links.map((row) => (
+            {tabs.map((row) => (
               <button key={row.link_key} type="button" role="tab" aria-selected={active === row.link_key} className={active === row.link_key ? "active" : ""} onClick={() => setActive(row.link_key)}>{row.title}</button>
             ))}
           </div>
+          {active === DUTY_TODAY.key && !current && (
+            <div className="sched-empty" role="status">
+              <strong>ทีมเวรวันนี้ · ยังไม่เปิดใช้งาน</strong>
+              <p>{isAdmin ? 'ยังไม่ได้ตั้งค่าที่อยู่ กด "ตั้งค่าที่อยู่" แล้วกรอกช่อง "ทีมเวรวันนี้"' : "Admin ยังไม่ได้ตั้งค่าที่อยู่ของทีมเวรวันนี้"}</p>
+              <button type="button" className="secondary-button" onClick={() => onNavigate?.("home")}>กลับหน้าแรก</button>
+            </div>
+          )}
           {current && (
             <>
               <div className="sched-bar">
@@ -66,7 +70,7 @@ export default function ResidentSchedule({ user, onNavigate }) {
               <div className="sched-frame">
                 <iframe
                   key={`${current.link_key}-${reloadKey}-${current.url}`}
-                  title={current.title}
+                  title={active === DUTY_TODAY.key ? DUTY_TODAY.defaultTitle : current.title}
                   src={current.url}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-presentation"
                   allow="fullscreen"
@@ -98,7 +102,7 @@ function EmbedSettings({ links, onSaved, onError }) {
     setBusy(key);
     onError("");
     try {
-      await setEmbedLink(key, drafts[key].title.trim(), drafts[key].url.trim());
+      await setEmbedLink(key, key === DUTY_TODAY.key ? DUTY_TODAY.defaultTitle : drafts[key].title.trim(), drafts[key].url.trim());
       await onSaved("บันทึกที่อยู่แล้ว");
     } catch (nextError) { onError(embedErrorMessage(nextError)); } finally { setBusy(""); }
   }
@@ -121,7 +125,7 @@ function EmbedSettings({ links, onSaved, onError }) {
         return (
           <div className="sched-edit-row" key={item.key}>
             <strong>{item.label}</strong>
-            <label>ชื่อแท็บ<input value={drafts[item.key].title} maxLength={80} onChange={(event) => setDrafts((all) => ({ ...all, [item.key]: { ...all[item.key], title: event.target.value } }))} /></label>
+            {item.key !== DUTY_TODAY.key && <label>ชื่อแท็บ<input value={drafts[item.key].title} maxLength={80} onChange={(event) => setDrafts((all) => ({ ...all, [item.key]: { ...all[item.key], title: event.target.value } }))} /></label>}
             <label>ที่อยู่ (https://…)<input value={drafts[item.key].url} placeholder="https://" onChange={(event) => setDrafts((all) => ({ ...all, [item.key]: { ...all[item.key], url: event.target.value } }))} /></label>
             {problems[item.key] && <p className="form-error" role="alert">{problems[item.key]}</p>}
             <div className="button-row">

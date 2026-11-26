@@ -25,7 +25,7 @@ test("outside-page addresses follow the database rule (https only, no spaces, no
   for (const bad of ["https://example.org:0/x", "https://example.org:65536/x", "https://example.org:99999/", "https://example.org:00080/x", "https://example.org:123456/x", "https://example.org:/x", "https://example.org:80a/x", "", "   ", "http://example.org", "https://user:pass@example.org", "https://exa mple.org", "javascript:alert(1)", "https://", "//example.org", "ftp://example.org", "https://example.org/a b", "https://example.org/@x", `https://example.org/${"a".repeat(600)}`]) assert.notEqual(embedAddressProblem(bad), "", bad);
   assert.equal(embedHost("https://rota.example.org:8443/x"), "rota.example.org");
   assert.equal(embedHost("not a url"), "");
-  assert.deepEqual(EMBED_LINKS.map((item) => item.key), ["or_schedule", "rota"]);
+  assert.deepEqual(EMBED_LINKS.map((item) => item.key), ["or_schedule", "rota", "duty_today"]);
   assert.match(embedErrorMessage(new Error("Admin account required")), /Admin/);
 });
 
