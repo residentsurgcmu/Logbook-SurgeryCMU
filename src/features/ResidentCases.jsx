@@ -449,8 +449,8 @@ function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
           ))}
         </div>
       ) : (
-      <div className="resident-table-wrap">
-        <table className="case-table">
+      <div className="resident-table-wrap admission-table-wrap">
+        <table className="case-table admission-table">
           <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management</th><th>Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
           <tbody>
             {rows.map((row) => (

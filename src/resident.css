@@ -558,3 +558,35 @@ button.admission-archive-heading { cursor: pointer; }
 .admission-archive-body > button { justify-self: start; }
 .admission-week { border: 1px solid var(--border, #cfd5d3); border-radius: 8px; min-width: 0; }
 .admission-week > summary { padding: .7rem .85rem; cursor: pointer; font-weight: 600; }
+
+/* Measure the list itself: the sidebar and the archive both reduce its width. */
+.admission-table-wrap { container: admission-table / inline-size; overflow: visible; }
+.admission-table-wrap .admission-table { min-width: 0; table-layout: fixed; }
+.admission-table th:nth-child(1) { width: 11%; }
+.admission-table th:nth-child(2) { width: 22%; }
+.admission-table th:nth-child(3) { width: 21%; }
+.admission-table th:nth-child(4) { width: 10%; }
+.admission-table th:nth-child(5) { width: 12%; }
+.admission-table th:nth-child(6) { width: 11%; }
+.admission-table th:nth-child(7) { width: 5%; }
+.admission-table th:nth-child(8) { width: 8%; }
+.admission-table th, .admission-table td { box-sizing: border-box; overflow-wrap: anywhere; }
+.admission-table .link-button { display: inline-block; max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.admission-table .case-clamp { max-width: none; }
+.admission-table td:first-child strong { white-space: nowrap; }
+.admission-table td:last-child > button { max-width: 100%; white-space: normal; }
+
+@container admission-table (max-width: 960px) {
+  .admission-table, .admission-table tbody { display: block; }
+  .admission-table thead { position: absolute; inset: auto; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .admission-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: 8px 16px; padding: 12px; margin: 0 0 10px; border: 1px solid var(--resident-line); border-radius: 10px;
+  }
+  .admission-table tbody tr:last-child { margin-bottom: 0; }
+  .admission-table tbody td { display: flex; flex-direction: column; min-width: 0; gap: 3px; padding: 0; border: 0; text-align: left; }
+  .admission-table tbody td::before { content: attr(data-label); color: var(--resident-muted); font-size: 12px; font-weight: 700; }
+  .admission-table tbody td:last-child { display: flex; align-items: flex-end; justify-content: flex-end; }
+  .admission-table tbody td:last-child::before { content: none; }
+  .admission-table .case-clamp { -webkit-line-clamp: unset; }
+}
