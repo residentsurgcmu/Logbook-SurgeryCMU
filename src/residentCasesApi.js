@@ -28,7 +28,7 @@ export async function loadCasePeople() {
   return data || [];
 }
 
-export async function loadAdmissionCases({ from, to, includeDeleted = false } = {}) {
+export async function loadAdmissionCases({ from, to, includeDeleted = false, signal } = {}) {
   const { data, error } = await fetchAllRows(() => {
     let query = supabase
       .from("resident_admission_cases")
@@ -37,6 +37,7 @@ export async function loadAdmissionCases({ from, to, includeDeleted = false } = 
     if (!includeDeleted) query = query.is("deleted_at", null);
     if (from) query = query.gte("admit_date", from);
     if (to) query = query.lte("admit_date", to);
+    if (signal) query = query.abortSignal(signal);
     return query.order("admit_date", { ascending: false }).order("case_code", { ascending: false });
   });
   fail(error);

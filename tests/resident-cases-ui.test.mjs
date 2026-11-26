@@ -81,7 +81,7 @@ test("case form lets validateCaseForm show Thai messages instead of native brows
 
 test("admin can list soft-deleted cases (to purge them) and deleted rows are read-only", async () => {
   const ui = await read("src/features/ResidentCases.jsx");
-  assert.match(ui, /includeDeleted: user\.role === "admin" && showDeleted/);
+  assert.match(ui, /const includeDeleted = user\.role === "admin" && showDeleted/);
   assert.match(ui, /แสดงเคสที่ถูกลบ/);
   assert.match(ui, /!row\.deleted_at/);
   const api = await read("src/residentCasesApi.js");
@@ -119,7 +119,7 @@ test("the case form lets users pick images before saving and previews them", asy
 test("after saving, the form closes and opens the case so a retry never creates a duplicate case", async () => {
   const ui = await read("src/features/ResidentCases.jsx");
   assert.match(ui, /await onSaved\(caseId, failureNotice\)/);
-  assert.match(ui, /setDialog\(\{ type: "detail", id: caseId, notice \}\)/);
+  assert.match(ui, /setDialog\(\{ type: "detail", id: caseId, row, notice \}\)/);
   assert.match(ui, /dialog\.notice/);
 });
 

@@ -546,3 +546,15 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
   .case-week-actions > .primary-button { flex-basis:100%; }
   .case-present .conf-controls > label { flex:1 1 110px; min-width:0; }
 }
+
+/* Admission history leaves the current conference window as the primary list. */
+.admission-current { margin-top: 1rem; min-width: 0; }
+.admission-current h3 { margin: 0 0 .85rem; }
+.admission-archive { margin-top: 1.2rem; border: 1px solid var(--border, #cfd5d3); border-radius: 12px; min-width: 0; }
+.admission-archive-heading { display: block; width: 100%; margin: 0; text-align: left; border: 0; font: inherit; background: #e9edeb; color: #30403a; font-weight: 700; padding: .85rem 1rem; border-radius: inherit; }
+button.admission-archive-heading { cursor: pointer; }
+.admission-archive-body { display: grid; gap: .65rem; padding: .75rem; min-width: 0; }
+.admission-archive-body[hidden] { display: none; }
+.admission-archive-body > button { justify-self: start; }
+.admission-week { border: 1px solid var(--border, #cfd5d3); border-radius: 8px; min-width: 0; }
+.admission-week > summary { padding: .7rem .85rem; cursor: pointer; font-weight: 600; }
