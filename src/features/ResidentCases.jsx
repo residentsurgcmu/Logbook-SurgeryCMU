@@ -731,8 +731,8 @@ function ResidentCasesPage({ user, onPresent }) {
         <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={afterSave} onReload={load} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "hnExport" && canExportHn && dialog.permission === exportPermission && (
-        <CaseModal title="ส่งออกไฟล์ Grand Rounds" onClose={() => setDialog(null)}>
-          <CaseHnExport keyId={pinnedKeyId} onClose={() => setDialog(null)} />
+        <CaseModal className="case-modal--hn-export" title="ส่งออกไฟล์ Grand Rounds" onClose={() => setDialog(null)}>
+          <CaseHnExport keyId={pinnedKeyId} />
         </CaseModal>
       )}
       {dialog?.type === "excel" && (

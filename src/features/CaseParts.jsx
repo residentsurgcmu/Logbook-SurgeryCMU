@@ -9,7 +9,7 @@ export const thaiDateTime = (value) =>
   value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value)) : "—";
 export const personName = (people, id) => people.find((person) => person.user_id === id)?.full_name || "ไม่ทราบชื่อ";
 
-export function CaseModal({ title, onClose, closeDisabled = false, children }) {
+export function CaseModal({ title, onClose, closeDisabled = false, className = "", children }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -24,7 +24,7 @@ export function CaseModal({ title, onClose, closeDisabled = false, children }) {
     };
   }, []);
   return (
-    <dialog ref={ref} className="case-modal" aria-label={title}
+    <dialog ref={ref} className={`case-modal ${className}`.trim()} aria-label={title}
       onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (!closeDisabled) onClose(); }}
       onKeyDown={event => {
         const dialog = event.currentTarget;
