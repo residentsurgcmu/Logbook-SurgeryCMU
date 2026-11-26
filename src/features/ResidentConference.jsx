@@ -37,15 +37,23 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [splitAvailable, setSplitAvailable] = useState(false);
   const [splitSelected, setSplitSelected] = useState(false);
   const panel = useRef(null);
+  const deckPane = useRef(null);
   const view = requestedView === "split" && !splitAvailable ? (splitSelected ? "deck" : "table") : requestedView;
   const split = view === "split";
   const showDeck = view === "deck" || (split && splitSelected);
   useEffect(() => {
     if (typeof ResizeObserver !== "function") return;
     const host = panel.current.closest(".conference-main") || panel.current;
-    const observer = new ResizeObserver(([entry]) => setSplitAvailable(entry.contentRect.width >= 1284));
+    const tallEnough = window.matchMedia("(min-height: 620px)");
+    let width = 0;
+    const update = () => setSplitAvailable(width >= 1284 && tallEnough.matches);
+    const observer = new ResizeObserver(([entry]) => { width = entry.contentRect.width; update(); });
     observer.observe(host);
-    return () => observer.disconnect();
+    tallEnough.addEventListener("change", update);
+    return () => {
+      observer.disconnect();
+      tallEnough.removeEventListener("change", update);
+    };
   }, []);
   const [typeFilter, setTypeFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
@@ -123,6 +131,9 @@ export default function ResidentConference({ user, initialCase = null }) {
   }, [cases, shown]);
 
   const current = shown[Math.min(index, Math.max(shown.length - 1, 0))] || null;
+  useEffect(() => {
+    if (split && deckPane.current) deckPane.current.scrollTop = 0;
+  }, [split, current?.id]);
   const media = mediaResult?.caseId === current?.id ? (mediaResult?.rows || []) : [];
   useEffect(() => {
     const mine = ++mediaSeq.current;
@@ -221,7 +232,7 @@ export default function ResidentConference({ user, initialCase = null }) {
         {cases && (view === "table" || split) && shown.length > 0 && (
           <section className="conf-agenda-pane" aria-label="ตารางประชุม">
             <CaseTypeLegend />
-            <div className="resident-table-wrap conf-desktop-table">
+            <div className="resident-table-wrap conf-desktop-table" tabIndex={split ? 0 : undefined} aria-label={split ? "เลื่อนตารางเคส" : undefined}>
               <table className="case-table conf-table">
                 <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th>{!split && <><th>Management / Operation</th><th>หน่วย / Owner</th></>}<th>Type</th>{!split && <th />}</tr></thead>
                 <tbody>
@@ -282,7 +293,7 @@ export default function ResidentConference({ user, initialCase = null }) {
         </section>}
 
         {cases && showDeck && current && (
-          <section className="conf-deck-pane" aria-label="Deck">
+          <section ref={deckPane} className="conf-deck-pane" aria-label="Deck" tabIndex={split ? 0 : undefined}>
             <div className="case-weekbar">
               <select aria-label="เลือกเคส" value={Math.min(index, shown.length - 1)} onChange={(event) => setIndex(Number(event.target.value))}>
                 {shown.map((row, position) => <option key={row.id} value={position}>{row.case_code} · {row.diagnosis}</option>)}
