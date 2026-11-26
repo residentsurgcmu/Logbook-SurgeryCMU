@@ -44,11 +44,11 @@ test("phone bottom bar: at most four shortcuts per role, all real tabs, plus the
 
 test("the shell renders badges from counts, a bottom bar, and one shared navigate function", async () => {
   const shell = await read("src/features/ResidentPlatform.jsx");
-  assert.match(shell, /<nav className="bottom-nav" aria-label="เมนูด่วน">/);
+  assert.match(shell, /<nav className="bottom-nav" inert=\{drawerOpen\} aria-label="เมนูด่วน">/);
   assert.match(shell, /function NavBadge\(\{ count \}\)/);
   assert.doesNotMatch(shell, /รอประเมิน \(\$\{/, "counts are badges, not part of the label");
   assert.match(shell, /onClick=\{\(\) => goTo\(id\)\}/);
-  assert.match(shell, /onClick=\{\(\) => setMenuOpen\(true\)\}/);
+  assert.match(shell, /onClick=\{openMenu\}/);
   const css = await read("src/resident.css");
   assert.match(css, /\.bottom-nav \{ display:none; \}/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);

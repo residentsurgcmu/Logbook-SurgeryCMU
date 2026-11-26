@@ -124,13 +124,17 @@ export default function ResidentConference({ user, initialCase = null }) {
   }, [current?.id, view, mediaVersion]);
   useEffect(() => { setPhoto(0); }, [current?.id, view]);
 
-  async function exportWeek() {
-    if (exporting || !included.length) return;
+  const filtersActive = typeFilter !== "all" || unitFilter !== "all" || Boolean(dateFilter.start || dateFilter.end);
+  async function exportWeek(rows, filtered = false) {
+    if (exporting || !rows.length) return;
     setExporting(true);
     setError("");
     setNotice("");
     try {
-      const missing = await exportWeekDeck({ start: range.from, end: range.to }, included, people);
+      const week = filtered && dateFilter.start
+        ? { start: dateFilter.start, end: dateFilter.end || dateFilter.start }
+        : { start: range.from, end: range.to };
+      const missing = await exportWeekDeck({ ...week, filtered }, rows, people);
       if (missing) setError(`ดาวน์โหลด PowerPoint แล้ว แต่ใส่ภาพไม่ได้ ${missing} ภาพ`);
     } catch (nextError) {
       setError(caseErrorMessage(nextError));
@@ -151,7 +155,10 @@ export default function ResidentConference({ user, initialCase = null }) {
         <button type="button" className="link-button" onClick={() => changeWeek(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
         </div><div className="case-week-actions">
         {canManage && <button type="button" className="secondary-button" disabled={!cases} onClick={() => setEditing(true)}>จัดรายการประชุม</button>}
-        <button type="button" className="primary-button" disabled={exporting || !included.length} onClick={exportWeek}>{exporting ? "กำลังสร้างไฟล์…" : `Export PowerPoint ตามรายการ (${included.length})`}</button>
+        <button type="button" className="primary-button" disabled={exporting || !included.length} onClick={() => exportWeek(included)}>ส่งออก PowerPoint ทั้งวาระ ({included.length} เคส)</button>
+        {filtersActive && <button type="button" className="secondary-button" disabled={exporting || !shown.length}
+          onClick={() => exportWeek(shown, true)}>ส่งออกเฉพาะที่แสดง ({shown.length} เคส)</button>}
+        {exporting && <span role="status">กำลังสร้างไฟล์ PowerPoint…</span>}
         </div>
       </div>
       <small className="case-muted">

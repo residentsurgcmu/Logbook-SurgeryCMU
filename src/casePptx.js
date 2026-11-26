@@ -51,7 +51,7 @@ export function buildCaseSlides(row, { people = [], media = [], notes = [], incl
 
 export function buildWeekSlides({ week, people = [], cases = [] }) {
   return [
-    { kind: "cover", title: "Friday case conference", subtitle: `${thaiDate(week.start)} – ${thaiDate(week.end)} · ${cases.length} เคส` },
+    { kind: "cover", title: "Friday case conference", subtitle: `${thaiDate(week.start)} – ${thaiDate(week.end)} · ${cases.length} เคส${week.filtered ? " · เฉพาะที่แสดง" : ""}` },
     ...cases.flatMap(({ row, media, notes }) => buildCaseSlides(row, { people, media, notes, includeNotes: true })),
   ];
 }
@@ -65,7 +65,7 @@ export function fitImage(imageWidth, imageHeight, boxWidth, boxHeight, x, y) {
   return { x: round(x + (boxWidth - w) / 2), y: round(y + (boxHeight - h) / 2), w: round(w), h: round(h) };
 }
 
-export const deckFileName = ({ caseCode, weekStart }) => (caseCode ? `${caseCode}.pptx` : `Conference-${weekStart}.pptx`);
+export const deckFileName = ({ caseCode, weekStart, filtered }) => (caseCode ? `${caseCode}.pptx` : `Conference-${weekStart}${filtered ? "-filtered" : ""}.pptx`);
 
 function addTitle(slide, text) {
   slide.addText(text, { x: 0.5, y: 0.3, w: SLIDE.w - 1, h: 0.8, fontFace: FONT, fontSize: 24, bold: true, color: GREEN, fit: "shrink" });

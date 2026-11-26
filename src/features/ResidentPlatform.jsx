@@ -1,5 +1,5 @@
 import ResidentCalendar from "./ResidentCalendar";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   deleteResidentAssessment,
   inviteStaff,
@@ -784,12 +784,27 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
     workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "home";
   const [tab, setTab] = useState(initialTab);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuTrigger = useRef(null);
+  const closeMenuButton = useRef(null);
+  const [mobileMenu, setMobileMenu] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (event) => { if (event.key === "Escape") setMenuOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+    const media = window.matchMedia("(max-width: 900px)");
+    const change = () => { setMobileMenu(media.matches); if (!media.matches) setMenuOpen(false); };
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  const drawerOpen = menuOpen && mobileMenu;
+  useLayoutEffect(() => {
+    if (drawerOpen) closeMenuButton.current?.focus();
+    else if (menuTrigger.current) {
+      menuTrigger.current.focus({ preventScroll: true });
+      menuTrigger.current = null;
+    }
+  }, [drawerOpen]);
+  function openMenu(event) {
+    menuTrigger.current = event.currentTarget;
+    setMenuOpen(true);
+  }
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [historyFocus, setHistoryFocus] = useState("completed");
   const [presentCase, setPresentCase] = useState(null);
@@ -874,14 +889,15 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   };
   return (
     <div className="resident-app app-shell-v2 corner-shell">
-      <aside className={`app-sidebar${menuOpen ? " open" : ""}`} aria-label="เมนูหลัก">
+      <aside className={`app-sidebar${menuOpen ? " open" : ""}`} aria-label="เมนูหลัก" inert={mobileMenu && !drawerOpen}
+        onKeyDown={event => { if (drawerOpen && event.key === "Escape") { event.stopPropagation(); setMenuOpen(false); } }}>
         <div className="app-sidebar-brand">
           <img src="/surgery-cmu-logo.png" alt="Surgery CMU" />
           <div>
             <strong>Resident Corner</strong>
             <span>ภาควิชาศัลยศาสตร์ มช.</span>
           </div>
-          <button type="button" className="icon-button app-menu-close" onClick={() => setMenuOpen(false)} aria-label="ปิดเมนู"><XIcon /></button>
+          <button type="button" ref={closeMenuButton} className="icon-button app-menu-close" onClick={() => setMenuOpen(false)} aria-label="ปิดเมนู"><XIcon /></button>
         </div>
         <nav className="app-nav" aria-label="เมนู Resident Corner">
           {groupNav(nav, workspace.user.role).map(([group, items]) => (
@@ -909,9 +925,9 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
         <div className="app-sidebar-foot">SERVICE · LEARNING · TRAINING<br />ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</div>
       </aside>
       {menuOpen && <div className="app-scrim" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
-      <div className="app-workspace">
+      <div className="app-workspace" inert={drawerOpen}>
         <div className="app-topbar">
-          <button type="button" className="icon-button app-menu-button" onClick={() => setMenuOpen(true)} aria-label="เปิดเมนู" aria-expanded={menuOpen}><MenuIcon /></button>
+          <button type="button" className="icon-button app-menu-button" onClick={openMenu} aria-label="เปิดเมนู" aria-expanded={menuOpen}><MenuIcon /></button>
           <div className="app-crumb">Resident Corner {tab !== "home" && <span>/ {titles[tab]}</span>}</div>
           <div className="app-user">
             <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
@@ -1042,7 +1058,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
         ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย
       </footer>
       </div>
-      <nav className="bottom-nav" aria-label="เมนูด่วน">
+      <nav className="bottom-nav" inert={drawerOpen} aria-label="เมนูด่วน">
         {quickNav.map(([id, label]) => {
           const Icon = navIcons[id] || FileIcon;
           return (
@@ -1062,7 +1078,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           type="button"
           aria-current={quickNav.some(([id]) => id === tab) ? undefined : "page"}
           aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(true)}
+          onClick={openMenu}
         >
           <span className="bottom-nav-icon"><MenuIcon size={22} /></span>
           <span>เพิ่มเติม</span>

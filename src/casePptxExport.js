@@ -16,6 +16,6 @@ export async function exportWeekDeck(week, rows, people) {
     const [media, notes] = await Promise.all([loadCaseMedia(row.id).then(withSlideImages), loadCaseNotes(row.id)]);
     cases.push({ row, media, notes });
   }
-  await downloadDeck(deckFileName({ weekStart: week.start }), buildWeekSlides({ week, people, cases }));
+  await downloadDeck(deckFileName({ weekStart: week.start, filtered: week.filtered }), buildWeekSlides({ week, people, cases }));
   return cases.reduce((total, item) => total + missingImages(item.media), 0);
 }
