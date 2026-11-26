@@ -1,8 +1,10 @@
-import { CASE_MIN_ADMIT_DATE, conferenceWeekForCase, conferenceWindow } from "./residentCases.js";
+import { CASE_MIN_ADMIT_DATE } from "./residentCases.js";
 import { shiftIsoDate } from "./roundSchedule.js";
 
 export function admissionWeek(date) {
-  return conferenceWindow(conferenceWeekForCase(date).start);
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  const from = shiftIsoDate(date, -((weekday + 2) % 7));
+  return { from, to: shiftIsoDate(from, 6) };
 }
 
 export function archiveRange(currentFrom, weeks) {

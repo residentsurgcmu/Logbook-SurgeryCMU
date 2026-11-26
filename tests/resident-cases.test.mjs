@@ -38,13 +38,13 @@ const good = {
 
 test("labels fall back to the raw value", () => {
   assert.equal(caseTypeLabel("operative"), "Operative");
-  assert.equal(caseTypeLabel("conservative"), "Conservative");
+  assert.equal(caseTypeLabel("conservative"), "Non-operative");
   assert.equal(caseTypeLabel(null), "ยังไม่ระบุ");
   assert.equal(caseSexLabel("female"), "หญิง");
   assert.equal(caseTypeLabel("weird"), "weird");
 });
 
-test("Type is optional, limited to Conservative/Operative, and the old status is no longer validated", () => {
+test("Type is optional, limited to Non-operative/Operative, and the old status is no longer validated", () => {
   assert.deepEqual(CASE_TYPES.map(([key]) => key), ["conservative", "operative"]);
   assert.equal(validateCaseForm({ ...good, treatment_type: "" }, NOW), "");
   assert.equal(validateCaseForm({ ...good, treatment_type: "operative" }, NOW), "");

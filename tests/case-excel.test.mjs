@@ -70,6 +70,19 @@ test("the workbook has a case sheet and a discussion sheet with Thai values", as
   assert.equal(discussion.getRow(2).values[5], "ทบทวน operative findings");
 });
 
+test("legacy unit and type still filter and export under their new labels", async () => {
+  const legacy = { ...cases[1], unit_name: "HPB", treatment_type: "conservative" };
+  const range = { from: "2026-10-01", to: "2026-10-01", unit: "HPB" };
+  const rows = filterCasesForExport([legacy], range);
+  assert.equal(rows.length, 1);
+  assert.match(caseExportFileName(range), /-HBP\.xlsx$/);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await buildCaseWorkbook(ExcelJS, { rows }).xlsx.writeBuffer());
+  const sheet = workbook.getWorksheet("รายการเคส");
+  assert.equal(sheet.getCell("E2").value, "HBP");
+  assert.equal(sheet.getCell("I2").value, "Non-operative");
+});
+
 test("notes are fetched in chunks and exceljs loads only on export", async () => {
   const api = await readFile(new URL("../src/residentCasesApi.js", import.meta.url), "utf8");
   const fn = api.slice(api.indexOf("export async function loadCaseNotesForCases"));
