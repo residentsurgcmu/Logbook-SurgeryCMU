@@ -321,12 +321,13 @@ export async function requestAssessment(form) {
 
 export async function completeAssessmentRequest(form) {
   const { data, error } = await supabase.rpc(
-    "complete_resident_assessment_request",
+    "complete_current_resident_assessment_request",
     {
       p_request_id: form.requestId,
       p_overall_outcome: form.outcome.trim(),
       p_overall_comment: form.comment.trim(),
       p_scores: form.scores,
+      p_expected: form.expectedDetails,
     },
   );
   fail(error);
@@ -336,6 +337,15 @@ export async function completeAssessmentRequest(form) {
 export async function setMyStaffAvailability(unavailableUntil) {
   const { error } = await supabase.rpc("set_my_resident_staff_availability", {
     p_unavailable_until: unavailableUntil || null,
+  });
+  fail(error);
+}
+
+export async function editPendingAssessmentRequest(original, draft) {
+  const { error } = await supabase.rpc("edit_pending_resident_assessment_request", {
+    p_request_id: original.id, p_assessment_date: draft.date, p_procedure_or_activity: draft.activity,
+    p_clinical_context: draft.context,
+    p_expected: [original.assessment_date, original.procedure_or_activity, original.clinical_context],
   });
   fail(error);
 }
