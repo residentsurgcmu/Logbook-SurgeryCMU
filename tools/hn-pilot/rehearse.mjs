@@ -10,6 +10,7 @@ try {
   const keyId=publicKey.keyId, auth="authenticated";
   const owner="00000000-1111-4000-8000-000000000001";
   const other="00000000-1111-4000-8000-000000000002";
+  const future="00000000-1111-4000-8000-000000000004";
   const admin="00000000-1111-4000-8000-000000000003";
   const uuid="00000000-2222-4000-8000-000000000001";
   const uuid2="00000000-2222-4000-8000-000000000002";
@@ -46,6 +47,7 @@ try {
   await run("20261122110000_hn_production_pilot_interfaces.sql");
   await run("20261126160000_hn_pilot_create_case.sql");
   await run("20261126161000_hn_pilot_export_history.sql");
+  await run("20261126190000_hn_pilot_active_residents.sql");
   const host="https://dyiiivcyoatgmkmvgcnt.supabase.co";
   assert.equal(isCaseHnPilotEnabled("true",host,keyId),true);
   assert.equal(isCaseHnPilotEnabled("false",host,keyId),false);
@@ -91,15 +93,13 @@ try {
   assert.equal(bundle.records[0].revision,1);
   assert.equal(await q("select count(*)::int as result from rc_hn_prod_private.export_log where case_ids=array[$1]::uuid[] and revisions=array[1]",[uuid]),1);
   const createId="00000000-2222-4000-8000-000000000003";
-  const create=(op,fields,key,cipher)=>q("select public.rc_hn_pilot_create_case($1,$2,$3,$4,$5) as result",
-    [op,createId,fields??null,key??null,cipher??null]);
+  const create=(op,fields,key,cipher,id=createId)=>q("select public.rc_hn_pilot_create_case($1,$2,$3,$4,$5) as result",
+    [op,id,fields??null,key??null,cipher??null]);
   const fields={admit_date:"2026-11-20",age_years:"40",sex:"male",diagnosis:"fixture",
     management:"",operation:"",unit_name:"Upper GI",status:"admit",treatment_type:"conservative"};
-  await role(auth,owner);
+  await role(auth,admin);
   assert.equal(await create("status"),null);
   await assert.rejects(create("reserve"),{code:"42501"});
-  await role(null);
-  await db.query("insert into rc_hn_prod_private.pilot_creators values($1)",[owner]);
   await role(auth,owner);
   assert.equal((await create("status")).eligible,true);
   const reserved=await create("reserve");
@@ -128,6 +128,38 @@ try {
   const roundTrip=await exportBundle([createId]);
   assert.equal(roundTrip.records[0].ciphertext,encrypted.ciphertext);
   assert.equal(roundTrip.records[0].caseId,reserved.caseCode);
+  // A future invite gets access only once both the Resident role and profile are active.
+  const futureCaseId="00000000-2222-4000-8000-000000000004";
+  await db.query("insert into public.resident_profiles values($1,false)",[future]);
+  await db.query("insert into public.resident_user_roles values($1,'resident',false)",[future]);
+  await role(auth,future);
+  assert.equal(await create("status"),null);
+  await assert.rejects(create("reserve",null,null,null,futureCaseId),{code:"42501"});
+  await role(null);
+  await db.query("update public.resident_user_roles set active=true where user_id=$1",[future]);
+  await role(auth,future);
+  assert.equal(await create("status"),null);
+  await role(null);
+  await db.query("update public.resident_profiles set active=true where user_id=$1",[future]);
+  await role(auth,future);
+  assert.equal((await create("status")).eligible,true);
+  const futureReservation=await create("reserve",null,null,null,futureCaseId);
+  const futureEnvelope=await sealPilotHn({publicKey:futureReservation.publicKey,configuredKey:keyId,
+    caseUuid:futureCaseId,caseCode:futureReservation.caseCode,hn});
+  await role(null);
+  await db.query("update public.resident_user_roles set active=false where user_id=$1",[future]);
+  await role(auth,future);
+  assert.equal(await create("status"),null);
+  await assert.rejects(create("save",fields,keyId,futureEnvelope.ciphertext,futureCaseId),{code:"42501"});
+  await role(null);
+  await db.query("update public.resident_user_roles set active=true where user_id=$1",[future]);
+  await role(auth,future);
+  assert.deepEqual(await create("save",fields,keyId,futureEnvelope.ciphertext,futureCaseId),{id:futureCaseId});
+  await assert.rejects(exportBundle(),{code:"42501"});
+  await assert.rejects(history(),{code:"42501"});
+  await role(null);
+  assert.equal(await q("select count(*)::int as result from rc_hn_prod_private.pilot_creators"),0);
+  console.error("PASS: existing and future active Residents, inactive profile, revocation, and no separate HN allowlist");
   await db.query("update public.resident_profiles set active=false where user_id=$1",[owner]);
   await role(auth,owner);
   assert.equal(await status(),null);
@@ -135,6 +167,11 @@ try {
   await role(null);
   await db.exec("update rc_hn_prod_private.pilot_config set enabled=false");
   await assert.rejects(exportBundle(),{code:"42501"});
+  await role(auth,future);
+  assert.equal(await create("status"),null);
+  await assert.rejects(create("reserve",null,null,null,futureCaseId),{code:"42501"});
+  await assert.rejects(create("save",fields,keyId,futureEnvelope.ciphertext,futureCaseId),{code:"42501"});
+  await role(null);
   await db.exec("update rc_hn_prod_private.pilot_config set enabled=true");
   // Separate session logins model named non-owner operators, with only function grants.
   await db.exec(`
