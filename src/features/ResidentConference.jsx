@@ -33,7 +33,28 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [session, setSession] = useState(null);          // saved agenda for this meeting date, or null (= automatic)
   const [cases, setCases] = useState(null);              // cases for the range + the added older ones
   const [people, setPeople] = useState([]);
-  const [view, setView] = useState(initialCase ? "deck" : "table");
+  const [requestedView, setView] = useState(initialCase ? "deck" : "table");
+  const [splitAvailable, setSplitAvailable] = useState(false);
+  const [splitSelected, setSplitSelected] = useState(false);
+  const panel = useRef(null);
+  const deckPane = useRef(null);
+  const view = requestedView === "split" && !splitAvailable ? (splitSelected ? "deck" : "table") : requestedView;
+  const split = view === "split";
+  const showDeck = view === "deck" || (split && splitSelected);
+  useEffect(() => {
+    if (typeof ResizeObserver !== "function") return;
+    const host = panel.current.closest(".conference-main") || panel.current;
+    const tallEnough = window.matchMedia("(min-height: 620px)");
+    let width = 0;
+    const update = () => setSplitAvailable(width >= 1284 && tallEnough.matches);
+    const observer = new ResizeObserver(([entry]) => { width = entry.contentRect.width; update(); });
+    observer.observe(host);
+    tallEnough.addEventListener("change", update);
+    return () => {
+      observer.disconnect();
+      tallEnough.removeEventListener("change", update);
+    };
+  }, []);
   const [typeFilter, setTypeFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
   const [photoFilter, setPhotoFilter] = useState("all");
@@ -96,7 +117,7 @@ export default function ResidentConference({ user, initialCase = null }) {
     if (start === weekStart) return;
     setWeekStart(start);
     setDateFilter({ start: "", end: "" });
-    setIndex(0);
+    resetSelection();
   }
 
   // A case chosen from "New admissions" opens in Deck at that case.
@@ -110,21 +131,35 @@ export default function ResidentConference({ user, initialCase = null }) {
   }, [cases, shown]);
 
   const current = shown[Math.min(index, Math.max(shown.length - 1, 0))] || null;
+  useEffect(() => {
+    if (split && deckPane.current) deckPane.current.scrollTop = 0;
+  }, [split, current?.id]);
   const media = mediaResult?.caseId === current?.id ? (mediaResult?.rows || []) : [];
   useEffect(() => {
     const mine = ++mediaSeq.current;
 
-    if (!current || view !== "deck") return;
+    if (!current || !showDeck) return;
     loadCaseMedia(current.id)
       .then((rows) => { if (mine === mediaSeq.current) setMedia({ caseId: current.id, rows }); })
       .catch((nextError) => { if (mine === mediaSeq.current) setError(caseErrorMessage(nextError)); });
     return () => { ++mediaSeq.current; };
-  }, [current?.id, view, mediaVersion]);
-  useEffect(() => { setPhoto(0); }, [current?.id, view]);
+  }, [current?.id, showDeck, mediaVersion]);
+  useEffect(() => { setPhoto(0); }, [current?.id, showDeck]);
+
+  function resetSelection() {
+    setIndex(0);
+    setSplitSelected(false);
+  }
 
   function openDeck(position) {
     setIndex(position);
-    setView("deck");
+    if (split) setSplitSelected(true);
+    else setView("deck");
+  }
+
+  function openSplit() {
+    setSplitSelected(view === "deck" ? Boolean(current) : splitSelected);
+    setView("split");
   }
 
   const filtersActive = typeFilter !== "all" || unitFilter !== "all" || photoFilter !== "all" || Boolean(dateFilter.start || dateFilter.end);
@@ -149,7 +184,7 @@ export default function ResidentConference({ user, initialCase = null }) {
   const label = `ประชุมวันศุกร์ที่ ${thaiDate(meetingDate)}`;
   const changed = session && (session.excluded_case_ids.length || session.added_case_ids.length || session.case_order.length);
   return (
-    <section className="resident-panel case-present">
+    <section ref={panel} className={split ? "resident-panel case-present case-present--split" : "resident-panel case-present"}>
       <div className="case-weekbar">
         <div className="case-week-navigation">
         <button type="button" className="secondary-button" onClick={() => changeWeek(shiftIsoDate(weekStart, -7))}>สัปดาห์ก่อน</button>
@@ -178,106 +213,118 @@ export default function ResidentConference({ user, initialCase = null }) {
             <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงรายการประชุม">
               <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setView("table")}>Table</button>
               <button type="button" className={view === "deck" ? "active" : ""} aria-pressed={view === "deck"} onClick={() => setView("deck")}>Deck</button>
+              {splitAvailable && <button type="button" className={split ? "active" : ""} aria-pressed={split} onClick={openSplit}>Table + Deck</button>}
             </div>
-            <label>Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setIndex(0); }}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
-            <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); setIndex(0); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
-            <label>ภาพแนบ<select value={photoFilter} onChange={(event) => { setPhotoFilter(event.target.value); setIndex(0); }}>
+            <label>Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); resetSelection(); }}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
+            <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); resetSelection(); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
+            <label>ภาพแนบ<select value={photoFilter} onChange={(event) => { setPhotoFilter(event.target.value); resetSelection(); }}>
               <option value="all">ทุกเคส</option><option value="with">มีภาพแนบ</option><option value="without">ไม่มีภาพแนบ</option>
             </select></label>
             <ConferenceDateFilter key={weekStart} value={dateFilter} initialDate={range.from}
-              onChange={(value) => { setDateFilter(value); setIndex(0); }} />
+              onChange={(value) => { setDateFilter(value); resetSelection(); }} />
           </div>
           {included.length === 0 && <p className="case-muted">ไม่มีเคสในรายการประชุมสัปดาห์นี้{canManage ? ' กด "จัดรายการประชุม" เพื่อเพิ่มเคส' : ""}</p>}
           {included.length > 0 && shown.length === 0 && <p className="case-muted">ไม่มีเคสที่ตรงกับตัวกรอง</p>}
         </>
       )}
 
-      {cases && view === "table" && shown.length > 0 && (
-        <>
-          <CaseTypeLegend />
-          <div className="resident-table-wrap conf-desktop-table">
-            <table className="case-table conf-table">
-              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management / Operation</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
-              <tbody>
-                {shown.map((row, position) => (
-                  <tr key={row.id}>
-                    <td data-label="ลำดับ">{position + 1}</td>
-                    <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
-                    <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                    <td data-label="Management / Operation"><CaseTreatmentSummary row={row} /></td>
-                    <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                    <td data-label="Type"><ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} /></td>
-                    <td><button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="resident-table-wrap conf-mobile-table">
-            <table aria-label="รายการประชุมแบบย่อ">
-              <thead><tr><th scope="col">ลำดับ</th><th scope="col">เคส / วันที่รับ</th></tr></thead>
-              <tbody>
-                {shown.map((row, position) => (
-                  <tr key={row.id}>
-                    <td>{position + 1}</td>
-                    <td>
-                      <div className="conf-mobile-case">
-                        <details>
-                          <summary><span><strong>{row.case_code}</strong> · {thaiDate(row.admit_date)}
-                            {addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}
-                          </span></summary>
-                          <div className="conf-mobile-details">
-                            <dl>
-                              <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
-                              <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
-                              <dt>การรักษา</dt><dd><CaseTreatmentSummary row={row} /></dd>
-                            </dl>
-                            <button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button>
-                          </div>
-                        </details>
-                        <ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <div className={split ? "conf-workspace conf-workspace-split" : "conf-workspace"}>
+        {cases && (view === "table" || split) && shown.length > 0 && (
+          <section className="conf-agenda-pane" aria-label="ตารางประชุม">
+            <CaseTypeLegend />
+            <div className="resident-table-wrap conf-desktop-table" tabIndex={split ? 0 : undefined} aria-label={split ? "เลื่อนตารางเคส" : undefined}>
+              <table className="case-table conf-table">
+                <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th>{!split && <><th>Management / Operation</th><th>หน่วย / Owner</th></>}<th>Type</th>{!split && <th />}</tr></thead>
+                <tbody>
+                  {shown.map((row, position) => (
+                    <tr key={row.id} className={split && splitSelected && current?.id === row.id ? "conf-selected-row" : undefined}>
+                      <td data-label="ลำดับ">{position + 1}</td>
+                      <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
+                      <td data-label="Diagnosis"><div className="case-cell">
+                        {split ? <button type="button" className="link-button conf-select-case" aria-pressed={splitSelected && current?.id === row.id}
+                          aria-label={`เลือกเคส ${row.case_code} · ${row.diagnosis}`} onClick={() => openDeck(position)}>{row.diagnosis}</button> : row.diagnosis}
+                        <br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
+                      {!split && <>
+                        <td data-label="Management / Operation"><CaseTreatmentSummary row={row} /></td>
+                        <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                      </>}
+                      <td data-label="Type"><ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} /></td>
+                      {!split && <td><button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!split && <div className="resident-table-wrap conf-mobile-table">
+              <table aria-label="รายการประชุมแบบย่อ">
+                <thead><tr><th scope="col">ลำดับ</th><th scope="col">เคส / วันที่รับ</th></tr></thead>
+                <tbody>
+                  {shown.map((row, position) => (
+                    <tr key={row.id}>
+                      <td>{position + 1}</td>
+                      <td>
+                        <div className="conf-mobile-case">
+                          <details>
+                            <summary><span><strong>{row.case_code}</strong> · {thaiDate(row.admit_date)}
+                              {addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}
+                            </span></summary>
+                            <div className="conf-mobile-details">
+                              <dl>
+                                <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
+                                <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
+                                <dt>การรักษา</dt><dd><CaseTreatmentSummary row={row} /></dd>
+                              </dl>
+                              <button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button>
+                            </div>
+                          </details>
+                          <ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>}
+          </section>
+        )}
 
-      {cases && view === "deck" && current && (
-        <>
-          <div className="case-weekbar">
-            <select aria-label="เลือกเคส" value={Math.min(index, shown.length - 1)} onChange={(event) => setIndex(Number(event.target.value))}>
-              {shown.map((row, position) => <option key={row.id} value={position}>{row.case_code} · {row.diagnosis}</option>)}
-            </select>
-            <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(index - 1)}>ก่อนหน้า</button>
-            <strong>{Math.min(index, shown.length - 1) + 1} / {shown.length}</strong>
-            <button type="button" className="secondary-button" disabled={index >= shown.length - 1} onClick={() => setIndex(index + 1)}>ถัดไป</button>
-          </div>
-          <div className="case-split">
-            <div>
-              <p><span className="case-count">{current.case_code}</span> <span className="case-count">{caseUnitLabel(current.unit_name)}</span> <CaseTypeChip type={current.treatment_type} /></p>
-              <h2>{current.diagnosis}</h2>
-              <p className="case-muted">{caseSexLabel(current.sex)} {current.age_years} ปี · รับไว้ {thaiDate(current.admit_date)} · Owner: {personName(people, current.owner_id)}</p>
-              <div className="case-field"><small>Management</small>{current.management || "ยังไม่ระบุ"}</div>
-              <div className="case-field"><small>Operation</small>{current.operation || "ยังไม่ระบุ"}</div>
+        {cases && split && shown.length > 0 && !splitSelected && <section className="conf-deck-pane conf-deck-empty" aria-label="Deck">
+          <h2>Deck</h2><p>เลือกเคสจากตารางด้านซ้ายเพื่อดูรายละเอียด ภาพ และข้ออภิปราย</p>
+        </section>}
+
+        {cases && showDeck && current && (
+          <section ref={deckPane} className="conf-deck-pane" aria-label="Deck" tabIndex={split ? 0 : undefined}>
+            <div className="case-weekbar">
+              <select aria-label="เลือกเคส" value={Math.min(index, shown.length - 1)} onChange={(event) => setIndex(Number(event.target.value))}>
+                {shown.map((row, position) => <option key={row.id} value={position}>{row.case_code} · {row.diagnosis}</option>)}
+              </select>
+              <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(index - 1)}>ก่อนหน้า</button>
+              <strong>{Math.min(index, shown.length - 1) + 1} / {shown.length}</strong>
+              <button type="button" className="secondary-button" disabled={index >= shown.length - 1} onClick={() => setIndex(index + 1)}>ถัดไป</button>
             </div>
-            <div>
-              <div className="case-present-image">
-                {media[photo] ? <CasePhoto key={current.id} src={media[photo].url}
-                  label={media[photo].caption || `ภาพที่ ${photo + 1}`} photos={media} startIndex={photo}
-                  onRefresh={() => setMediaVersion(n => n + 1)} /> : <span>ยังไม่มีภาพแนบ</span>}
+            <div className="case-split">
+              <div>
+                <p><span className="case-count">{current.case_code}</span> <span className="case-count">{caseUnitLabel(current.unit_name)}</span> <CaseTypeChip type={current.treatment_type} /></p>
+                <h2>{current.diagnosis}</h2>
+                <p className="case-muted">{caseSexLabel(current.sex)} {current.age_years} ปี · รับไว้ {thaiDate(current.admit_date)} · Owner: {personName(people, current.owner_id)}</p>
+                <div className="case-field"><small>Management</small>{current.management || "ยังไม่ระบุ"}</div>
+                <div className="case-field"><small>Operation</small>{current.operation || "ยังไม่ระบุ"}</div>
               </div>
-              <div className="button-row">
-                {media.map((item, position) => <button key={item.id} type="button" className={position === photo ? "primary-button" : "secondary-button"} onClick={() => setPhoto(position)}>ภาพ {position + 1}</button>)}
+              <div>
+                <div className="case-present-image">
+                  {media[photo] ? <CasePhoto key={current.id} src={media[photo].url}
+                    label={media[photo].caption || `ภาพที่ ${photo + 1}`} photos={media} startIndex={photo}
+                    onRefresh={() => setMediaVersion(n => n + 1)} /> : <span>ยังไม่มีภาพแนบ</span>}
+                </div>
+                <div className="button-row">
+                  {media.map((item, position) => <button key={item.id} type="button" className={position === photo ? "primary-button" : "secondary-button"} onClick={() => setPhoto(position)}>ภาพ {position + 1}</button>)}
+                </div>
               </div>
             </div>
-          </div>
-          <CaseNotes key={`${current.id}|${meetingDate}`} caseId={current.id} user={user} people={people} meetingDate={meetingDate} />
-        </>
-      )}
+            <CaseNotes key={`${current.id}|${meetingDate}`} caseId={current.id} user={user} people={people} meetingDate={meetingDate} />
+          </section>
+        )}
+      </div>
 
       {editing && (
         <AgendaEditor
@@ -286,7 +333,7 @@ export default function ResidentConference({ user, initialCase = null }) {
           defaultRange={defaultRange}
           people={people}
           onClose={() => setEditing(false)}
-          onSaved={async (message) => { setEditing(false); setNotice(message); setIndex(0); await load(); }}
+          onSaved={async (message) => { setEditing(false); setNotice(message); resetSelection(); await load(); }}
           onConflict={async (nextError) => { setEditing(false); await load(); setError(caseErrorMessage(nextError)); }}
         />
       )}
