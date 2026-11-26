@@ -4,7 +4,7 @@ import { hnPilotWebExport } from "../residentCasesApi";
 
 const MAX_EXPORT_CASES = 50;
 
-export default function CaseHnExport({ keyId, onClose }) {
+export default function CaseHnExport({ keyId }) {
   const [grouped, setGrouped] = useState(false);
   const [day, setDay] = useState("");
   const [wholeDay, setWholeDay] = useState(false);
@@ -108,61 +108,73 @@ export default function CaseHnExport({ keyId, onClose }) {
     });
   }
 
-  return <div className="case-form">
-    <p>เลือกเฉพาะเคสที่จะใช้ใน Grand Rounds ได้ไม่เกิน {MAX_EXPORT_CASES} เคสต่อไฟล์ ไฟล์ที่ดาวน์โหลดต้องเปิดด้วยกุญแจบนเครื่องของคุณ</p>
-    <form className="button-row" onSubmit={find}>
-      <label>ค้นหารหัสเคส <input value={prefix} maxLength={9} disabled={busy}
-        onChange={(e) => setPrefix(e.target.value)} placeholder="ADM-00012" /></label>
-      <button className="secondary-button" disabled={busy}>ค้นหา</button>
-    </form>
-    <div className="button-row">
-      <button type="button" className="secondary-button" disabled={busy} aria-pressed={grouped || wholeDay}
-        onClick={() => { setGrouped(!grouped && !wholeDay); if (wholeDay) { setWholeDay(false); setRows(null); setSearch({ prefix: "" }); } }}>จัดกลุ่มตามวันที่รับ</button>
-      <label>วันที่รับ <input type="date" value={day} disabled={busy} onChange={(event) => loadDay(event.target.value)} /></label>
-    </div>
-    {dayTooLarge && <p role="alert">วันนี้มีมากกว่า 500 เคส กรุณาแบ่งตามรหัสเคสเพื่อส่งออก</p>}
-    {wholeDay && !dayTooLarge && visibleRows.length > 0 && <div className="button-row">
-      {Array.from({ length: Math.ceil(visibleRows.length / MAX_EXPORT_CASES) }, (_, i) => <button key={i} type="button"
-        className="secondary-button" disabled={busy} onClick={() => download(visibleRows.slice(i * MAX_EXPORT_CASES, (i + 1) * MAX_EXPORT_CASES), `-${day}${visibleRows.length > MAX_EXPORT_CASES ? `-part-${i + 1}` : ""}`)}>
-        {visibleRows.length <= MAX_EXPORT_CASES ? `ดาวน์โหลดทั้งวัน (${visibleRows.length} เคส)` : `ดาวน์โหลดชุดที่ ${i + 1} (${Math.min(MAX_EXPORT_CASES, visibleRows.length - i * MAX_EXPORT_CASES)} เคส)`}
-      </button>)}
-    </div>}
-    {error && <p role="alert" className="form-error">{error}</p>}
-    {rows === null && <p role="status">กำลังโหลดเคส…</p>}
-    {rows?.length === 0 && <p>ไม่พบเคสที่ส่งออกได้</p>}
-    {!wholeDay && rows?.length === MAX_EXPORT_CASES && <p>แสดงได้สูงสุด {MAX_EXPORT_CASES} รายการล่าสุดที่ตรงกับคำค้น ค้นหาด้วยรหัสเคสเพื่อดูรายการอื่น</p>}
-    {!!visibleRows.length && <fieldset>
-      <legend>รหัสเคสที่ส่งออกได้</legend>
-      <div className="button-row">
-        <button type="button" className="secondary-button" disabled={busy || allVisibleSelected || wouldExceedLimit}
-          onClick={selectAllVisible}>เลือกทั้งหมดที่แสดง ({visibleRows.length})</button>
+  return <div className="case-form hn-export">
+    <div className="hn-export-content">
+      <div className="hn-export-controls">
+        <p className="case-muted">ส่งออกได้สูงสุด {MAX_EXPORT_CASES} เคสต่อไฟล์ เปิดไฟล์ด้วยกุญแจบนเครื่องของคุณ</p>
+        <div className="hn-export-filters">
+          <form className="hn-export-search" onSubmit={find}>
+            <label>ค้นหารหัสเคส<input value={prefix} maxLength={9} disabled={busy}
+              onChange={(e) => setPrefix(e.target.value)} placeholder="ADM-00012" /></label>
+            <button className="secondary-button" disabled={busy}>ค้นหา</button>
+          </form>
+          <label>วันที่รับ<input type="date" value={day} disabled={busy} onChange={(event) => loadDay(event.target.value)} /></label>
+        </div>
+        <div className="hn-export-options">
+          <button type="button" className="secondary-button" disabled={busy} aria-pressed={grouped || wholeDay}
+            onClick={() => { setGrouped(!grouped && !wholeDay); if (wholeDay) { setWholeDay(false); setRows(null); setSearch({ prefix: "" }); } }}>จัดกลุ่มตามวันที่รับ</button>
+          {!!visibleRows.length && <button type="button" className="secondary-button"
+            disabled={busy || allVisibleSelected || wouldExceedLimit} onClick={selectAllVisible}>เลือกทั้งหมดที่แสดง ({visibleRows.length})</button>}
+        </div>
       </div>
-      {wouldExceedLimit && <p className="case-muted">เลือกทั้งหมดไม่ได้ เพราะรวมกับเคสที่เลือกไว้แล้วจะเกิน {MAX_EXPORT_CASES} เคส กรุณาล้างรายการหรือเลือกเฉพาะเคสที่ต้องการ</p>}
-      {groups.map(([date, dailyRows]) => <div key={date} className="hn-export-day">
-        {date && <div className="button-row"><strong>{thaiDate(date)}</strong>
-          {!wholeDay && <button type="button" className="secondary-button" disabled={busy} onClick={() => loadDay(date)}>ดูทุกเคสของวันนี้</button>}
+      <div className="hn-export-results" role="region" aria-label="รายการเคสที่ส่งออกได้" tabIndex={0}>
+        {dayTooLarge && <p role="alert">วันนี้มีมากกว่า 500 เคส กรุณาแบ่งตามรหัสเคสเพื่อส่งออก</p>}
+        {wholeDay && !dayTooLarge && visibleRows.length > 0 && <div className="hn-export-options hn-export-batches">
+          {Array.from({ length: Math.ceil(visibleRows.length / MAX_EXPORT_CASES) }, (_, i) => <button key={i} type="button"
+            className="secondary-button" disabled={busy} onClick={() => download(visibleRows.slice(i * MAX_EXPORT_CASES, (i + 1) * MAX_EXPORT_CASES), `-${day}${visibleRows.length > MAX_EXPORT_CASES ? `-part-${i + 1}` : ""}`)}>
+            {visibleRows.length <= MAX_EXPORT_CASES ? `ดาวน์โหลดทั้งวัน (${visibleRows.length} เคส)` : `ดาวน์โหลดชุดที่ ${i + 1} (${Math.min(MAX_EXPORT_CASES, visibleRows.length - i * MAX_EXPORT_CASES)} เคส)`}
+          </button>)}
         </div>}
-      {dailyRows.map((row) => {
-        const checked = selectedIds.has(row.id);
-        return <label key={row.id} className="case-check">
-          <input type="checkbox" checked={checked} disabled={busy || (!checked && selected.length >= MAX_EXPORT_CASES)}
-            onChange={(e) => {
-              const add = e.target.checked;
-              setSelected((all) => add
-                ? (all.length >= MAX_EXPORT_CASES || all.some(({ id }) => id === row.id) ? all : [...all, row])
-                : all.filter(({ id }) => id !== row.id));
-            }} /> {row.code}
-        </label>;
-      })}
-      </div>)}
-    </fieldset>}
-    {selected.length > 0 && <div>เลือก {selected.length} เคส: {selected.map(({ code }) => code).join(", ")}{" "}
-      <button type="button" className="link-button" disabled={busy} onClick={() => setSelected([])}>ล้างรายการ</button></div>}
-    <div className="button-row">
-      <button type="button" className="secondary-button" onClick={onClose}>ปิด</button>
-      <button type="button" className="primary-button" disabled={busy || !selected.length} onClick={() => download()}>
-        {busy ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลดไฟล์เข้ารหัส"}
-      </button>
+        {rows === null && <p role="status">กำลังโหลดเคส…</p>}
+        {rows?.length === 0 && <p>ไม่พบเคสที่ส่งออกได้</p>}
+        {!wholeDay && rows?.length === MAX_EXPORT_CASES && <p>แสดงได้สูงสุด {MAX_EXPORT_CASES} รายการล่าสุดที่ตรงกับคำค้น ค้นหาด้วยรหัสเคสเพื่อดูรายการอื่น</p>}
+        {wouldExceedLimit && <p className="case-muted">เลือกทั้งหมดไม่ได้ เพราะรวมกับเคสที่เลือกไว้แล้วจะเกิน {MAX_EXPORT_CASES} เคส กรุณาล้างรายการหรือเลือกเฉพาะเคสที่ต้องการ</p>}
+        {!!visibleRows.length && <fieldset>
+          <legend>รหัสเคสที่ส่งออกได้ ({visibleRows.length})</legend>
+          {groups.map(([date, dailyRows]) => <div key={date} className="hn-export-day">
+            {date && <div className="hn-export-day-head">
+              <strong>{thaiDate(date)} <span className="case-muted">· {dailyRows.length} เคส</span></strong>
+              {!wholeDay && <button type="button" className="secondary-button" disabled={busy} onClick={() => loadDay(date)}>ดูทุกเคสของวันนี้</button>}
+            </div>}
+            <div className="hn-export-cases">
+              {dailyRows.map((row) => {
+                const checked = selectedIds.has(row.id);
+                return <label key={row.id} className="case-check">
+                  <input type="checkbox" checked={checked} disabled={busy || (!checked && selected.length >= MAX_EXPORT_CASES)}
+                    onChange={(e) => {
+                      const add = e.target.checked;
+                      setSelected((all) => add
+                        ? (all.length >= MAX_EXPORT_CASES || all.some(({ id }) => id === row.id) ? all : [...all, row])
+                        : all.filter(({ id }) => id !== row.id));
+                    }} />{row.code}
+                </label>;
+              })}
+            </div>
+          </div>)}
+        </fieldset>}
+      </div>
+    </div>
+    <div className="hn-export-footer">
+      {error && <p role="alert" className="form-error">{error}</p>}
+      <div className="hn-export-footer-row">
+        <div className="hn-export-selection">
+          <strong role="status">เลือก {selected.length}/{MAX_EXPORT_CASES} เคส</strong>
+          {selected.length > 0 && <button type="button" className="link-button" disabled={busy} onClick={() => setSelected([])}>ล้างรายการ</button>}
+        </div>
+        <button type="button" className="primary-button" disabled={busy || !selected.length} onClick={() => download()}>
+          {busy ? "กำลังเตรียมไฟล์…" : "ดาวน์โหลดไฟล์เข้ารหัส"}
+        </button>
+      </div>
     </div>
   </div>;
 }
