@@ -49,11 +49,11 @@ import { CaseModal, CaseTypeChip, PrivacyNotice, personName, thaiDate, thaiDateT
 const emptyForm = (user) => ({
   admit_date: bangkokIsoDate(),
   age_years: "",
-  sex: "male",
+  sex: "",
   diagnosis: "",
   management: "",
   operation: "",
-  unit_name: CASE_UNITS[0],
+  unit_name: "",
   status: "admit",
   treatment_type: "",
   owner_id: user.role === "resident" ? user.id : "",
@@ -233,8 +233,8 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         </label>}
         <label>วันที่รับ<input type="date" value={form.admit_date} min={CASE_MIN_ADMIT_DATE} max={bangkokIsoDate()} onChange={set("admit_date")} required /></label>
         <label>อายุ (ปี)<input type="number" inputMode="numeric" min={0} max={120} step={1} value={form.age_years} onChange={set("age_years")} required /></label>
-        <label>เพศ<select value={form.sex} onChange={set("sex")}>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit} value={unit}>{caseUnitLabel(unit)}</option>)}</select></label>
+        <label>เพศ<select aria-label="เพศ" required value={form.sex} onChange={set("sex")}><option value="" disabled>เลือกเพศ</option>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>หน่วย<select aria-label="หน่วย" required value={form.unit_name} onChange={set("unit_name")}><option value="" disabled>เลือกหน่วย</option>{CASE_UNITS.map((unit) => <option key={unit} value={unit}>{caseUnitLabel(unit)}</option>)}</select></label>
         <label className="case-full">Diagnosis<input maxLength={CASE_LIMITS.diagnosis} value={form.diagnosis} onChange={set("diagnosis")} required /></label>
         <label className="case-full">{initial ? "Type" : "Type (จำเป็น)"}<select value={form.treatment_type} onChange={set("treatment_type")} aria-required={!initial}><option value="">{initial ? "ยังไม่ระบุ" : "เลือก Type"}</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {treatmentField === "operation" && <>
@@ -540,6 +540,7 @@ function ResidentCasesPage({ user, onPresent }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveWeeks, setArchiveWeeks] = useState(4);
   const [archiveState, setArchiveState] = useState(null);
+  const currentPanelId = useId();
   const archivePanelId = useId();
 
   const [people, setPeople] = useState([]);
@@ -656,50 +657,63 @@ function ResidentCasesPage({ user, onPresent }) {
 
   return (
     <section ref={listPanel} className="resident-panel case-list-page">
-      <div className="panel-title-row">
-        <div><h2>เคสรับใหม่ของภาควิชา</h2><p>ทุกคนที่ active เห็นเคสร่วมกัน · ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</p></div>
-        <div className="button-row">
-          <button type="button" className="secondary-button" onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
+      <div className="panel-title-row admission-title">
+        <h1>เคสรับใหม่</h1>
+        <div className="button-row admission-create">
           <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
-          {canExportHn && <button type="button" className="secondary-button"
-            onClick={() => setDialog({ type: "hnExport", permission: exportPermission })}>ส่งออกไฟล์ Grand Rounds</button>}
-          {pilotActor === user.id && <button type="button" className="primary-button"
+          {pilotActor === user.id && <button type="button" className="secondary-button"
             onClick={() => setDialog({ type: "form", hnRequired: true, actorId: user.id })}>
-            <PlusIcon size={16} /> เพิ่มเคส Grand Rounds (นำร่อง)
+            <PlusIcon size={16} /> เพิ่มเคส Grand Rounds · ใช้ HN
           </button>}
         </div>
       </div>
       {error && <p className="form-error" role="alert">{error} <button type="button" className="link-button" onClick={load}>ลองใหม่</button></p>}
       {saveNotice && <p className="form-error" role="status">{saveNotice}</p>}
-      <div className="case-stats">
+      <p className="admission-compact-stats">
+        รอบนี้ {cases ? live.length : "…"} เคส · {cases ? count("operative") : "…"} Operative · {cases ? count("conservative") : "…"} Non-operative
+        {count("unset") > 0 && ` · ไม่ระบุ ${count("unset")}`}
+      </p>
+      <div className="case-stats admission-wide-stats">
         <div><small>เคสรอบปัจจุบัน</small><strong>{cases ? live.length : "…"}</strong></div>
         <div><small>{caseTypeLabel("operative")}</small><strong>{cases ? count("operative") : "…"}</strong></div>
         <div><small>{caseTypeLabel("conservative")}</small><strong>{cases ? count("conservative") : "…"}</strong></div>
         <div><small>ยังไม่ระบุ Type</small><strong>{cases ? count("unset") : "…"}</strong></div>
       </div>
-      <div className="history-filters">
-        <label>ค้นหา<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Diagnosis, รหัสเคส หรือผู้รับผิดชอบ" /></label>
-        <label>Type<select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
-        <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
-        {wide && <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงเคส">
-          <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setWideView("table")}>Table</button>
-          <button type="button" className={view === "cards" ? "active" : ""} aria-pressed={view === "cards"} onClick={() => setWideView("cards")}>Flashcards</button>
-        </div>}
-        {user.role === "admin" && (
-          <label className="case-check"><input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} /> แสดงเคสที่ถูกลบ</label>
-        )}
+      <div className="admission-tools">
+        <label className="admission-search">ค้นหาเคส<input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Diagnosis, รหัสเคส หรือผู้รับผิดชอบ" /></label>
+        <details className="admission-tools-more">
+          <summary>ตัวกรองและส่งออก{(typeFilter !== "all" || unit !== "all" || showDeleted) && " · กำลังกรอง"}</summary>
+          <div className="history-filters">
+            <label>Type<select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
+            <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
+            {wide && <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงเคส">
+              <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setWideView("table")}>Table</button>
+              <button type="button" className={view === "cards" ? "active" : ""} aria-pressed={view === "cards"} onClick={() => setWideView("cards")}>Flashcards</button>
+            </div>}
+            {user.role === "admin" && (
+              <label className="case-check"><input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} /> แสดงเคสที่ถูกลบ</label>
+            )}
+          </div>
+          <div className="button-row admission-exports">
+            <button type="button" className="secondary-button" onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
+            {canExportHn && <button type="button" className="secondary-button"
+              onClick={() => setDialog({ type: "hnExport", permission: exportPermission })}>ส่งออกไฟล์ Grand Rounds</button>}
+          </div>
+        </details>
       </div>
-      <section className="admission-current">
+      {!searching && <div className="case-view-switch admission-period" role="group" aria-label="ช่วงรายการเคส">
+        <button type="button" className={!archiveOpen ? "active" : ""} aria-pressed={!archiveOpen} aria-controls={currentPanelId} onClick={() => setArchiveOpen(false)}>รอบปัจจุบัน</button>
+        <button type="button" className={archiveOpen ? "active" : ""} aria-pressed={archiveOpen} aria-controls={archivePanelId} onClick={() => setArchiveOpen(true)}>เคสย้อนหลัง</button>
+      </div>}
+      <section id={currentPanelId} className="admission-current" hidden={archiveOpen && !searching}>
         <h3>เคสรอบปัจจุบัน · {thaiDate(week.from)} – {thaiDate(week.to)}</h3>
         {!cases && !error && <p className="case-muted" role="status">กำลังโหลดเคสรอบนี้…</p>}
         {cases && currentRows.length === 0 && <p className="case-muted">{cases.length ? "ไม่พบเคสที่ตรงกับเงื่อนไขในรอบนี้" : "ยังไม่มีเคสในรอบนี้"}</p>}
         {currentRows.length > 0 && <AdmissionCaseList rows={currentRows} {...listProps} />}
       </section>
-      <section className="admission-archive">
-        {searching ? <h3 className="admission-archive-heading">เคสย้อนหลัง · ผลการค้นหา</h3>
-          : <button type="button" className="admission-archive-heading" aria-expanded={archiveVisible} aria-controls={archivePanelId}
-            onClick={() => setArchiveOpen((open) => !open)}><span aria-hidden="true">{archiveVisible ? "▾" : "▸"}</span> เคสย้อนหลัง</button>}
-        <div id={archivePanelId} className="admission-archive-body" hidden={!archiveVisible}>
+      <section id={archivePanelId} className="admission-archive" hidden={!archiveVisible}>
+        <h3 className="admission-archive-heading">เคสย้อนหลัง{searching && " · ผลการค้นหา"}</h3>
+        <div className="admission-archive-body">
           {archiveVisible && <>
             {archive?.error ? <p className="form-error" role="alert">{archive.error} <button className="link-button" type="button" onClick={() => setRevision((n) => n + 1)}>ลองใหม่</button></p>
               : !archive ? <p role="status">กำลังโหลดเคสย้อนหลัง…</p>

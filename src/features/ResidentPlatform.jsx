@@ -938,7 +938,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           </div>
         </div>
       <main>
-        {tab !== "myspace" && <div className="page-heading">
+        {tab !== "myspace" && tab !== "cases" && <div className="page-heading">
           <div>
             <h1>{titles[tab]}</h1>
             {tab === "notifications" && <p>จัดการช่องทางและติดตามแจ้งเตือนในระบบ</p>}
