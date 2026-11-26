@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ShieldIcon, XIcon } from "../components/Icons";
-import { CASE_LIMITS, canDeleteNote, canEditNote, caseErrorMessage, caseTypeLabel } from "../residentCases";
+import { CASE_LIMITS, canDeleteNote, canEditNote, caseErrorMessage, caseTreatmentField, caseTypeLabel, CASE_TYPES } from "../residentCases";
 import { addCaseNote, addConferenceNote, deleteCaseNote, editCaseNote, loadCaseNotes } from "../residentCasesApi";
 
 export const thaiDate = (value) =>
@@ -53,6 +53,28 @@ export function CaseModal({ title, onClose, closeDisabled = false, className = "
       <div className="case-modal-body">{children}</div>
     </dialog>
   );
+}
+
+function CaseStatusDot({ type }) {
+  return <span className="case-status-dot" data-type={type || "unset"} aria-hidden="true" />;
+}
+
+export function CaseTypeDot({ type }) {
+  const label = caseTypeLabel(type);
+  return <span title={label}><CaseStatusDot type={type} /><span className="visually-hidden">{label}</span></span>;
+}
+
+export function CaseTypeLegend() {
+  return <div className="case-type-legend" role="group" aria-label="ความหมายจุดสี Type">
+    {[...CASE_TYPES, ["", "ยังไม่ระบุ"]].map(([type, label]) => <span key={type}><CaseStatusDot type={type} />{label}</span>)}
+  </div>;
+}
+
+export function CaseTreatmentSummary({ row }) {
+  const field = caseTreatmentField(row.treatment_type);
+  if (!field) return "—";
+  return <div className="case-treatment-summary"><small>{field === "operation" ? "Operation" : "Management"}</small>
+    <span>{row[field]?.trim() || "—"}</span></div>;
 }
 
 export function CaseTypeChip({ type }) {

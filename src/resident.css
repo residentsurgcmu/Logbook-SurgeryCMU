@@ -422,7 +422,6 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 .assessment-evaluator { margin:4px 0 10px; font-size:15px; }
 .case-card-actions { display:flex; gap:8px; flex-wrap:wrap; padding:0 16px 14px; }
 .case-cell { min-width:0; }
-.case-clamp { max-width:220px; overflow-wrap:anywhere; white-space:pre-wrap; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 @media (max-width:700px) {
   .case-table, .case-table tbody, .case-table tr, .case-table td { display:block; width:100%; box-sizing:border-box; }
   .case-table thead { position:absolute; left:-9999px; }
@@ -431,7 +430,6 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
   .case-table td::before { content:attr(data-label); color:#61777b; font-size:12.5px; font-weight:700; }
   .case-table td:last-child { display:block; }
   .case-table td:last-child::before { content:none; }
-  .case-clamp { max-width:none; -webkit-line-clamp:unset; }
 }
 .conf-controls { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:10px 0 6px; }
 .conf-controls label { display:grid; gap:4px; font-size:13px; font-weight:700; color:#41585c; }
@@ -562,19 +560,33 @@ button.admission-archive-heading { cursor: pointer; }
 
 /* Wide layout for New admissions. Narrow screens render the flashcards. */
 .admission-table-wrap .admission-table { min-width: 0; table-layout: fixed; }
-.admission-table th:nth-child(1) { width: 11%; }
-.admission-table th:nth-child(2) { width: 22%; }
-.admission-table th:nth-child(3) { width: 21%; }
-.admission-table th:nth-child(4) { width: 10%; }
-.admission-table th:nth-child(5) { width: 12%; }
-.admission-table th:nth-child(6) { width: 11%; }
-.admission-table th:nth-child(7) { width: 5%; }
-.admission-table th:nth-child(8) { width: 8%; }
+.admission-table th:nth-child(1) { width:13%; }
+.admission-table th:nth-child(2) { width:25%; }
+.admission-table th:nth-child(4) { width:16%; }
+.admission-table th:nth-child(5) { width:64px; }
+.admission-table th:nth-child(6) { width:54px; }
+.admission-table th:nth-child(7) { width:58px; }
+.admission-table th:nth-child(5),.admission-table td:nth-child(5) { text-align:center; }
+.admission-table th:nth-child(7),.admission-table td:nth-child(7) { padding-inline:6px; text-align:center; }
 .admission-table th, .admission-table td { box-sizing: border-box; overflow-wrap: anywhere; }
 .admission-table .link-button { display: inline-block; max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.admission-table .case-clamp { max-width: none; }
 .admission-table td:first-child strong { white-space: nowrap; }
-.admission-table td:last-child > button { max-width: 100%; white-space: normal; }
+.admission-table-layout .case-type-legend { padding-inline:12px; }
+.case-type-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin:8px 0; font-size:12px; color:var(--resident-muted); }
+.case-type-legend > span { display:inline-flex; align-items:center; gap:5px; }
+.case-status-dot { display:inline-block; flex:none; width:.65rem; height:.65rem; border-radius:50%; background:#64748b; }
+.case-status-dot[data-type="operative"] { background:#7c3aed; }
+.case-status-dot[data-type="conservative"] { background:#15803d; }
+.case-treatment-summary { min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.case-treatment-summary small { display:block; font-weight:700; color:var(--resident-muted); }
+.case-table-indicators { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.case-table-indicators > span:first-child { display:flex; align-items:center; min-height:16px; }
+.admission-table .secondary-button.case-edit-icon,.case-present .secondary-button.case-photo-deck {
+  box-sizing:border-box; display:inline-grid; place-items:center; width:36px; min-width:36px; height:36px; min-height:36px; padding:0;
+}
+@media (max-width:700px) {
+  .case-present .conf-mobile-case .secondary-button.case-photo-deck { width:44px; height:44px; }
+}
 
 .case-photo-trigger { display:block; width:100%; padding:0; border:0; border-radius:10px; background:none; cursor:zoom-in; }
 .case-photo-trigger img { display:block; box-sizing:border-box; }

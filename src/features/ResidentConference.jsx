@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { caseErrorMessage, caseSexLabel, caseTreatmentField, caseTypeLabel, caseUnitLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
+import { caseErrorMessage, caseSexLabel, caseUnitLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople, loadCasesByIds, loadConferenceSession, resetConferenceAgenda, saveConferenceAgenda } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
@@ -7,22 +7,18 @@ import { agendaCandidates, buildAgenda, canManageConference, conferenceRangeProb
 import CasePhoto from "./CasePhoto";
 import ConferenceDateFilter from "../components/ConferenceDateFilter";
 import { includesConferenceDay } from "../conferenceDisplayDates";
-import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./CaseParts";
+import { PhotoIcon } from "../components/Icons";
+import { CaseModal, CaseNotes, CaseTreatmentSummary, CaseTypeChip, CaseTypeDot, CaseTypeLegend, personName, thaiDate } from "./CaseParts";
 
-const typeDots = { operative: "operative", conservative: "non-operative" };
-
-function ConferenceStatusDot({ variant }) {
-  return <span className="conf-status-dot" data-variant={variant || "unset"} aria-hidden="true" />;
-}
-function ConferenceTypeDot({ type }) {
-  const label = caseTypeLabel(type);
-  return <span title={label}><ConferenceStatusDot variant={typeDots[type]} /><span className="visually-hidden">{label}</span></span>;
-}
-function ConferenceTreatment({ row }) {
-  const field = caseTreatmentField(row.treatment_type);
-  if (!field) return "—";
-  return <div className="conf-treatment"><small>{field === "operation" ? "Operation" : "Management"}</small>
-    <span>{row[field]?.trim() || "—"}</span></div>;
+function ConferenceCaseIndicators({ row, onOpenDeck }) {
+  const count = row.media_count;
+  return <div className="case-table-indicators">
+    <CaseTypeDot type={row.treatment_type} />
+    {count > 0 && <button type="button" className="secondary-button case-photo-deck"
+      title={`เปิด Deck · ${count} รูป`} aria-label={`เปิด Deck เคส ${row.case_code} · ${count} รูป`} onClick={onOpenDeck}>
+      <PhotoIcon size={17} />
+    </button>}
+  </div>;
 }
 
 // One Friday conference. The agenda = cases admitted in the date range (automatic) minus the cases an organiser
@@ -40,6 +36,7 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [view, setView] = useState(initialCase ? "deck" : "table");
   const [typeFilter, setTypeFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
+  const [photoFilter, setPhotoFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [index, setIndex] = useState(0);
   const [mediaResult, setMedia] = useState(null);
@@ -91,7 +88,8 @@ export default function ResidentConference({ user, initialCase = null }) {
   const shown = useMemo(() => included.filter((row) =>
     (typeFilter === "all" || (typeFilter === "unset" ? !row.treatment_type : row.treatment_type === typeFilter)) &&
     (unitFilter === "all" || row.unit_name === unitFilter) &&
-    includesConferenceDay(dateFilter, row.admit_date)), [included, typeFilter, unitFilter, dateFilter]);
+    (photoFilter === "all" || (row.media_count > 0) === (photoFilter === "with")) &&
+    includesConferenceDay(dateFilter, row.admit_date)), [included, typeFilter, unitFilter, dateFilter, photoFilter]);
   const addedIds = useMemo(() => new Set(agenda.filter((item) => item.source === "added").map((item) => item.row.id)), [agenda]);
 
   function changeWeek(start) {
@@ -124,7 +122,12 @@ export default function ResidentConference({ user, initialCase = null }) {
   }, [current?.id, view, mediaVersion]);
   useEffect(() => { setPhoto(0); }, [current?.id, view]);
 
-  const filtersActive = typeFilter !== "all" || unitFilter !== "all" || Boolean(dateFilter.start || dateFilter.end);
+  function openDeck(position) {
+    setIndex(position);
+    setView("deck");
+  }
+
+  const filtersActive = typeFilter !== "all" || unitFilter !== "all" || photoFilter !== "all" || Boolean(dateFilter.start || dateFilter.end);
   async function exportWeek(rows, filtered = false) {
     if (exporting || !rows.length) return;
     setExporting(true);
@@ -178,6 +181,9 @@ export default function ResidentConference({ user, initialCase = null }) {
             </div>
             <label>Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setIndex(0); }}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
             <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); setIndex(0); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
+            <label>ภาพแนบ<select value={photoFilter} onChange={(event) => { setPhotoFilter(event.target.value); setIndex(0); }}>
+              <option value="all">ทุกเคส</option><option value="with">มีภาพแนบ</option><option value="without">ไม่มีภาพแนบ</option>
+            </select></label>
             <ConferenceDateFilter key={weekStart} value={dateFilter} initialDate={range.from}
               onChange={(value) => { setDateFilter(value); setIndex(0); }} />
           </div>
@@ -188,22 +194,20 @@ export default function ResidentConference({ user, initialCase = null }) {
 
       {cases && view === "table" && shown.length > 0 && (
         <>
-          <div className="conf-type-legend" aria-label="ความหมายจุดสี Type">
-            {[...CASE_TYPES, ["", "ยังไม่ระบุ"]].map(([type, label]) => <span key={type}><ConferenceStatusDot variant={typeDots[type]} /> {label}</span>)}
-          </div>
+          <CaseTypeLegend />
           <div className="resident-table-wrap conf-desktop-table">
             <table className="case-table conf-table">
-              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Operation / Management</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
+              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management / Operation</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
               <tbody>
                 {shown.map((row, position) => (
                   <tr key={row.id}>
                     <td data-label="ลำดับ">{position + 1}</td>
                     <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
                     <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                    <td data-label="Operation / Management"><ConferenceTreatment row={row} /></td>
+                    <td data-label="Management / Operation"><CaseTreatmentSummary row={row} /></td>
                     <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                    <td data-label="Type"><ConferenceTypeDot type={row.treatment_type} /></td>
-                    <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
+                    <td data-label="Type"><ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} /></td>
+                    <td><button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -217,20 +221,22 @@ export default function ResidentConference({ user, initialCase = null }) {
                   <tr key={row.id}>
                     <td>{position + 1}</td>
                     <td>
-                      <details>
-                        <summary><span><strong>{row.case_code}</strong> · {thaiDate(row.admit_date)}
-                          {addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}
-                        </span></summary>
-                        <div className="conf-mobile-details">
-                          <dl>
-                            <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
-                            <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
-                            <dt>Type</dt><dd><ConferenceTypeDot type={row.treatment_type} /></dd>
-                            <dt>การรักษา</dt><dd><ConferenceTreatment row={row} /></dd>
-                          </dl>
-                          <button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button>
-                        </div>
-                      </details>
+                      <div className="conf-mobile-case">
+                        <details>
+                          <summary><span><strong>{row.case_code}</strong> · {thaiDate(row.admit_date)}
+                            {addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}
+                          </span></summary>
+                          <div className="conf-mobile-details">
+                            <dl>
+                              <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
+                              <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
+                              <dt>การรักษา</dt><dd><CaseTreatmentSummary row={row} /></dd>
+                            </dl>
+                            <button type="button" className="secondary-button" onClick={() => openDeck(position)}>เปิด Deck</button>
+                          </div>
+                        </details>
+                        <ConferenceCaseIndicators row={row} onOpenDeck={() => openDeck(position)} />
+                      </div>
                     </td>
                   </tr>
                 ))}

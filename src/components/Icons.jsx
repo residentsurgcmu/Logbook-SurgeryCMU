@@ -49,3 +49,6 @@ export const BedIcon = (props) => <Icon {...props}><path d="M3 18V8M3 14h18v4M21
 export const BellIcon = (props) => <Icon {...props}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21h4" /></Icon>;
 export const MicIcon = (props) => <Icon {...props}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></Icon>;
 export const MenuIcon = (props) => <Icon {...props}><path d="M3 6h18M3 12h18M3 18h18" /></Icon>;
+
+export const PhotoIcon = (props) => <Icon {...props}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="1.5" /><path d="m21 15-5-5L5 20" /></Icon>;
+export const PencilIcon = (props) => <Icon {...props}><path d="m14 6 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z" /></Icon>;

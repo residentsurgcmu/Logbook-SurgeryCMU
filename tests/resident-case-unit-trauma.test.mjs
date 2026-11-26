@@ -20,13 +20,13 @@ test("the results page shows which Staff evaluated, in the table and in the deta
   assert.match(ui, /profileById\.get\(item\.evaluator_id\)\?\.name \|\| "ไม่พบชื่อ Staff"/);
 });
 
-test("flashcards can open the Deck and the list searches by Owner; the table shows Management and Operation", async () => {
+test("flashcards can open the Deck and the list searches by Owner; the table has one treatment column", async () => {
   const ui = await read("src/features/ResidentCases.jsx");
   assert.match(ui, />เปิด Deck</);
   assert.match(ui, /onPresent\(\{ id: row\.id, admit_date: row\.admit_date \}\)/);
   assert.match(ui, /caseMatchesSearch\(row, needle, personName\(people, row\.owner_id\)\)/);
-  assert.match(ui, /<th>Management<\/th><th>Operation<\/th>/);
-  assert.match(ui, /data-label="Management"/);
+  assert.match(ui, /<th>Management \/ Operation<\/th>/);
+  assert.match(ui, /data-label="Management \/ Operation"/);
   const css = await read("src/resident.css");
   assert.match(css, /@media \(max-width:700px\) \{\s*\.case-table, \.case-table tbody/);
 });
