@@ -32,3 +32,28 @@
 .conf-table th:nth-child(6),.conf-table td[data-label="Type"] { text-align:center; }
 .conf-mobile-case { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:start; }
 .conf-mobile-case .case-table-indicators { padding-top:7px; }
+
+/* Expand only Friday Conference so an ultrawide viewport can fit both panes. */
+.resident-app.app-shell-v2 main.conference-main { max-width:1800px; }
+.conference-main > .case-present:not(.case-present--split),
+.conference-main:not(:has(.case-present--split)) > .page-heading { width:100%; max-width:1240px; margin-inline:auto; box-sizing:border-box; }
+.conf-workspace,.conf-agenda-pane,.conf-deck-pane { min-width:0; }
+.conf-workspace:empty { display:none; }
+.conf-workspace-split { display:grid; grid-template-columns:minmax(0, .9fr) minmax(0, 1.1fr); gap:18px; align-items:start; }
+.conf-workspace-split .conf-agenda-pane,.conf-workspace-split .conf-deck-pane { border:1px solid var(--resident-line); border-radius:12px; }
+.conf-workspace-split .conf-agenda-pane > .case-type-legend { padding-inline:12px; }
+.conf-workspace-split .conf-desktop-table { max-height:clamp(240px,64dvh,900px); overscroll-behavior:contain; }
+.conf-workspace-split .conf-table { min-width:0; table-layout:fixed; }
+.conf-workspace-split .conf-table th { position:sticky; top:0; z-index:1; }
+.conf-workspace-split .conf-table :is(th,td) { padding:9px 8px; }
+.conf-workspace-split .conf-table th:nth-child(1) { width:58px; }
+.conf-workspace-split .conf-table th:nth-child(2) { width:118px; }
+.conf-workspace-split .conf-table th:last-child { width:62px; text-align:center; }
+.conf-workspace-split .conf-selected-row td { background:var(--resident-soft); }
+.conf-select-case { display:inline-block; max-width:100%; min-height:32px; padding:0; white-space:normal; text-align:left; overflow-wrap:anywhere; }
+.conf-select-case[aria-pressed="true"] { font-weight:800; }
+.conf-workspace-split .conf-deck-pane { padding:14px; overflow-wrap:anywhere; }
+.conf-workspace-split .conf-deck-empty { min-height:160px; display:grid; align-content:center; justify-items:center; text-align:center; color:var(--resident-muted); }
+.conf-workspace-split .case-split { grid-template-columns:minmax(0,1fr); gap:12px; }
+.conf-workspace-split .case-present-image { max-height:360px; }
+.conf-workspace-split .conf-deck-pane select { min-width:0; max-width:100%; }

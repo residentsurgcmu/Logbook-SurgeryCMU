@@ -937,7 +937,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
             </button>
           </div>
         </div>
-      <main>
+      <main className={tab === "conference" ? "conference-main" : undefined}>
         {tab !== "myspace" && tab !== "cases" && <div className="page-heading">
           <div>
             <h1>{titles[tab]}</h1>
