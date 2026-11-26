@@ -1,0 +1,29 @@
+.case-present .conf-date-filter { position:relative; min-width:0; }
+.conf-date-label { display:block; margin-bottom:4px; font-size:13px; font-weight:700; color:var(--text-muted); }
+.conf-date-trigger { min-height:46px; max-width:100%; }
+.conf-date-picker { position:absolute; top:100%; inset-inline-end:0; z-index:5; width:330px; max-width:calc(100vw - 40px); padding:12px; margin-top:4px; border:1px solid var(--line-strong); border-radius:12px; background:var(--surface); box-shadow:var(--shadow-md); }
+.conf-date-month,.conf-date-actions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+.conf-date-month button,.conf-date-grid button { min-height:40px; border:1px solid transparent; border-radius:8px; color:var(--text); background:var(--canvas); cursor:pointer; }
+.conf-date-month button { min-width:44px; font-size:1.25rem; }
+.conf-date-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; margin:8px 0; text-align:center; }
+.conf-date-grid span { padding:3px 0; font-size:.8rem; color:var(--text-muted); }
+.conf-date-grid button[aria-pressed="true"] { color:var(--brand-dark); background:var(--brand-soft); border-color:var(--brand); font-weight:700; }
+.conf-date-picker p { margin:8px 0; }
+.conf-date-actions button { min-height:44px; }
+.conf-mobile-table { display:none; }
+@media (max-width:700px) {
+  .case-present .conf-date-filter { flex:0 0 100%; }
+  .conf-date-picker { position:static; width:100%; max-width:100%; }
+  .conf-date-trigger { width:100%; text-align:left; }
+  .conf-desktop-table { display:none; }
+  .conf-mobile-table { display:block; }
+  .resident-table-wrap.conf-mobile-table table { min-width:0; width:100%; table-layout:fixed; }
+  .conf-mobile-table th:first-child { width:60px; }
+  .conf-mobile-table td { overflow-wrap:anywhere; }
+  .conf-mobile-table summary { min-height:44px; padding:7px 0; cursor:pointer; }
+  .conf-mobile-table summary > span { display:inline; }
+  .conf-mobile-details { margin:2px 0 4px; padding:10px 0; border-top:1px solid var(--line); }
+  .conf-mobile-details dl { margin:0 0 10px; }
+  .conf-mobile-details dt { font-weight:700; }
+  .conf-mobile-details dd { margin:0 0 6px; }
+}
