@@ -139,7 +139,7 @@ test("the case form, detail view and conference have no clinical history/vitals/
     assert.doesNotMatch(ui, /Present illness|Vital signs|Physical examination|CASE_VITALS|formatVitals|present_illness|physical_exam/, name);
   }
   assert.match(form, />Diagnosis</);
-  assert.match(form, />Management</);
+  assert.match(form, />Management \(จำเป็น\)<textarea required/);
 });
 
 test("Admin sees a permanent delete button for each image; uploaders keep the soft delete", async () => {

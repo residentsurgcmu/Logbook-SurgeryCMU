@@ -4,7 +4,7 @@ import CaseHnPilot, { caseHnPilotEnabled, pinnedKeyId } from "./CaseHnPilot";
 import CasePhoto from "./CasePhoto";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { admissionWeek, archiveRange, caseMatchesSearch, groupAdmissionWeeks } from "../admissionHistory";
-import { PlusIcon } from "../components/Icons";
+import { PencilIcon, PlusIcon } from "../components/Icons";
 import {
   CASE_LIMITS,
   CASE_MIN_ADMIT_DATE,
@@ -44,7 +44,7 @@ import {
 import { exportCaseDeck } from "../casePptxExport";
 import { caseExportRange, filterCasesForExport, validateExportRange } from "../caseExcel";
 import { exportCasesExcel } from "../caseExcelExport";
-import { CaseModal, CaseTypeChip, PrivacyNotice, personName, thaiDate, thaiDateTime } from "./CaseParts";
+import { CaseModal, CaseTreatmentSummary, CaseTypeChip, CaseTypeDot, CaseTypeLegend, PrivacyNotice, personName, thaiDate, thaiDateTime } from "./CaseParts";
 
 const emptyForm = (user) => ({
   admit_date: bangkokIsoDate(),
@@ -506,24 +506,26 @@ function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
           ))}
         </div>
       ) : (
-      <div className="resident-table-wrap admission-table-wrap">
-        <table className="case-table admission-table">
-          <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management</th><th>Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className={row.deleted_at ? "case-row-deleted" : undefined}>
-                <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong><br /><small>{thaiDate(row.admit_date)}</small></div></td>
-                <td data-label="Diagnosis"><div className="case-cell"><button type="button" className="link-button" onClick={() => openCase("detail", row)}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                <td data-label="Management"><div className="case-cell case-clamp">{row.management || "—"}</div></td>
-                <td data-label="Operation"><div className="case-cell case-clamp">{row.operation || "—"}</div></td>
-                <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} />{!row.deleted_at ? null : <> <span className="case-status case-status-deleted">ถูกลบ</span></>}</div></td>
-                <td data-label="ภาพ">{row.media_count}</td>
-                <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => openCase("form", row)}>แก้ไข</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="admission-table-layout">
+        <CaseTypeLegend />
+        <div className="resident-table-wrap admission-table-wrap">
+          <table className="case-table admission-table">
+            <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management / Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className={row.deleted_at ? "case-row-deleted" : undefined}>
+                  <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong><br /><small>{thaiDate(row.admit_date)}</small></div></td>
+                  <td data-label="Diagnosis"><div className="case-cell"><button type="button" className="link-button" onClick={() => openCase("detail", row)}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
+                  <td data-label="Management / Operation"><CaseTreatmentSummary row={row} /></td>
+                  <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                  <td data-label="Type"><div className="case-table-indicators"><CaseTypeDot type={row.treatment_type} />{row.deleted_at && <span className="case-status case-status-deleted">ถูกลบ</span>}</div></td>
+                  <td data-label="ภาพ">{row.media_count}</td>
+                  <td><button type="button" className="secondary-button case-edit-icon" aria-label={`แก้ไขเคส ${row.case_code}`} disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "แก้ไขเคส" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => openCase("form", row)}><PencilIcon size={16} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       )}
   </>;
