@@ -2,6 +2,7 @@
 export const EMBED_LINKS = [
   { key: "or_schedule", label: "ตารางห้องผ่าตัด (OR)", defaultTitle: "ตารางห้องผ่าตัด (OR)" },
   { key: "rota", label: "Surgical Rotation Manager", defaultTitle: "Surgical Rotation Manager" },
+  { key: "duty_today", label: "ทีมเวรวันนี้", defaultTitle: "ทีมเวรวันนี้" },
 ];
 
 // Same rule as the database check: https only, a real port (1-65535) if any, no spaces, no user:password@ part, at most 500 characters.
