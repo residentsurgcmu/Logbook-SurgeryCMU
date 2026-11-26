@@ -15,6 +15,8 @@ import {
   canEditCase,
   caseErrorMessage,
   caseSexLabel,
+  caseTypeLabel,
+  caseUnitLabel,
   isCaseConflict,
   splitCaseImageFiles,
   validateCaseForm,
@@ -196,7 +198,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         <label>วันที่รับ<input type="date" value={form.admit_date} min={CASE_MIN_ADMIT_DATE} max={bangkokIsoDate()} onChange={set("admit_date")} required /></label>
         <label>อายุ (ปี)<input type="number" inputMode="numeric" min={0} max={120} step={1} value={form.age_years} onChange={set("age_years")} required /></label>
         <label>เพศ<select value={form.sex} onChange={set("sex")}>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
+        <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit} value={unit}>{caseUnitLabel(unit)}</option>)}</select></label>
         <label className="case-full">Diagnosis<input maxLength={CASE_LIMITS.diagnosis} value={form.diagnosis} onChange={set("diagnosis")} required /></label>
         <label className="case-full">Management<textarea rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>
         <label className="case-full">Operation<input maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>
@@ -290,7 +292,7 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
   ];
   return (
     <>
-      <p className="case-muted">{caseSexLabel(row.sex)} {row.age_years} ปี · {row.unit_name} · รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</p>
+      <p className="case-muted">{caseSexLabel(row.sex)} {row.age_years} ปี · {caseUnitLabel(row.unit_name)} · รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</p>
       {row.deleted_at && <p className="form-error" role="status">เคสนี้ถูกลบ (ซ่อนจากผู้ใช้อื่น) · Admin ลบถาวรได้จากปุ่มด้านล่าง</p>}
       <p><CaseTypeChip type={row.treatment_type} /> <small className="case-muted">แก้ล่าสุด {thaiDateTime(row.updated_at)} โดย {personName(people, row.updated_by)}</small></p>
       {notice && <p className="form-error" role="status">{notice}</p>}
@@ -410,7 +412,7 @@ function ExcelExportDialog({ people, onClose }) {
         <label className="case-full">หน่วย
           <select value={unit} onChange={(event) => setUnit(event.target.value)}>
             <option value="all">ทุกหน่วย</option>
-            {CASE_UNITS.map((name) => <option key={name}>{name}</option>)}
+            {CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}
           </select>
         </label>
       </div>
@@ -433,7 +435,7 @@ function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
               <button type="button" className="case-card-open" onClick={() => openCase("detail", row)} aria-label={`เปิด ${row.case_code} ${row.diagnosis}`}>
                 <div className="case-card-top"><span>{row.case_code}</span><CaseTypeChip type={row.treatment_type} /></div>
                 <strong>{row.diagnosis}</strong>
-                <small>{caseSexLabel(row.sex)} · {row.age_years} ปี · {row.unit_name}</small>
+                <small>{caseSexLabel(row.sex)} · {row.age_years} ปี · {caseUnitLabel(row.unit_name)}</small>
                 <small>รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</small>
                 {row.media_count ? <small>ภาพแนบ {row.media_count}</small> : null}
               </button>
@@ -447,8 +449,8 @@ function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
           ))}
         </div>
       ) : (
-      <div className="resident-table-wrap">
-        <table className="case-table">
+      <div className="resident-table-wrap admission-table-wrap">
+        <table className="case-table admission-table">
           <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management</th><th>Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
           <tbody>
             {rows.map((row) => (
@@ -457,7 +459,7 @@ function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
                 <td data-label="Diagnosis"><div className="case-cell"><button type="button" className="link-button" onClick={() => openCase("detail", row)}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
                 <td data-label="Management"><div className="case-cell case-clamp">{row.management || "—"}</div></td>
                 <td data-label="Operation"><div className="case-cell case-clamp">{row.operation || "—"}</div></td>
-                <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
                 <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} />{!row.deleted_at ? null : <> <span className="case-status case-status-deleted">ถูกลบ</span></>}</div></td>
                 <td data-label="ภาพ">{row.media_count}</td>
                 <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => openCase("form", row)}>แก้ไข</button></td>
@@ -604,14 +606,14 @@ function ResidentCasesPage({ user, onPresent }) {
       {saveNotice && <p className="form-error" role="status">{saveNotice}</p>}
       <div className="case-stats">
         <div><small>เคสรอบปัจจุบัน</small><strong>{cases ? live.length : "…"}</strong></div>
-        <div><small>Operative</small><strong>{cases ? count("operative") : "…"}</strong></div>
-        <div><small>Conservative</small><strong>{cases ? count("conservative") : "…"}</strong></div>
+        <div><small>{caseTypeLabel("operative")}</small><strong>{cases ? count("operative") : "…"}</strong></div>
+        <div><small>{caseTypeLabel("conservative")}</small><strong>{cases ? count("conservative") : "…"}</strong></div>
         <div><small>ยังไม่ระบุ Type</small><strong>{cases ? count("unset") : "…"}</strong></div>
       </div>
       <div className="history-filters">
         <label>ค้นหา<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Diagnosis, รหัสเคส หรือผู้รับผิดชอบ" /></label>
         <label>Type<select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
-        <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name}>{name}</option>)}</select></label>
+        <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
         <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงเคส">
           <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setView("table")}>Table</button>
           <button type="button" className={view === "cards" ? "active" : ""} aria-pressed={view === "cards"} onClick={() => setView("cards")}>Flashcards</button>

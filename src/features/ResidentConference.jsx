@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { caseErrorMessage, caseSexLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
+import { caseErrorMessage, caseSexLabel, caseUnitLabel, CASE_TYPES, CASE_UNITS, conferenceWeek, conferenceWeekForCase, conferenceWindow } from "../residentCases";
 import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople, loadCasesByIds, loadConferenceSession, resetConferenceAgenda, saveConferenceAgenda } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
@@ -13,7 +13,7 @@ import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./Case
 // date, so everyone sees the same list. Table = the list; Deck = present one case at a time.
 export default function ResidentConference({ user, initialCase = null }) {
   const [weekStart, setWeekStart] = useState(
-    // A weekend admission is presented at the following Friday conference; with
+    // An admission on or after Friday is presented at the following Friday conference; with
     // no case selected, open the week that contains (or just ended before) today.
     () => (initialCase ? conferenceWeekForCase(initialCase.admit_date) : conferenceWeek(bangkokIsoDate())).start,
   );
@@ -119,7 +119,7 @@ export default function ResidentConference({ user, initialCase = null }) {
     }
   }
 
-  const label = `${thaiDate(week.start)} – ${thaiDate(week.end)}`;
+  const label = `ประชุมวันศุกร์ที่ ${thaiDate(meetingDate)}`;
   const changed = session && (session.excluded_case_ids.length || session.added_case_ids.length || session.case_order.length);
   return (
     <section className="resident-panel case-present">
@@ -136,7 +136,7 @@ export default function ResidentConference({ user, initialCase = null }) {
       </div>
       <small className="case-muted">
         รวมเคสที่รับตั้งแต่ {thaiDate(range.from)} ถึง {thaiDate(range.to)}
-        {changed ? ` · จัดรายการแล้ว (ยกเว้น ${session.excluded_case_ids.length} · เพิ่มเคสเก่า ${session.added_case_ids.length})` : " · รายการอัตโนมัติ"}
+        {session ? (changed ? ` · จัดรายการแล้ว (ยกเว้น ${session.excluded_case_ids.length} · เพิ่มเคสเก่า ${session.added_case_ids.length})` : " · ช่วงวันที่ที่บันทึกไว้") : " · รายการอัตโนมัติ"}
       </small>
       {error && <p className="form-error" role="alert">{error}</p>}
       {notice && <p className="form-success" role="status">{notice}</p>}
@@ -150,7 +150,7 @@ export default function ResidentConference({ user, initialCase = null }) {
               <button type="button" className={view === "deck" ? "active" : ""} aria-pressed={view === "deck"} onClick={() => setView("deck")}>Deck</button>
             </div>
             <label>Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setIndex(0); }}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
-            <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); setIndex(0); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name}>{name}</option>)}</select></label>
+            <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); setIndex(0); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
             <ConferenceDateFilter key={weekStart} value={dateFilter} initialDate={range.from}
               onChange={(value) => { setDateFilter(value); setIndex(0); }} />
           </div>
@@ -170,7 +170,7 @@ export default function ResidentConference({ user, initialCase = null }) {
                     <td data-label="ลำดับ">{position + 1}</td>
                     <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
                     <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                    <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                    <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
                     <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} /></div></td>
                     <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
                   </tr>
@@ -193,7 +193,7 @@ export default function ResidentConference({ user, initialCase = null }) {
                         <div className="conf-mobile-details">
                           <dl>
                             <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
-                            <dt>หน่วย / Owner</dt><dd>{row.unit_name} · {personName(people, row.owner_id)}</dd>
+                            <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
                             <dt>Type</dt><dd><CaseTypeChip type={row.treatment_type} /></dd>
                           </dl>
                           <button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button>
@@ -220,7 +220,7 @@ export default function ResidentConference({ user, initialCase = null }) {
           </div>
           <div className="case-split">
             <div>
-              <p><span className="case-count">{current.case_code}</span> <span className="case-count">{current.unit_name}</span> <CaseTypeChip type={current.treatment_type} /></p>
+              <p><span className="case-count">{current.case_code}</span> <span className="case-count">{caseUnitLabel(current.unit_name)}</span> <CaseTypeChip type={current.treatment_type} /></p>
               <h2>{current.diagnosis}</h2>
               <p className="case-muted">{caseSexLabel(current.sex)} {current.age_years} ปี · รับไว้ {thaiDate(current.admit_date)} · Owner: {personName(people, current.owner_id)}</p>
               <div className="case-field"><small>Management</small>{current.management || "ยังไม่ระบุ"}</div>
@@ -447,6 +447,8 @@ function AgendaEditor({ meetingDate, session, defaultRange, people, onClose, onS
       <div className="conf-range">
         <label>รับตั้งแต่<input type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>ถึงวันที่<input type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} /></label>
+        {(from !== defaultRange.from || to !== defaultRange.to) && <button type="button" className="secondary-button" disabled={busy}
+          onClick={() => { setFrom(defaultRange.from); setTo(defaultRange.to); }}>ใช้ช่วงศุกร์–พฤหัสบดี</button>}
       </div>
       {rangeProblem && <p className="form-error" role="alert">{rangeProblem}</p>}
       {!pool && !loadError && <p className="case-muted">กำลังโหลดเคส…</p>}
@@ -470,7 +472,7 @@ function AgendaEditor({ meetingDate, session, defaultRange, people, onClose, onS
                 <span className="conf-box-no">{position + 1}</span>
                 <div className="conf-box-main">
                   <strong>{item.row.diagnosis}</strong>
-                  <small>{item.row.case_code} · {thaiDate(item.row.admit_date)} · {item.row.unit_name}{item.source === "added" ? " · เพิ่มเอง" : ""}</small>
+                  <small>{item.row.case_code} · {thaiDate(item.row.admit_date)} · {caseUnitLabel(item.row.unit_name)}{item.source === "added" ? " · เพิ่มเอง" : ""}</small>
                 </div>
                 <CaseTypeChip type={item.row.treatment_type} />
                 <div className="conf-box-actions">
@@ -489,7 +491,7 @@ function AgendaEditor({ meetingDate, session, defaultRange, people, onClose, onS
               <li key={candidate.row.id}>
                 <div>
                   <strong>{candidate.row.diagnosis}</strong>
-                  <small>{candidate.row.case_code} · {thaiDate(candidate.row.admit_date)} · {candidate.row.unit_name} · {candidate.outside ? "นอกช่วงวัน" : "ถูกเอาออก"}</small>
+                  <small>{candidate.row.case_code} · {thaiDate(candidate.row.admit_date)} · {caseUnitLabel(candidate.row.unit_name)} · {candidate.outside ? "นอกช่วงวัน" : "ถูกเอาออก"}</small>
                 </div>
                 <button type="button" className="secondary-button" onClick={() => putOn(candidate.row)} aria-label={`เพิ่ม ${candidate.row.case_code} เข้ารายการ`}>+ เพิ่ม</button>
               </li>

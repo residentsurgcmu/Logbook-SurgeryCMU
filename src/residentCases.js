@@ -2,10 +2,12 @@
 import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 
 export const CASE_UNITS = ["Upper GI", "Colorectal", "HPB", "B&E", "Vascular", "Trauma"];
+// Preserve existing database values; use the department label for forms and exports.
+export const caseUnitLabel = (value) => value === "HPB" ? "HBP" : value;
 export const CASE_SEXES = [["male", "ชาย"], ["female", "หญิง"], ["unspecified", "ไม่ระบุ"]];
 // Planned treatment, decided on the admission day. It replaces the visible case status;
 // the old status value is still stored (hidden) so existing rows and old app versions keep working.
-export const CASE_TYPES = [["conservative", "Conservative"], ["operative", "Operative"]];
+export const CASE_TYPES = [["conservative", "Non-operative"], ["operative", "Operative"]];
 export const CASE_LIMITS = { diagnosis: 180, management: 1000, operation: 180, caption: 200, note: 2000 };
 export const CASE_IMAGE_INPUT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 // Phone photos are often larger than 5 MB; they are re-encoded before upload,
@@ -39,7 +41,7 @@ export function validateCaseForm(form, at = new Date(), { requireType = false } 
   if (String(form.management || "").length > CASE_LIMITS.management) return `Management ต้องไม่เกิน ${CASE_LIMITS.management} ตัวอักษร`;
   if (String(form.operation || "").length > CASE_LIMITS.operation) return `Operation ต้องไม่เกิน ${CASE_LIMITS.operation} ตัวอักษร`;
   if (!CASE_UNITS.includes(form.unit_name)) return "กรุณาเลือกหน่วย";
-  if (requireType && !form.treatment_type) return "กรุณาเลือก Type (Conservative หรือ Operative)";
+  if (requireType && !form.treatment_type) return "กรุณาเลือก Type (Non-operative หรือ Operative)";
   if (form.treatment_type && !CASE_TYPES.some(([key]) => key === form.treatment_type)) return "กรุณาเลือก Type ให้ถูกต้อง";
   if (!form.owner_id) return "กรุณาเลือก Owner (Resident)";
   return "";
@@ -70,18 +72,17 @@ export function conferenceWeek(iso) {
 }
 
 // Friday conference window: everything admitted since the previous Friday
-// conference (Saturday..Friday), so weekend admissions are never skipped.
+// through the Thursday before this meeting.
 export function conferenceWindow(weekStart) {
-  return { from: shiftIsoDate(weekStart, -2), to: shiftIsoDate(weekStart, 4) };
+  return { from: shiftIsoDate(weekStart, -3), to: shiftIsoDate(weekStart, 3) };
 }
 
-// The conference week whose window contains this admission date: Saturday and
-// Sunday admissions are presented at the following Friday conference.
+// Friday, Saturday and Sunday admissions belong to the following Friday meeting.
 export function conferenceWeekForCase(iso) {
   const ms = Date.parse(`${iso}T00:00:00Z`);
   if (Number.isNaN(ms)) return null;
   const day = new Date(ms).getUTCDay();
-  return conferenceWeek(shiftIsoDate(iso, day === 6 ? 2 : day === 0 ? 1 : 0));
+  return conferenceWeek(shiftIsoDate(iso, day === 5 ? 3 : day === 6 ? 2 : day === 0 ? 1 : 0));
 }
 
 export function caseImagePath(caseId, fileId = crypto.randomUUID()) {
@@ -124,8 +125,8 @@ export const isCaseConflict = (error) => /CASE_CONFLICT/.test(String(error?.mess
 export function caseErrorMessage(error) {
   const text = String(error?.message || error || "");
   if (isCaseConflict(error)) return "มีผู้อื่นแก้เคสนี้ไปแล้ว กรุณาโหลดข้อมูลล่าสุดแล้วลองใหม่";
-  if (/Invalid treatment type/i.test(text)) return "Type ไม่ถูกต้อง กรุณาเลือก Conservative หรือ Operative";
-  if (/Treatment type is required/i.test(text)) return "กรุณาเลือก Type (Conservative หรือ Operative)";
+  if (/Invalid treatment type/i.test(text)) return "Type ไม่ถูกต้อง กรุณาเลือก Non-operative หรือ Operative";
+  if (/Treatment type is required/i.test(text)) return "กรุณาเลือก Type (Non-operative หรือ Operative)";
   if (/CONFERENCE_CONFLICT/.test(text)) return "มีผู้อื่นแก้รายการประชุมนี้ไปแล้ว ระบบโหลดรายการล่าสุดให้ กรุณาจัดอีกครั้ง";
   if (/cannot arrange the conference/i.test(text)) return "บัญชีนี้ไม่มีสิทธิ์จัดรายการประชุม";
   if (/Invalid date range/i.test(text)) return "ช่วงวันที่ไม่ถูกต้อง (วันเริ่มต้องไม่เกินวันสิ้นสุด และยาวไม่เกิน 63 วัน)";

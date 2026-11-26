@@ -1,6 +1,6 @@
 // Excel export of admission cases. Pure helpers + workbook building (tested in
 // Node with exceljs); the browser download lives in caseExcelExport.js.
-import { caseSexLabel, caseTypeLabel } from "./residentCases.js";
+import { caseSexLabel, caseTypeLabel, caseUnitLabel } from "./residentCases.js";
 
 import { bangkokIsoDate, shiftIsoDate } from "./roundSchedule.js";
 
@@ -43,7 +43,7 @@ export function filterCasesForExport(cases, { from, to, unit = "all" }) {
 }
 
 export function caseExportFileName({ from, to, unit = "all" }) {
-  const unitPart = unit && unit !== "all" ? `-${String(unit).replace(/[^A-Za-z0-9ก-๙_-]+/g, "-").replace(/^-|-$/g, "")}` : "";
+  const unitPart = unit && unit !== "all" ? `-${String(caseUnitLabel(unit)).replace(/[^A-Za-z0-9ก-๙_-]+/g, "-").replace(/^-|-$/g, "")}` : "";
   return `Admissions-${from}_to_${to}${unitPart}.xlsx`;
 }
 
@@ -64,7 +64,7 @@ export function buildCaseWorkbook(ExcelJS, { rows, notes = [], people = [] }) {
     ["Owner", "owner", 24], ["จำนวนภาพ", "media", 10], ["ผู้บันทึก", "creator", 24], ["แก้ไขล่าสุด", "updated", 18],
   ].map(([header, key, width]) => ({ header, key, width }));
   rows.forEach((row) => list.addRow({
-    code: row.case_code, admit: row.admit_date, age: row.age_years, sex: caseSexLabel(row.sex), unit: row.unit_name,
+    code: row.case_code, admit: row.admit_date, age: row.age_years, sex: caseSexLabel(row.sex), unit: caseUnitLabel(row.unit_name),
     dx: row.diagnosis, management: row.management || "", operation: row.operation || "", type: caseTypeLabel(row.treatment_type),
     owner: nameOf(people, row.owner_id), media: row.media_count || 0, creator: nameOf(people, row.created_by), updated: bangkokDateTime(row.updated_at),
   }));

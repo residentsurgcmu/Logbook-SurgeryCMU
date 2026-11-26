@@ -1,6 +1,6 @@
 // PowerPoint export for admission cases. Slide building is pure (tested in Node);
 // pptxgenjs is loaded only when the user actually exports.
-import { caseSexLabel, caseTypeLabel } from "./residentCases.js";
+import { caseSexLabel, caseTypeLabel, caseUnitLabel } from "./residentCases.js";
 
 const FONT = "Tahoma"; // ships with Windows and macOS and renders Thai
 const GREEN = "155426";
@@ -22,7 +22,7 @@ export function buildCaseSlides(row, { people = [], media = [], notes = [], incl
     lines: [
       ["Diagnosis", row.diagnosis],
       ["อายุ / เพศ", `${row.age_years} ปี · ${caseSexLabel(row.sex)}`],
-      ["หน่วย", row.unit_name],
+      ["หน่วย", caseUnitLabel(row.unit_name)],
       ["วันที่รับ", thaiDate(row.admit_date)],
       ["Management", row.management || "ยังไม่ระบุ"],
       ["Operation", row.operation || "ยังไม่ระบุ"],
