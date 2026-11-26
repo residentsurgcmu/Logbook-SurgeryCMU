@@ -63,7 +63,7 @@ test("the Staff submit payload and validation message are unchanged; the action 
   const form = between(await views(), "export function StaffEvaluationForm", "export function ResidentRequestHistory");
   assert.match(
     form,
-    /completeAssessmentRequest\(\{\s+requestId: request\.id,\s+outcome,\s+comment,\s+scores: template\.criteria\.map\(\(criterion\) => \(\{\s+criterionId: criterion\.id,\s+score: scores\[criterion\.id\],\s+comment: comments\[criterion\.id\] \|\| "",\s+\}\)\),\s+\}\)/,
+    /completeAssessmentRequest\(\{\s+requestId: request\.id,\s+outcome,\s+comment,\s+scores: template\.criteria\.map\(\(criterion\) => \(\{\s+criterionId: criterion\.id,\s+score: scores\[criterion\.id\],\s+comment: comments\[criterion\.id\] \|\| "",\s+\}\)\),\s+expectedDetails: \[request\.assessment_date, request\.procedure_or_activity, request\.clinical_context\],\s+\}\)/,
   );
   assert.match(form, /กรุณาเลือกระดับทุกข้อก่อนลงนาม/);
   assert.match(form, /className="button-row assessment-actions"/);

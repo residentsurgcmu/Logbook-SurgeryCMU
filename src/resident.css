@@ -589,3 +589,8 @@ button.admission-archive-heading { cursor: pointer; }
 .case-photo-canvas { width:calc(var(--case-photo-scale) * 100%); height:calc(var(--case-photo-scale) * 100%); }
 .case-photo-dialog .case-photo-canvas img { display:block; width:100%; height:100%; aspect-ratio:auto; object-fit:contain; border:0; border-radius:0; }
 .case-photo-unavailable { display:grid; place-content:center; justify-items:center; color:#fff; padding:12px; }
+.case-photo-pan { cursor:grab; touch-action:none; }
+.case-photo-pan:active { cursor:grabbing; }
+.case-photo-pan img { user-select:none; }
+.case-present-image > .case-photo-trigger { height:100%; }
+.case-photo-dialog .case-photo-canvas img { position:static; max-height:none; }

@@ -433,4 +433,50 @@ select t.ok((select full_name = 'Old Edge after rollback' from public.resident_p
 update public.resident_maintenance_pause set block_client_direct_writes = true where scope = 'accounts';
 
 do $$ begin raise notice 'ALL ACCOUNT BEHAVIOUR TESTS PASSED'; end $$;
+-- Pending edits use the existing request and leave the assessor and template untouched.
+do $$
+declare
+  request_id uuid := gen_random_uuid();
+  request_date date := (current_date - 1);
+  statement text;
+  case_id uuid := gen_random_uuid();
+  media_id uuid := gen_random_uuid();
+  rename text;
+begin
+  if to_regprocedure('public.edit_pending_resident_assessment_request(uuid,date,text,text,jsonb)') is null then return; end if;
+  insert into t.users(name,id) values
+    ('workflow_resident','00000000-0000-0000-0000-0000000000b1'),
+    ('workflow_staff','00000000-0000-0000-0000-0000000000b2');
+  insert into public.resident_assessment_requests(id,template_id,resident_id,staff_id,assessment_date,procedure_or_activity,clinical_context,attempt_number)
+    values(request_id,t.tpl('EPA-1'),t.uid('workflow_resident'),t.uid('workflow_staff'),request_date,'Original','Context',9000);
+  statement := format('select public.edit_pending_resident_assessment_request(%L,%L,%L,%L,%L::jsonb)',request_id,request_date,'Changed','New context',
+    jsonb_build_array(request_date,'Original','Context'));
+  perform t.err('workflow_staff',statement,'Active Resident','pending request cannot be edited by Staff');
+  perform t.err('r3',statement,'Request not found|Active Resident','pending request cannot be edited by another Resident');
+  perform t.as_user('workflow_resident');
+  set local role authenticated;
+  execute statement;
+  reset role;
+  perform t.err('workflow_staff', format('select public.complete_current_resident_assessment_request(%L,%L,%L,%L,%L)',
+    request_id,'fixture','','[]',jsonb_build_array(request_date,'Original','Context')),
+    'REQUEST_EDIT_CONFLICT','assessor cannot sign against stale request metadata');
+  perform t.ok(exists(select 1 from public.resident_assessment_requests where id=request_id and procedure_or_activity='Changed'
+    and clinical_context='New context' and staff_id=t.uid('workflow_staff') and template_id=t.tpl('EPA-1')),'pending edit changes metadata only');
+  perform t.err('workflow_resident',statement,'REQUEST_EDIT_CONFLICT','stale edit cannot overwrite new metadata');
+  update public.resident_assessment_requests set status='cancelled' where id=request_id;
+  perform t.err('workflow_resident',statement,'REQUEST_NOT_PENDING','cancelled request cannot be edited');
+  insert into public.resident_admission_cases(id,admit_date,age_years,sex,diagnosis,unit_name,owner_id,created_by,updated_by,treatment_type)
+    values(case_id,request_date,40,'female','Fixture','Upper GI',t.uid('workflow_resident'),t.uid('workflow_resident'),t.uid('workflow_resident'),'operative');
+  insert into public.resident_case_media(id,case_id,storage_path,caption,created_by)
+    values(media_id,case_id,case_id::text || '/fixture.jpg','Original',t.uid('workflow_resident'));
+  rename := format('select public.rename_resident_case_media(%L,%L,%L)',media_id,'Original','New caption');
+  perform t.err('workflow_staff',rename,'cannot be edited','non-uploader Staff cannot rename a photo');
+  perform t.as_user('workflow_resident');
+  set local role authenticated;
+  execute rename;
+  reset role;
+  perform t.ok(exists(select 1 from public.resident_case_media where id=media_id and caption='New caption'),'uploader can rename one photo');
+  perform t.err('workflow_resident',rename,'changed','stale caption cannot overwrite');
+end $$;
+
 rollback;

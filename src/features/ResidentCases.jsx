@@ -32,6 +32,7 @@ import {
   deleteCaseMedia,
   loadAdmissionCases,
   loadCaseMedia,
+  renameCaseMedia,
   loadCasePeople,
   loadCasesByIds,
   purgeAdmissionCase,
@@ -83,6 +84,36 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
   const retryPayload = useRef(null);
   const hnCloseLocked = useRef(false);
   const [retryLocked, setRetryLocked] = useState(false);
+  const [existingMedia, setExistingMedia] = useState(null);
+  const [savedCaptions, setSavedCaptions] = useState({});
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaRevision, setMediaRevision] = useState(0);
+  useEffect(() => {
+    if (!initial?.id) return;
+    let alive = true;
+    loadCaseMedia(initial.id).then(items => { if (alive) setExistingMedia(items); })
+      .catch(() => { if (alive) setError("โหลดรูปเดิมไม่สำเร็จ"); });
+    return () => { alive = false; };
+  }, [initial?.id, mediaRevision]);
+  async function changeMedia(item, remove) {
+    if (busy || mediaBusy) return;
+    if (remove && !window.confirm("ลบรูปนี้ออกจากเคส?")) return;
+    setMediaBusy(true);
+    setError("");
+    try {
+      if (remove) {
+        await deleteCaseMedia(item.id);
+        setExistingMedia(current => current.filter(photo => photo.id !== item.id));
+      } else {
+        const next = savedCaptions[item.id].trim();
+        await renameCaseMedia(item.id, item.caption, next);
+        setExistingMedia(current => current.map(photo => photo.id === item.id ? { ...photo, caption: next } : photo));
+      }
+      setSavedCaptions(current => { const next = { ...current }; delete next[item.id]; return next; });
+      onReload();
+    } catch { setError("แก้ไขรูปไม่สำเร็จ กรุณาโหลดรูปล่าสุดก่อนลองอีกครั้ง"); }
+    finally { setMediaBusy(false); }
+  }
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   useEffect(() => () => pendingRef.current.forEach((item) => URL.revokeObjectURL(item.url)), []);
@@ -105,12 +136,12 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
   function closeForm() {
-    if (!hnRequired || !hnCloseLocked.current) onClose();
+    if (!mediaBusy && (!hnRequired || !hnCloseLocked.current)) onClose();
   }
 
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || mediaBusy) return;
     const payload = caseFormForSave(form, initial);
     const problem = validateCaseForm(payload, new Date(), { requireType: !initial, requireTreatmentDetail: true });
     if (problem) return setError(problem);
@@ -171,7 +202,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
     let failureNotice = "";
     if (pending.length) {
       setStage("upload");
-      const { failed } = await uploadCaseImages(caseId, pending.map((item) => item.file));
+      const { failed } = await uploadCaseImages(caseId, pending.map((item) => item.file), pending.map(item => item.caption));
       if (failed.length) {
         const reasons = failed.map((item) => `ภาพที่ ${item.position}: ${caseErrorMessage(item.error)}`).join(" · ");
         failureNotice = `บันทึกเคสแล้ว แต่อัปโหลดภาพไม่สำเร็จ ${failed.length} จาก ${pending.length} ภาพ (${reasons}) กรุณาลองใหม่ด้วยปุ่ม "อัปโหลดภาพ"`;
@@ -218,6 +249,22 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
           </select>
         </label>
       </fieldset>
+      {initial && <section className="case-form-images" aria-label="รูปเดิมของเคส">
+        <div className="case-images-head"><strong>รูปเดิมของเคส</strong><button type="button" className="secondary-button" disabled={busy || mediaBusy} onClick={() => setMediaRevision(n => n + 1)}>โหลดรูปล่าสุด</button></div>
+        <p className="case-muted">บันทึกป้ายกำกับและลบรูปมีผลทันที · ห้ามใส่ข้อมูลระบุตัวผู้ป่วย</p>
+        <div className="case-media">
+          {existingMedia?.map((item, index) => <figure key={item.id}>
+            <CasePhoto src={item.url} label={item.caption || `รูปเดิมที่ ${index + 1}`} photos={existingMedia} startIndex={index} onRefresh={() => setMediaRevision(n => n + 1)} />
+            <label>ป้ายกำกับรูปเดิมที่ {index + 1}<input value={savedCaptions[item.id] ?? item.caption ?? ""} maxLength={200}
+              disabled={!canDeleteMedia(user, item) || busy || mediaBusy} onChange={e => setSavedCaptions({ ...savedCaptions, [item.id]: e.target.value })} /></label>
+            {canDeleteMedia(user, item) && <div className="button-row">
+              <button type="button" className="secondary-button" disabled={busy || mediaBusy || savedCaptions[item.id] == null || savedCaptions[item.id].trim() === (item.caption || "")} onClick={() => changeMedia(item, false)}>บันทึกป้ายกำกับ</button>
+              <button type="button" className="secondary-button" disabled={busy || mediaBusy} onClick={() => changeMedia(item, true)}>ลบรูปนี้</button>
+            </div>}
+          </figure>)}
+          {!existingMedia?.length && <p className="case-muted">{existingMedia ? "ยังไม่มีรูปเดิม" : "กำลังโหลดรูปเดิม…"}</p>}
+        </div>
+      </section>}
       <div className="case-form-images">
         <div className="case-images-head">
           <strong>ภาพแนบ {pending.length ? `(${pending.length})` : ""}</strong>
@@ -230,7 +277,9 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
           <div className="case-media">
             {pending.map((item, index) => (
               <figure key={item.url}>
-                <CasePhoto src={item.url} label={`ภาพที่ ${index + 1}`} />
+                <CasePhoto src={item.url} label={`ภาพที่ ${index + 1}`} photos={pending} startIndex={index} />
+                <label>ป้ายกำกับภาพใหม่ที่ {index + 1}<input value={item.caption || ""} maxLength={200} disabled={busy || retryLocked}
+                  onChange={e => { const caption = e.target.value; setPending(all => all.map(p => p.url === item.url ? { ...p, caption } : p)); }} /></label>
                 <figcaption>ภาพที่ {index + 1} <button type="button" className="link-button" disabled={busy} onClick={() => removePending(index)}>เอาออก</button></figcaption>
               </figure>
             ))}
@@ -241,13 +290,13 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
       </div>
       <div className="button-row case-actions">
         <button type="button" className="secondary-button" onClick={closeForm} disabled={busy || retryLocked}>ยกเลิก</button>
-        <button type="submit" className="primary-button" disabled={busy}>{stage === "upload" ? "กำลังอัปโหลดภาพ…" : busy ? "กำลังบันทึก…" : "บันทึก"}</button>
+        <button type="submit" className="primary-button" disabled={busy || mediaBusy}>{stage === "upload" ? "กำลังอัปโหลดภาพ…" : busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </form>
   );
   return (
     <CaseModal title={initial ? `แก้ไข ${initial.case_code}` : hnRequired ? "เพิ่มเคส Grand Rounds" : "เพิ่มเคสใหม่"}
-      closeDisabled={hnRequired && (busy || retryLocked)} onClose={closeForm}>
+      closeDisabled={mediaBusy || (hnRequired && (busy || retryLocked))} onClose={closeForm}>
       {fields}
     </CaseModal>
   );
@@ -343,7 +392,7 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
           <div className="case-media">
             {(media || []).map((item, index) => (
               <figure key={item.id}>
-                <CasePhoto src={item.url} label={item.caption || `ภาพ ${index + 1}`} onRefresh={reloadMedia} />
+                <CasePhoto src={item.url} label={item.caption || `ภาพ ${index + 1}`} onRefresh={reloadMedia} photos={media} startIndex={index} />
                 <figcaption>{item.caption || `ภาพ ${index + 1}`}</figcaption>
                 {user.role === "admin" ? (
                   <button type="button" className="danger-button case-media-delete" disabled={busy} onClick={() => { if (window.confirm("ลบภาพนี้ถาวร? ไฟล์จะถูกลบออกจากระบบและกู้คืนไม่ได้")) run(async () => { await purgeCaseMedia(item.id); await reloadMedia(); await onChanged(); }); }}>ลบถาวร</button>

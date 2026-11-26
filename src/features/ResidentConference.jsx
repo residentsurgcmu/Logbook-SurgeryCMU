@@ -4,6 +4,7 @@ import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople, loadCasesByIds, loadConferenceSession, resetConferenceAgenda, saveConferenceAgenda } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
 import { agendaCandidates, buildAgenda, canManageConference, conferenceRangeProblem, includedRows, moveId, moveToIndex } from "../conferenceAgenda";
+import CasePhoto from "./CasePhoto";
 import ConferenceDateFilter from "../components/ConferenceDateFilter";
 import { includesConferenceDay } from "../conferenceDisplayDates";
 import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./CaseParts";
@@ -41,7 +42,8 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [unitFilter, setUnitFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [index, setIndex] = useState(0);
-  const [media, setMedia] = useState([]);
+  const [mediaResult, setMedia] = useState(null);
+  const [mediaVersion, setMediaVersion] = useState(0);
   const [photo, setPhoto] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -110,15 +112,17 @@ export default function ResidentConference({ user, initialCase = null }) {
   }, [cases, shown]);
 
   const current = shown[Math.min(index, Math.max(shown.length - 1, 0))] || null;
+  const media = mediaResult?.caseId === current?.id ? (mediaResult?.rows || []) : [];
   useEffect(() => {
     const mine = ++mediaSeq.current;
-    setMedia([]);
-    setPhoto(0);
+
     if (!current || view !== "deck") return;
     loadCaseMedia(current.id)
-      .then((rows) => { if (mine === mediaSeq.current) setMedia(rows); })
+      .then((rows) => { if (mine === mediaSeq.current) setMedia({ caseId: current.id, rows }); })
       .catch((nextError) => { if (mine === mediaSeq.current) setError(caseErrorMessage(nextError)); });
-  }, [current?.id, view]);
+    return () => { ++mediaSeq.current; };
+  }, [current?.id, view, mediaVersion]);
+  useEffect(() => { setPhoto(0); }, [current?.id, view]);
 
   async function exportWeek() {
     if (exporting || !included.length) return;
@@ -249,7 +253,9 @@ export default function ResidentConference({ user, initialCase = null }) {
             </div>
             <div>
               <div className="case-present-image">
-                {media[photo]?.url ? <img src={media[photo].url} alt={media[photo].caption || `ภาพ ${photo + 1}`} /> : <span>{media.length ? "โหลดภาพไม่สำเร็จ" : "ยังไม่มีภาพแนบ"}</span>}
+                {media[photo] ? <CasePhoto key={current.id} src={media[photo].url}
+                  label={media[photo].caption || `ภาพที่ ${photo + 1}`} photos={media} startIndex={photo}
+                  onRefresh={() => setMediaVersion(n => n + 1)} /> : <span>ยังไม่มีภาพแนบ</span>}
               </div>
               <div className="button-row">
                 {media.map((item, position) => <button key={item.id} type="button" className={position === photo ? "primary-button" : "secondary-button"} onClick={() => setPhoto(position)}>ภาพ {position + 1}</button>)}

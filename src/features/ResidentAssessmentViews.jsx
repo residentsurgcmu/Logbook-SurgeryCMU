@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import {
   cancelAssessmentRequest,
   completeAssessmentRequest,
+  editPendingAssessmentRequest,
   requestAssessment,
   setMyStaffAvailability,
 } from "../residentApi";
@@ -594,10 +595,13 @@ export function StaffEvaluationForm({
           score: scores[criterion.id],
           comment: comments[criterion.id] || "",
         })),
+        expectedDetails: [request.assessment_date, request.procedure_or_activity, request.clinical_context],
       });
       await onSaved();
     } catch (nextError) {
-      setError(nextError.message || "บันทึกผลประเมินไม่สำเร็จ");
+      setError(/REQUEST_EDIT_CONFLICT/.test(nextError?.message)
+        ? "Resident แก้รายละเอียดคำขอแล้ว กรุณาโหลดรายการล่าสุดและตรวจข้อมูลก่อนลงนาม"
+        : nextError.message || "บันทึกผลประเมินไม่สำเร็จ");
       // The error line sits above the sticky bar and may be off screen mid-form.
       requestAnimationFrame(() => document.querySelector("form.assessment-form .form-error")?.scrollIntoView({ block: "center" }));
     } finally {
@@ -691,6 +695,32 @@ export function StaffEvaluationForm({
 export function ResidentRequestHistory({ workspace, onRefresh }) {
   const [cancellingId, setCancellingId] = useState("");
   const [error, setError] = useState("");
+  const [original, setOriginal] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const owner = workspace.user.id;
+  function beginEdit(request) {
+    setError("");
+    setOriginal(request);
+    setDraft({ date: request.assessment_date, activity: request.procedure_or_activity, context: request.clinical_context || "" });
+  }
+  async function saveEdit(event) {
+    event.preventDefault();
+    if (saving || !original || original.resident_id !== owner) return;
+    setSaving(true);
+    setError("");
+    try {
+      await editPendingAssessmentRequest(original, draft);
+    } catch (error) {
+      setError(/REQUEST_NOT_PENDING|REQUEST_EDIT_CONFLICT/.test(error?.message)
+        ? "สถานะหรือข้อมูลคำขอเปลี่ยนแล้ว กรุณาปิดฟอร์มและโหลดรายการล่าสุด"
+        : "แก้ไขคำขอไม่สำเร็จ กรุณาตรวจวันที่และข้อมูลแล้วลองใหม่");
+      return;
+    } finally { setSaving(false); }
+    setOriginal(null);
+    setDraft(null);
+    try { await onRefresh?.(); } catch { setError("บันทึกแล้ว แต่โหลดรายการล่าสุดไม่ได้"); }
+  }
   const names = new Map(
     (workspace.allProfiles || workspace.profiles).map((person) => [person.id, person.name]),
   );
@@ -715,6 +745,18 @@ export function ResidentRequestHistory({ workspace, onRefresh }) {
     <section className="resident-panel">
       <h2>สถานะแบบประเมินที่ส่ง</h2>
       {error && <p className="form-error" role="alert">{error}</p>}
+      {draft && original.resident_id === owner && <form className="resident-form-grid" onSubmit={saveEdit}>
+        <h3 className="wide">แก้ไขคำขอ {original.resident_template_definitions?.template_code}</h3>
+        <p className="wide">แก้ได้เฉพาะวันที่ หัวข้อ และบริบทของคำขอที่รอประเมิน ผู้ประเมินและคะแนนเดิมยังคงอยู่</p>
+        <label>วันที่ประเมิน<input type="date" required max={localDate()} disabled={saving} value={draft.date}
+          onChange={e => setDraft({ ...draft, date: e.target.value })} /></label>
+        <label>หัตถการ / กิจกรรม<input required maxLength={240} disabled={saving} value={draft.activity}
+          onChange={e => setDraft({ ...draft, activity: e.target.value })} /></label>
+        <label className="wide">บริบทเพิ่มเติม<textarea maxLength={500} disabled={saving} value={draft.context}
+          onChange={e => setDraft({ ...draft, context: e.target.value })} /><small>ห้ามใส่ HN หรือข้อมูลระบุตัวผู้ป่วย</small></label>
+        <div className="button-row wide"><button type="button" className="secondary-button" disabled={saving} onClick={() => { setOriginal(null); setDraft(null); setError(""); }}>ปิดฟอร์ม</button>
+          <button type="submit" className="primary-button" disabled={saving}>{saving ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button></div>
+      </form>}
       <div className="resident-table-wrap">
         <table>
           <thead>
@@ -745,11 +787,13 @@ export function ResidentRequestHistory({ workspace, onRefresh }) {
                   </span>
                 </td>
                 <td>
+                  {request.status === "pending" && request.resident_id === owner &&
+                    <button type="button" className="secondary-button" disabled={saving || Boolean(cancellingId)} onClick={() => beginEdit(request)}>แก้ไขคำขอ</button>}
                   {request.status === "pending" && (
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={Boolean(cancellingId)}
+                      disabled={saving || Boolean(cancellingId)}
                       onClick={() => cancel(request)}
                     >
                       {cancellingId === request.id ? "กำลังยกเลิก…" : "ยกเลิกคำขอ"}

@@ -168,17 +168,24 @@ export async function uploadCaseImage(caseId, file, caption = "") {
 }
 
 // Uploads one at a time so a single bad image never loses the others.
-export async function uploadCaseImages(caseId, files) {
+export async function uploadCaseImages(caseId, files, captions = []) {
   const uploaded = [];
   const failed = [];
   for (const [index, file] of files.entries()) {
     try {
-      uploaded.push(await uploadCaseImage(caseId, file));
+      uploaded.push(await uploadCaseImage(caseId, file, captions[index]));
     } catch (error) {
       failed.push({ position: index + 1, error });
     }
   }
   return { uploaded, failed };
+}
+
+export async function renameCaseMedia(mediaId, expectedCaption, caption) {
+  const { error } = await supabase.rpc("rename_resident_case_media", {
+    p_media_id: mediaId, p_expected_caption: expectedCaption, p_caption: caption,
+  });
+  fail(error);
 }
 
 export async function deleteCaseMedia(mediaId) {
