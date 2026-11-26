@@ -20,7 +20,14 @@ export const DownloadIcon = (props) => <Icon {...props}><path d="M12 3v12" /><pa
 export const CloudBackupIcon = (props) => <Icon {...props}><path d="M7 18h10a4 4 0 0 0 .7-7.94A6 6 0 0 0 6.3 8.4 4.5 4.5 0 0 0 7 18Z" /><path d="M12 15V9" /><path d="m9.5 11.5 2.5-2.5 2.5 2.5" /></Icon>;
 export const KeyIcon = (props) => <Icon {...props}><circle cx="8" cy="15" r="4" /><path d="m11 12 9-9M15 8l3 3M17 6l2 2" /></Icon>;
 export const FileIcon = (props) => <Icon {...props}><path d="M6 2h8l4 4v16H6Z" /><path d="M14 2v5h5M9 13h6M9 17h6" /></Icon>;
-export const QrIcon = (props) => <Icon {...props}><rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2v2h-2zM19 15h2v6h-2M15 19h2v2h-2" /></Icon>;
+export const QrIcon = (props) => (
+  <Icon {...props}>
+    <rect x="3" y="3" width="6" height="6" rx=".5" />
+    <rect x="15" y="3" width="6" height="6" rx=".5" />
+    <rect x="3" y="15" width="6" height="6" rx=".5" />
+    <path fill="currentColor" stroke="none" d="M5 5h2v2H5zM17 5h2v2h-2zM5 17h2v2H5zM12 12h3v3h-3zM18 12h3v6h-3zM12 18h3v3h-3zM18 19h3v2h-3z" />
+  </Icon>
+);
 export const ScanIcon = (props) => <Icon {...props}><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><path d="M7 12h10" /></Icon>;
 export const ClockIcon = (props) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>;
 export const ShieldIcon = (props) => <Icon {...props}><path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6Z" /><path d="m8.5 12 2.2 2.2 4.8-5" /></Icon>;
