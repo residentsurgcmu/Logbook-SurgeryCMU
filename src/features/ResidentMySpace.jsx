@@ -8,6 +8,8 @@ import { loadOwnRoundAttendanceSince } from "../residentApi";
 import { ManagedPersonalScores } from "./ManagedExams";
 import MySpaceXrayRadar from "./MySpaceXrayRadar";
 import { useXrayRadarPilot } from "./useXrayRadarPilot";
+import MySpaceLayoutSettings from "./MySpaceLayoutSettings";
+import { MY_SPACE_CARD_LABELS, MY_SPACE_CARD_ORDER, loadMySpacePreferences, saveMySpacePreferences, withMySpaceCardSize } from "../mySpaceLayouts";
 
 const TABS = [["overview", "ภาพรวม"], ["assessment", "EPA / PBA"], ["exams", "ผลสอบ"], ["attendance", "การประชุม"]];
 const checkInTime = (iso) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(iso));
@@ -41,12 +43,68 @@ function Progress({ label, count, total, unit, children }) {
   </div>;
 }
 
-export default function ResidentMySpace({ workspace, onOpenHistory, onOpenRequest, onNavigate }) {
+const BOARD_STEPS = ["MCQ/MEQ ครั้งที่ 1", "MCQ/MEQ ครั้งที่ 2", "Oral Exam"];
+const METRICS = [
+  ["EPA", "epaReached", "epaTotal", "ข้อถึงเกณฑ์"],
+  ["PBA", "pbaFinished", "pbaTarget", "เรื่องประเมินเสร็จ"],
+];
+
+function Metrics({ counters, rings = false }) {
+  return <div className={rings ? "ms-training-rings" : "ms-board-checklist"}>
+    {[...METRICS.map(([name, countKey, totalKey, description]) => ({
+      name, count: counters[countKey], total: counters[totalKey], description,
+    })), { name: "Board Review", count: null, total: 3, description: "รอทะเบียนผลสอบที่ยืนยันแล้ว" }].map(({ name, count, total, description }) =>
+      <section key={name} className="ms-training-metric">
+        {rings && <svg aria-hidden="true" className="ms-training-ring" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r="33" className={count == null ? "ms-ring-unknown" : "ms-ring-track"} />
+          {count > 0 && <circle cx="40" cy="40" r="33" className="ms-ring-fill" pathLength="100"
+            strokeDasharray={`${Math.min(100, 100 * count / total)} 100`} transform="rotate(-90 40 40)" />}
+        </svg>}
+        <h3>{name}</h3>
+        <p>{count == null ? <strong>รอข้อมูล</strong> : <strong>{count}/{total}</strong>} · {description}</p>
+        {name === "Board Review" && <ol>{BOARD_STEPS.map((step) => <li key={step}>{step}</li>)}</ol>}
+      </section>)}
+  </div>;
+}
+
+function LayoutCard({ card, size, onToggle, children }) {
+  const label = MY_SPACE_CARD_LABELS[card];
+  const collapsed = size === "collapsed";
+  const contentId = useId();
+  return <section className={`ms-layout-card ms-layout-card-${size || "default"} ms-layout-card-${card}`}>
+    <button className="ms-card-toggle" type="button" title={`${collapsed ? "ขยาย" : "ย่อ"} ${label}`}
+      aria-label={`${collapsed ? "ขยาย" : "ย่อ"} ${label}`} aria-expanded={!collapsed} aria-controls={contentId} onClick={onToggle}>
+      {collapsed && <strong>{label}</strong>}<span aria-hidden="true">{collapsed ? "⌄" : "⌃"}</span>
+    </button>
+    <div id={contentId} className="ms-card-content" hidden={collapsed}>{!collapsed && children}</div>
+  </section>;
+}
+
+export default function ResidentMySpace(props) {
+  return <ResidentMySpaceAccount key={props.workspace.user.id} {...props} />;
+}
+
+function ResidentMySpaceAccount({ workspace, onOpenHistory, onOpenRequest, onNavigate }) {
   const xrayPilot = useXrayRadarPilot(workspace.user);
   const yearStart = academicYearStart(new Date());
   const [tab, setTab] = useState("overview"), [filter, setFilter] = useState("all"), [allPba, setAllPba] = useState(false);
   const [attendance, setAttendance] = useState({ rows: null, error: "", loading: true });
+  const accountId = workspace.user.id;
+  const [preferences, setPreferences] = useState(() => loadMySpacePreferences(accountId));
+  const [draft, setDraft] = useState(null);
+  const [storageFailed, setStorageFailed] = useState(false);
   const id = useId();
+  const { layout } = preferences;
+  const plain = layout === "board";
+  function applyPreferences(next) {
+    setPreferences(next);
+    setStorageFailed(!saveMySpacePreferences(accountId, next));
+  }
+  function toggleCard(card) {
+    const size = preferences.cards[layout]?.[card] || "default";
+    applyPreferences(withMySpaceCardSize(preferences, layout, card,
+      size === "collapsed" ? preferences.expandedSizes[layout]?.[card] || "default" : "collapsed"));
+  }
   useEffect(() => {
     let live = true;
     setAttendance({ rows: null, error: "", loading: true });
@@ -75,8 +133,35 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
     <button type="button" className="ms-link ms-link-quiet" onClick={onOpenHistory}>ดูผลการประเมินทั้งหมด →</button>
   </section>;
 
+  const progress = <section className="ms-card" aria-labelledby={`${id}-progress`}><div className="ms-card-heading"><h2 id={`${id}-progress`}>ความก้าวหน้าของฉัน</h2></div>
+        {layout === "daily" ? <><Progress label="EPA ถึงเกณฑ์" count={counters.epaReached} total={counters.epaTotal} unit="ข้อ"><span>ประเมินเสร็จปีนี้ (EPA) <b>{counters.finishedEpaThisYear}</b> ครั้ง</span><span>รอประเมิน (EPA) <b>{counters.waitingEpa}</b> ครั้ง</span></Progress>
+        <Progress label="PBA เสร็จแล้ว" count={counters.pbaFinished} total={counters.pbaTarget} unit="เรื่อง"><span>ประเมินเสร็จปีนี้ (PBA) <b>{counters.finishedPbaThisYear}</b> เรื่อง</span><span>รอประเมิน (PBA) <b>{counters.waitingPba}</b> เรื่อง</span></Progress></> : <Metrics counters={counters} rings />}
+        <button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("assessment")}>ดูเกณฑ์และรายการทั้งหมด →</button>
+      </section>;
+  const initials = (data.greeting.name || "R").trim().split(/\s+/).slice(0, 2).map((word) => Array.from(word)[0]).join("");
+  const cards = {
+    progress, waiting, recent,
+    calendar: <UpcomingCalendar key={accountId} userId={accountId} onOpenCalendar={() => onNavigate?.("calendar")} onExams={() => onNavigate?.("exams")} />,
+    exams: <section className="ms-card ms-private-summary"><div><h2>ผลการสอบของฉัน</h2><p className="ms-muted">ซ่อนคะแนนอยู่ · เปิดดูเมื่อพร้อม</p></div><button type="button" className="ms-link" onClick={() => changeTab("exams")}>เปิดดู</button></section>,
+    radar: xrayPilot ? <MySpaceXrayRadar key={accountId} userId={accountId} /> : null,
+    attendance: <section className="ms-card"><h2>การเข้าร่วมประชุมของฉัน</h2>{attendanceSummary}<p className="ms-muted">ข้อมูลประกอบ ไม่ใช่คะแนน</p><button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("attendance")}>ดูประวัติประชุม →</button></section>,
+    profile: <section className="ms-card ms-achiever-profile"><span className="ms-profile-initials" aria-hidden="true">{initials}</span><div><h2>{data.greeting.name || "Resident"}</h2><p>{data.greeting.pgy ? `PGY ${data.greeting.pgy} · ` : ""}{data.year.label}</p></div></section>,
+    awards: !preferences.hideAwards && <section className="ms-card"><h2>ผลงานและเหรียญ</h2><p className="ms-muted">ยังไม่มีทะเบียนผลงานที่ยืนยันแล้ว</p></section>,
+  };
+
   return <div className="ms-page">
-    <div className="ms-page-heading"><div><h1>My space</h1><p>{data.greeting.name || "Resident"}{data.greeting.pgy ? ` · PGY ${data.greeting.pgy}` : ""} · {data.year.label}</p></div><button type="button" className="primary-button" onClick={onOpenRequest}>ส่งแบบประเมิน</button></div>
+    <div className="ms-page-heading"><div><h1>My space</h1><p>{data.greeting.name || "Resident"}{data.greeting.pgy ? ` · PGY ${data.greeting.pgy}` : ""} · {data.year.label}</p></div>
+      <div className="ms-heading-actions">{!plain && <button type="button" className="primary-button" onClick={onOpenRequest}>ส่งแบบประเมิน</button>}
+        <button type="button" className="secondary-button" onClick={() => setDraft(preferences)}><span aria-hidden="true">⚙ </span>จัดหน้า</button>
+      </div>
+    </div>
+    {storageFailed && <p role="status" className="ms-note">ใช้รูปแบบนี้ได้ในหน้านี้ แต่เบราว์เซอร์ไม่อนุญาตให้บันทึกการตั้งค่า</p>}
+    {draft && <MySpaceLayoutSettings draft={draft} setDraft={setDraft} radarAvailable={xrayPilot} onClose={() => setDraft(null)} onSave={() => {
+      if (draft.layout !== layout) changeTab("overview");
+      applyPreferences(draft);
+      setDraft(null);
+    }} />}
+    {plain ? <article className="ms-board-plain"><h2>Board Checklist</h2><Metrics counters={counters} /></article> : <>
     <div className="ms-tabs" role="tablist" aria-label="หมวดใน My space">{TABS.map(([key, label], index) => <button type="button" role="tab" key={key} id={`${id}-tab-${key}`} aria-selected={tab === key} aria-controls={`${id}-panel`} onClick={() => changeTab(key)} onKeyDown={(event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault(); const next = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1 : (index + (event.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
@@ -85,11 +170,10 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
     {counters.waitingUnknown > 0 && <p className="ms-note" role="status">มีคำขอรอประเมินที่ระบุประเภท EPA/PBA ไม่ได้ {counters.waitingUnknown} คำขอ กรุณาตรวจรายการในประวัติหรือติดต่อ Admin</p>}
     {!data.epaAvailable && <p className="ms-note" role="status">ยังโหลดความคืบหน้า EPA ไม่ได้ ลองรีเฟรชหน้านี้ ส่วนอื่นยังใช้ได้ตามปกติ</p>}
     <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-tab-${tab}`}>
-      {tab === "overview" && <div className="ms-overview-grid"><div className="ms-stack"><section className="ms-card" aria-labelledby={`${id}-progress`}><div className="ms-card-heading"><h2 id={`${id}-progress`}>ความก้าวหน้าของฉัน</h2></div>
-        <Progress label="EPA ถึงเกณฑ์" count={counters.epaReached} total={counters.epaTotal} unit="ข้อ"><span>ประเมินเสร็จปีนี้ (EPA) <b>{counters.finishedEpaThisYear}</b> ครั้ง</span><span>รอประเมิน (EPA) <b>{counters.waitingEpa}</b> ครั้ง</span></Progress>
-        <Progress label="PBA เสร็จแล้ว" count={counters.pbaFinished} total={counters.pbaTarget} unit="เรื่อง"><span>ประเมินเสร็จปีนี้ (PBA) <b>{counters.finishedPbaThisYear}</b> เรื่อง</span><span>รอประเมิน (PBA) <b>{counters.waitingPba}</b> เรื่อง</span></Progress>
-        <button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("assessment")}>ดูเกณฑ์และรายการทั้งหมด →</button>
-      </section><UpcomingCalendar key={workspace.user.id} userId={workspace.user.id} onOpenCalendar={() => onNavigate?.("calendar")} onExams={() => onNavigate?.("exams")} />{waiting}</div><div className="ms-stack"><section className="ms-card ms-private-summary"><div><h2>ผลการสอบของฉัน</h2><p className="ms-muted">ซ่อนคะแนนอยู่ · เปิดดูเมื่อพร้อม</p></div><button type="button" className="ms-link" onClick={() => changeTab("exams")}>เปิดดู</button></section>{xrayPilot && <MySpaceXrayRadar key={workspace.user.id} userId={workspace.user.id} />}{recent}<section className="ms-card"><h2>การเข้าร่วมประชุมของฉัน</h2>{attendanceSummary}<p className="ms-muted">ข้อมูลประกอบ ไม่ใช่คะแนน</p><button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("attendance")}>ดูประวัติประชุม →</button></section></div></div>}
+      {tab === "overview" && <div className={`ms-layout-grid ms-layout-${layout}`}>
+        {MY_SPACE_CARD_ORDER[layout].filter((card) => cards[card]).map((card) =>
+          <LayoutCard key={`${layout}/${card}`} card={card} size={preferences.cards[layout]?.[card]} onToggle={() => toggleCard(card)}>{cards[card]}</LayoutCard>)}
+      </div>}
       {tab === "assessment" && <><div className="ms-filters" aria-label="กรองสถานะแบบประเมิน">{[["all", "ทั้งหมด"], ["waiting", "รอประเมิน"], ["unfinished", "ยังไม่เสร็จ"], ["finished", "เสร็จ / ถึงเกณฑ์"]].map(([key, label]) => <button type="button" key={key} className="ms-link" aria-pressed={filter === key} onClick={() => { setFilter(key); setAllPba(false); }}>{label}</button>)}</div>
         <div className="ms-assessment-grid"><section className="ms-card" aria-labelledby={`${id}-board`}><div className="ms-card-heading"><h2 id={`${id}-board`}>เช็กลิสต์ก่อนสอบบอร์ด</h2><span className="ms-muted">EPA {counters.epaReached == null ? "—" : counters.epaReached}/{counters.epaTotal} ข้อ</span></div>
           {epa.map((item) => <FormRow key={item.code} item={item} epa />)}{epa.length === 0 && <p className="ms-empty">ไม่มีแบบ EPA ในสถานะที่เลือก</p>}
@@ -106,5 +190,6 @@ export default function ResidentMySpace({ workspace, onOpenHistory, onOpenReques
         {!attendance.loading && !attendance.error && (data.attendance.last5.length === 0 ? <p className="ms-empty">ยังไม่มีการเช็คชื่อในปีการศึกษานี้</p> : <ul className="ms-meeting-list">{data.attendance.last5.map((iso, i) => <li key={`${iso}-${i}`}><strong>ครั้งที่ {data.attendance.countThisYear - i}</strong><span>{checkInTime(iso)}</span></li>)}</ul>)}
       </section>}
     </div>
+    </>}
   </div>;
 }

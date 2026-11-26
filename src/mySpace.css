@@ -96,3 +96,72 @@
 @media (max-width: 900px) { .ms-page { max-width:none; } }
 @media (max-width:600px) { .ms-card { padding:15px; } .ms-page-heading { align-items:flex-start; } .ms-page h1 { font-size:25px; } .ms-page-heading p { font-size:13px; } .ms-page-heading .primary-button { padding:10px 12px; font-size:13px; } .ms-tabs button { font-size:13px; } .ms-overview-grid, .ms-assessment-grid, .ms-stack { gap:12px; } .ms-progress-meta { flex-direction:column; gap:4px; } .ms-form-detail { padding-left:0; } }
 @media (max-width:359px) { .ms-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); } .ms-private-summary { flex-wrap:wrap; } }
+
+/* Layout preferences only change the Resident overview. */
+.ms-heading-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.ms-heading-actions > button { min-height:44px; }
+.ms-layout-grid { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:14px; }
+.ms-layout-card { min-width:0; position:relative; }
+.ms-layout-card .ms-card > h2:first-child,.ms-layout-card .ms-card > .ms-card-heading:first-child { padding-inline-end:42px; }
+.ms-layout-card .ms-private-summary { padding-inline-end:54px; }
+.ms-layout-card .ms-achiever-profile { padding-inline-end:54px; }
+.ms-layout-card .ms-private-summary .ms-link { flex-shrink:1; }
+.ms-layout-card-compact .ms-card { padding-block:12px; }
+.ms-layout-card-collapsed { border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.ms-card-content[hidden] { display:none; }
+.ms-card-toggle { position:absolute; top:5px; inset-inline-end:5px; display:inline-flex; align-items:center; justify-content:center; width:44px; min-height:44px; padding:0; border:1px solid transparent; border-radius:8px; color:var(--resident-green); background:transparent; cursor:pointer; font:inherit; }
+.ms-card-toggle:hover { background:var(--brand-soft); }
+.ms-card-toggle:focus-visible,.ms-layout-choice:focus-within { outline:2px solid var(--focus); outline-offset:2px; }
+.ms-layout-card-collapsed .ms-card-toggle { position:static; width:100%; justify-content:space-between; padding-inline:14px; text-align:start; }
+.ms-board-plain { width:min(100%,680px); }
+.ms-board-plain h2 { padding-bottom:8px; border-bottom:1px solid var(--line); }
+.ms-board-checklist .ms-training-metric { padding-block:14px; border-bottom:1px solid var(--line); }
+.ms-training-metric p,.ms-training-metric li { color:var(--resident-muted); font-size:14px; }
+.ms-training-metric ol { margin:6px 0 0; padding-inline-start:20px; }
+.ms-training-rings { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr)); gap:12px; }
+.ms-training-rings .ms-training-metric { min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px; text-align:center; }
+.ms-training-rings ol { text-align:start; }
+.ms-training-ring { width:76px; max-width:100%; fill:none; stroke-width:7px; }
+.ms-ring-track { stroke:var(--brand-soft); }
+.ms-ring-unknown { stroke:var(--line-strong); stroke-dasharray:4 5; }
+.ms-ring-fill { stroke:var(--resident-green); stroke-linecap:round; }
+.ms-achiever-profile { display:flex; flex-wrap:wrap; align-items:center; gap:12px; overflow-wrap:anywhere; }
+.ms-layout-achiever .ms-achiever-profile { background:var(--brand-soft); }
+.ms-profile-initials { display:grid; place-items:center; flex:none; width:52px; height:52px; border-radius:10px; color:#fff; background:var(--resident-green); font-weight:800; }
+@container myspace (min-width:680px) {
+  .ms-layout-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ms-layout-card-large,.ms-layout-rings .ms-layout-card-progress:not(.ms-layout-card-compact),.ms-layout-achiever .ms-layout-card-progress:not(.ms-layout-card-compact) { grid-column:1 / -1; }
+}
+.ms-layout-dialog { width:min(720px,calc(100% - 20px)); max-height:calc(100dvh - 20px); padding:0; margin:auto; border:1px solid var(--line); border-radius:14px; color:var(--resident-ink); background:var(--surface); }
+.ms-layout-dialog[open] { display:flex; flex-direction:column; }
+.ms-layout-dialog::backdrop { background:rgb(10 30 26 / .55); }
+.ms-layout-dialog-head,.ms-layout-dialog-body,.ms-layout-dialog-actions { padding:12px clamp(10px,3vw,20px); }
+.ms-layout-dialog-head { flex:none; border-bottom:1px solid var(--line); }
+.ms-layout-dialog-body { min-height:0; overflow:auto; overscroll-behavior:contain; }
+.ms-layout-dialog-actions { flex:none; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; border-top:1px solid var(--line); }
+.ms-layout-dialog-actions button { min-width:44px; min-height:44px; }
+.ms-layout-options { min-width:0; margin:0; padding:0; border:0; }
+.ms-layout-options legend { font-weight:750; margin-bottom:8px; }
+.ms-layout-choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr)); gap:8px; }
+.ms-layout-choice { display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 7px; align-items:center; min-width:0; min-height:44px; padding:8px; border:1px solid var(--line-strong); border-radius:9px; cursor:pointer; overflow-wrap:anywhere; }
+.ms-layout-choice:has(input:checked) { border-color:var(--resident-green); background:var(--brand-soft); }
+.ms-layout-choice input { grid-row:2; width:18px; height:18px; margin:0; accent-color:var(--resident-green); }
+.ms-layout-choice strong { grid-row:2; }
+.ms-layout-choice > span { grid-column:1 / -1; font-size:13px; }
+.ms-layout-mini { display:flex; align-items:center; gap:7px; padding:7px; height:46px; border-radius:5px; background:var(--canvas); }
+.ms-layout-mini i { flex:1; height:16px; border-radius:3px; background:var(--line-strong); }
+.ms-layout-mini-daily i:first-child { flex:2; height:27px; background:var(--resident-green); }
+.ms-layout-mini-board { flex-direction:column; align-items:stretch; gap:4px; }
+.ms-layout-mini-board i { border-radius:2px; }
+.ms-layout-mini-board i:last-child { width:66%; }
+.ms-layout-mini-rings i,.ms-layout-mini-achiever i:last-child { flex:none; width:24px; height:24px; border:3px solid var(--resident-green); border-radius:50%; background:transparent; }
+.ms-layout-mini-achiever i:first-child { flex:none; width:22px; height:28px; background:var(--resident-green); }
+.ms-layout-awards { display:flex; min-height:44px; align-items:center; gap:8px; margin-block:10px; }
+.ms-layout-awards input { flex:none; width:18px; height:18px; accent-color:var(--resident-green); }
+.ms-layout-sizes label { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,10rem); align-items:center; gap:7px; padding-block:4px; }
+.ms-layout-sizes select { width:100%; min-width:0; min-height:44px; font:inherit; }
+@media (max-width:430px) {
+  .ms-layout-choices { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ms-layout-sizes label { grid-template-columns:minmax(0,1fr) minmax(0,8rem); }
+  .ms-layout-card-large .ms-card { padding-block:22px; }
+}
