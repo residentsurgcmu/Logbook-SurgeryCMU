@@ -495,7 +495,7 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 .round-schedule-form label { min-width:0; margin:0; }
 .round-schedule-form input:not([type="checkbox"]),
 .round-seat-time input,
-.case-list-page .history-filters input:not([type="checkbox"]),
+.case-list-page .admission-search input,
 .case-list-page .history-filters select,
 .case-present .conf-controls select {
   box-sizing:border-box; width:100%; min-width:0; height:46px; padding:9px 12px; line-height:1.4;
