@@ -91,9 +91,11 @@ test("export buttons exist on case detail and on the conference", async () => {
   assert.match(detail, /Export PowerPoint/);
   assert.match(detail, /exportCaseDeck\(/);
   const conference = await readFile(new URL("../src/features/ResidentConference.jsx", import.meta.url), "utf8");
-  assert.match(conference, /Export PowerPoint ตามรายการ/);
+  assert.match(conference, /ส่งออก PowerPoint ทั้งวาระ/);
+  assert.match(conference, /exportWeek\(included\)/);
+  assert.match(conference, /exportWeek\(shown, true\)/);
   // the deck follows the saved agenda (included cases, in the chosen order), not "every case of the week"
-  assert.match(conference, /exportWeekDeck\(\{ start: range\.from, end: range\.to \}, included, people\)/);
+  assert.match(conference, /exportWeekDeck\(\{ \.\.\.week, filtered \}, rows, people\)/);
 });
 
 test("a case never produces a History & Examination slide, even if old rows still carry clinical columns", () => {

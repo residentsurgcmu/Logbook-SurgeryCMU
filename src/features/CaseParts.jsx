@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ShieldIcon, XIcon } from "../components/Icons";
 import { CASE_LIMITS, canDeleteNote, canEditNote, caseErrorMessage, caseTypeLabel } from "../residentCases";
 import { addCaseNote, addConferenceNote, deleteCaseNote, editCaseNote, loadCaseNotes } from "../residentCasesApi";
@@ -10,23 +10,48 @@ export const thaiDateTime = (value) =>
 export const personName = (people, id) => people.find((person) => person.user_id === id)?.full_name || "ไม่ทราบชื่อ";
 
 export function CaseModal({ title, onClose, closeDisabled = false, children }) {
-  useEffect(() => {
-    const onKey = (event) => {
-      if (event.key === "Escape" && !closeDisabled) onClose();
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    const trigger = document.activeElement;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      queueMicrotask(() => {
+        if (!document.querySelector("dialog[open]") && trigger?.isConnected &&
+            document.activeElement === document.body) trigger.focus({ preventScroll: true });
+      });
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [closeDisabled, onClose]);
+  }, []);
   return (
-    <div className="case-modal-backdrop" onMouseDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose(); }}>
-      <section className="case-modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="case-modal-head">
-          <h2>{title}</h2>
-          <button type="button" className="icon-button" onClick={onClose} disabled={closeDisabled} aria-label="ปิด"><XIcon /></button>
-        </div>
-        <div className="case-modal-body">{children}</div>
-      </section>
-    </div>
+    <dialog ref={ref} className="case-modal" aria-label={title}
+      onCancel={event => { if (event.target !== event.currentTarget) return; event.preventDefault(); if (!closeDisabled) onClose(); }}
+      onKeyDown={event => {
+        const dialog = event.currentTarget;
+        if (event.target.closest("dialog") !== dialog) return;
+        if (event.key === "Escape") event.stopPropagation();
+        if (event.key !== "Tab") return;
+        const stops = [...dialog.querySelectorAll("a[href],button,input,select,textarea,summary,[tabindex]")]
+          .filter(el => el.tabIndex >= 0 && !el.matches(":disabled") && el.getClientRects().length &&
+            !el.closest("[inert]") && getComputedStyle(el).visibility === "visible");
+        const first = stops[0];
+        const last = stops.at(-1);
+        if (event.shiftKey ? event.target === first || event.target === dialog : event.target === last) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        }
+      }}
+      onClick={event => {
+        if (closeDisabled || event.target !== event.currentTarget) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose();
+      }}>
+      <div className="case-modal-head">
+        <h2>{title}</h2>
+        <button type="button" className="icon-button" onClick={onClose} disabled={closeDisabled} aria-label="ปิด"><XIcon /></button>
+      </div>
+      <div className="case-modal-body">{children}</div>
+    </dialog>
   );
 }
 
