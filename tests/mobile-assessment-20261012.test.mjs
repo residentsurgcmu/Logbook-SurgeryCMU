@@ -59,7 +59,7 @@ test("ScoreLegend is collapsible by state (CSS decides where) and keeps its cont
   assert.doesNotMatch(legend, /matchMedia/);
 });
 
-test("the Staff submit payload and validation message are unchanged; the action bar and counter exist", async () => {
+test("Staff submit includes the request details the assessor saw; the action bar and counter exist", async () => {
   const form = between(await views(), "export function StaffEvaluationForm", "export function ResidentRequestHistory");
   assert.match(
     form,
@@ -153,7 +153,7 @@ test("final review: save errors are announced and scrolled into view; one aria-l
   const form = between(src, "export function StaffEvaluationForm", "export function ResidentRequestHistory");
   assert.match(form, /<p className="form-error" role="alert">\{error\}<\/p>/);
   const catchBlock = form.slice(form.indexOf("} catch (nextError)"), form.indexOf("} finally"));
-  assert.match(catchBlock, /setError\(nextError\.message \|\| "บันทึกผลประเมินไม่สำเร็จ"\)/);
+  assert.match(catchBlock, /REQUEST_EDIT_CONFLICT[\s\S]*nextError\.message \|\| "บันทึกผลประเมินไม่สำเร็จ"/);
   assert.match(catchBlock, /requestAnimationFrame\(\(\) => document\.querySelector\("form\.assessment-form \.form-error"\)\?\.scrollIntoView\(\{ block: "center" \}\)\)/);
   assert.equal((form.match(/aria-live/g) || []).length, 0, "Staff form itself has no aria-live; the ScoreGrid counter is the only one");
   const grid = between(src, "export function ScoreGrid", "export function OutcomeSelect");
