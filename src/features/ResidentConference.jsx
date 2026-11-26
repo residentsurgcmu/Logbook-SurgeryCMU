@@ -4,6 +4,8 @@ import { bangkokIsoDate, shiftIsoDate } from "../roundSchedule";
 import { loadAdmissionCases, loadCaseMedia, loadCasePeople, loadCasesByIds, loadConferenceSession, resetConferenceAgenda, saveConferenceAgenda } from "../residentCasesApi";
 import { exportWeekDeck } from "../casePptxExport";
 import { agendaCandidates, buildAgenda, canManageConference, conferenceRangeProblem, includedRows, moveId, moveToIndex } from "../conferenceAgenda";
+import ConferenceDateFilter from "../components/ConferenceDateFilter";
+import { includesConferenceDay } from "../conferenceDisplayDates";
 import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./CaseParts";
 
 // One Friday conference. The agenda = cases admitted in the date range (automatic) minus the cases an organiser
@@ -21,6 +23,7 @@ export default function ResidentConference({ user, initialCase = null }) {
   const [view, setView] = useState(initialCase ? "deck" : "table");
   const [typeFilter, setTypeFilter] = useState("all");
   const [unitFilter, setUnitFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState({ start: "", end: "" });
   const [index, setIndex] = useState(0);
   const [media, setMedia] = useState([]);
   const [photo, setPhoto] = useState(0);
@@ -69,7 +72,16 @@ export default function ResidentConference({ user, initialCase = null }) {
   const included = useMemo(() => includedRows(agenda), [agenda]);
   const shown = useMemo(() => included.filter((row) =>
     (typeFilter === "all" || (typeFilter === "unset" ? !row.treatment_type : row.treatment_type === typeFilter)) &&
-    (unitFilter === "all" || row.unit_name === unitFilter)), [included, typeFilter, unitFilter]);
+    (unitFilter === "all" || row.unit_name === unitFilter) &&
+    includesConferenceDay(dateFilter, row.admit_date)), [included, typeFilter, unitFilter, dateFilter]);
+  const addedIds = useMemo(() => new Set(agenda.filter((item) => item.source === "added").map((item) => item.row.id)), [agenda]);
+
+  function changeWeek(start) {
+    if (start === weekStart) return;
+    setWeekStart(start);
+    setDateFilter({ start: "", end: "" });
+    setIndex(0);
+  }
 
   // A case chosen from "New admissions" opens in Deck at that case.
   useEffect(() => {
@@ -113,10 +125,10 @@ export default function ResidentConference({ user, initialCase = null }) {
     <section className="resident-panel case-present">
       <div className="case-weekbar">
         <div className="case-week-navigation">
-        <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, -7))}>สัปดาห์ก่อน</button>
+        <button type="button" className="secondary-button" onClick={() => changeWeek(shiftIsoDate(weekStart, -7))}>สัปดาห์ก่อน</button>
         <strong className="case-week-label">{label}</strong>
-        <button type="button" className="secondary-button" onClick={() => setWeekStart(shiftIsoDate(weekStart, 7))}>สัปดาห์ถัดไป</button>
-        <button type="button" className="link-button" onClick={() => setWeekStart(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
+        <button type="button" className="secondary-button" onClick={() => changeWeek(shiftIsoDate(weekStart, 7))}>สัปดาห์ถัดไป</button>
+        <button type="button" className="link-button" onClick={() => changeWeek(conferenceWeek(bangkokIsoDate()).start)}>สัปดาห์นี้</button>
         </div><div className="case-week-actions">
         {canManage && <button type="button" className="secondary-button" disabled={!cases} onClick={() => setEditing(true)}>จัดรายการประชุม</button>}
         <button type="button" className="primary-button" disabled={exporting || !included.length} onClick={exportWeek}>{exporting ? "กำลังสร้างไฟล์…" : `Export PowerPoint ตามรายการ (${included.length})`}</button>
@@ -139,6 +151,8 @@ export default function ResidentConference({ user, initialCase = null }) {
             </div>
             <label>Type<select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setIndex(0); }}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, name]) => <option key={value} value={value}>{name}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
             <label>หน่วย<select value={unitFilter} onChange={(event) => { setUnitFilter(event.target.value); setIndex(0); }}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name}>{name}</option>)}</select></label>
+            <ConferenceDateFilter key={weekStart} value={dateFilter} initialDate={range.from}
+              onChange={(value) => { setDateFilter(value); setIndex(0); }} />
           </div>
           {included.length === 0 && <p className="case-muted">ไม่มีเคสในรายการประชุมสัปดาห์นี้{canManage ? ' กด "จัดรายการประชุม" เพื่อเพิ่มเคส' : ""}</p>}
           {included.length > 0 && shown.length === 0 && <p className="case-muted">ไม่มีเคสที่ตรงกับตัวกรอง</p>}
@@ -146,23 +160,52 @@ export default function ResidentConference({ user, initialCase = null }) {
       )}
 
       {cases && view === "table" && shown.length > 0 && (
-        <div className="resident-table-wrap">
-          <table className="case-table conf-table">
-            <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
-            <tbody>
-              {shown.map((row, position) => (
-                <tr key={row.id}>
-                  <td data-label="ลำดับ">{position + 1}</td>
-                  <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{agenda.find((item) => item.row.id === row.id)?.source === "added" && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
-                  <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                  <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                  <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} /></div></td>
-                  <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="resident-table-wrap conf-desktop-table">
+            <table className="case-table conf-table">
+              <thead><tr><th>ลำดับ</th><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>หน่วย / Owner</th><th>Type</th><th /></tr></thead>
+              <tbody>
+                {shown.map((row, position) => (
+                  <tr key={row.id}>
+                    <td data-label="ลำดับ">{position + 1}</td>
+                    <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
+                    <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
+                    <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                    <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} /></div></td>
+                    <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="resident-table-wrap conf-mobile-table">
+            <table aria-label="รายการประชุมแบบย่อ">
+              <thead><tr><th scope="col">ลำดับ</th><th scope="col">เคส / วันที่รับ</th></tr></thead>
+              <tbody>
+                {shown.map((row, position) => (
+                  <tr key={row.id}>
+                    <td>{position + 1}</td>
+                    <td>
+                      <details>
+                        <summary><span><strong>{row.case_code}</strong> · {thaiDate(row.admit_date)}
+                          {addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}
+                        </span></summary>
+                        <div className="conf-mobile-details">
+                          <dl>
+                            <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
+                            <dt>หน่วย / Owner</dt><dd>{row.unit_name} · {personName(people, row.owner_id)}</dd>
+                            <dt>Type</dt><dd><CaseTypeChip type={row.treatment_type} /></dd>
+                          </dl>
+                          <button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button>
+                        </div>
+                      </details>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {cases && view === "deck" && current && (

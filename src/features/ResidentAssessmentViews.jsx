@@ -15,6 +15,7 @@ import {
   thaiDate,
 } from "../residentAssessmentRules";
 import { visibleRuleWarnings } from "../ruleMessageFilter";
+import AssessmentSearchSelect, { matchesAssessmentSearch } from "../components/AssessmentSearchSelect";
 
 const localDate = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -327,6 +328,7 @@ export function ResidentRequestForm({ workspace, onSaved }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const template = templates.find((item) => item.id === templateId);
+  const today = bangkokDate();
   const past = requests.filter(
     (item) => item.template_id === templateId && item.status !== "cancelled",
   );
@@ -356,7 +358,7 @@ export function ResidentRequestForm({ workspace, onSaved }) {
   async function submit(event) {
     event.preventDefault();
     if (blocked) return setError(rules.reasons[0].text);
-    if (!template || !staffId || !activity.trim())
+    if (!template || !registeredStaff.some((person) => person.user_id === staffId) || !activity.trim())
       return setError("กรุณาเลือกแบบประเมิน Staff และชื่อกิจกรรม");
     if (
       template.requires_self_assessment &&
@@ -416,44 +418,38 @@ export function ResidentRequestForm({ workspace, onSaved }) {
         </p>
       </div>
       <div className="resident-form-grid">
-        <label>
-          แบบประเมิน
-          <select
-            value={templateId}
-            onChange={(event) => {
-              setTemplateId(event.target.value);
-              setScores({});
-              setComments({});
-              setSelfOutcome("");
-            }}
-            required
-          >
-            {templates.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.template_code} · {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Staff ผู้ประเมิน
-          <select
-            value={staffId}
-            onChange={(event) => setStaffId(event.target.value)}
-            required
-          >
-            <option value="">เลือก Staff</option>
-            {registeredStaff.map((person) => {
-              const away = person.unavailable_until && person.unavailable_until >= bangkokDate();
-              return (
-                <option key={person.user_id} value={person.user_id} disabled={Boolean(away)}>
-                  {person.full_name} · {person.unit_name}
-                  {away ? ` · ไม่สะดวกถึง ${thaiDate(person.unavailable_until)}` : ""}
-                </option>
-              );
-            })}
-          </select>
-        </label>
+        <AssessmentSearchSelect
+          label="แบบประเมิน"
+          placeholder="ค้นหารหัสหรือชื่อแบบประเมิน"
+          value={templateId}
+          disabled={busy}
+          options={templates.map((item) => ({
+            value: item.id,
+            label: `${item.template_code} · ${item.title}`,
+          }))}
+          onChange={(id) => {
+            if (id === templateId) return;
+            setTemplateId(id);
+            setScores({});
+            setComments({});
+            setSelfOutcome("");
+          }}
+        />
+        <AssessmentSearchSelect
+          label="Staff ผู้ประเมิน"
+          placeholder="ค้นหาชื่อหรือหน่วย Staff"
+          value={staffId}
+          disabled={busy}
+          options={registeredStaff.map((person) => {
+            const away = person.unavailable_until && person.unavailable_until >= today;
+            return {
+              value: person.user_id,
+              label: [person.full_name, person.unit_name, away && `ไม่สะดวกถึง ${thaiDate(person.unavailable_until)}`].filter(Boolean).join(" · "),
+              disabled: Boolean(away),
+            };
+          })}
+          onChange={setStaffId}
+        />
         <label>
           วันที่ทำกิจกรรม
           <input
@@ -780,6 +776,8 @@ export function AssessmentHistory({
   const [residentId, setResidentId] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const isResident = user.role === "resident";
   useEffect(() => {
     if (user.role === "staff")
       document
@@ -809,17 +807,22 @@ export function AssessmentHistory({
     .map((id) => profileById.get(id))
     .filter(Boolean)
     .filter(matchesPgy);
-  const visible = assessments.filter(
-    (item) =>
-      (!pgy || String(item.resident_pgy) === pgy) &&
-      (!residentId || item.resident_id === residentId) &&
-      (!templateId || item.template_id === templateId),
-  );
   const byAssessment = new Map(
     requests
       .filter((request) => request.assessment_id)
       .map((request) => [request.assessment_id, request]),
   );
+  const templateById = new Map(templates.map((item) => [item.id, item]));
+  const visible = assessments.filter((item) => {
+    if (isResident && item.resident_id !== user.id) return false;
+    if ((pgy && String(item.resident_pgy) !== pgy) ||
+      (residentId && item.resident_id !== residentId) ||
+      (templateId && item.template_id !== templateId)) return false;
+    if (!isResident || !search.trim()) return true;
+    const template = item.resident_template_definitions || templateById.get(item.template_id);
+    return matchesAssessmentSearch(search, template?.template_code, template?.title, evaluatorName(item),
+      byAssessment.get(item.id)?.procedure_or_activity, item.assessment_date, dateLabel(item.assessment_date));
+  });
   const chooseResident = (id) => {
     setResidentId(id);
     onStaffFocus?.("completed");
@@ -979,6 +982,13 @@ export function AssessmentHistory({
       <section className="resident-panel" id="staff-history-completed">
         <h2>{user.role === "staff" ? "ฉันประเมินแล้ว" : "ผลการประเมิน"}</h2>
         <div className="history-filters">
+          {isResident && (
+            <label>
+              ค้นหาผลประเมินของฉัน
+              <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
+                placeholder="ชื่อแบบประเมิน ผู้ประเมิน กิจกรรม หรือวันที่" />
+            </label>
+          )}
           <label>
             ชั้นปี
             <select
@@ -1037,6 +1047,7 @@ export function AssessmentHistory({
               setPgy("");
               setResidentId("");
               setTemplateId("");
+              setSearch("");
             }}
           >
             ล้างตัวกรอง

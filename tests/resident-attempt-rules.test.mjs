@@ -146,7 +146,7 @@ test("front end: the form checks the rules, explains refusals in Thai, and block
   assert.match(views, /evaluateRequestRules\(\{\s*template,\s*requests,\s*assessments: workspace\.assessments \|\| \[\],\s*residentId: user\.id,/);
   assert.match(views, /disabled=\{busy \|\| pending \|\| blocked \|\| !registeredStaff\.length\}/);
   assert.match(views, /friendlyAssessmentError\(nextError\.message\)/);
-  assert.match(views, /disabled=\{Boolean\(away\)\}/, "an unavailable Staff cannot be selected");
+  assert.match(views, /disabled: Boolean\(away\)/, "an unavailable Staff cannot be selected");
   assert.match(views, /user\.role === "resident" && \(\s*<BelowLevelCallout/, "the 'below L4' list is for the Resident who was assessed");
   const platform = await read("../src/features/ResidentPlatform.jsx");
   assert.match(platform, /workspace\.user\.role === "staff" && \(\s*<StaffAvailabilityCard/);
