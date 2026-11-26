@@ -71,7 +71,7 @@ async def check(page, public_key, origin, entry):
 
     await page.route("**/*", route)
     await page.goto(f"{origin}/{entry}")
-    add = page.get_by_role("button", name="เพิ่มเคส Grand Rounds (นำร่อง)")
+    add = page.get_by_role("button", name="เพิ่มเคส Grand Rounds · ใช้ HN")
     dialog = page.get_by_role("dialog")
 
     async def try_to_dismiss():
@@ -96,6 +96,8 @@ async def check(page, public_key, origin, entry):
     await add.click()
     await page.get_by_label("อายุ (ปี)").fill("40")
     await page.get_by_label("Diagnosis").fill("fixture")
+    await page.get_by_label("เพศ", exact=True).select_option("male")
+    await page.get_by_label("หน่วย", exact=True).select_option("Upper GI")
     await page.get_by_label("Type (จำเป็น)").select_option("conservative")
     await page.get_by_label("Management (จำเป็น)").fill("Fixture management")
     await page.get_by_placeholder("ตัวเลข 7 หลัก").fill(HN)

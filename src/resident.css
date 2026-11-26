@@ -495,7 +495,7 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 .round-schedule-form label { min-width:0; margin:0; }
 .round-schedule-form input:not([type="checkbox"]),
 .round-seat-time input,
-.case-list-page .history-filters input:not([type="checkbox"]),
+.case-list-page .admission-search input,
 .case-list-page .history-filters select,
 .case-present .conf-controls select {
   box-sizing:border-box; width:100%; min-width:0; height:46px; padding:9px 12px; line-height:1.4;
@@ -595,3 +595,23 @@ button.admission-archive-heading { cursor: pointer; }
 .case-photo-pan img { user-select:none; }
 .case-present-image > .case-photo-trigger { height:100%; }
 .case-photo-dialog .case-photo-canvas img { position:static; max-height:none; }
+
+.admission-title { align-items:center; margin-bottom:12px; }
+.admission-title h1 { margin:0; font-size:clamp(1.25rem,3vw,1.6rem); color:var(--resident-green); }
+.admission-create button { min-height:44px; }
+.admission-compact-stats { display:none; }
+.admission-tools { display:grid; gap:8px; margin-bottom:10px; }
+.admission-tools-more > summary { cursor:pointer; font-weight:600; color:var(--resident-green); padding:6px 0; width:max-content; max-width:100%; }
+.admission-tools-more[open] .history-filters { margin:8px 0; }
+.admission-exports { margin:0 0 8px; }
+.admission-period { max-width:100%; }
+.admission-archive-heading { margin:0; font-size:1rem; }
+@media (max-width:700px) {
+  .admission-title { gap:8px; margin-bottom:8px; }
+  .admission-create { gap:6px; }
+  .admission-create button { padding-inline:8px; }
+  .case-list-page .admission-wide-stats { display:none; }
+  .admission-compact-stats { display:block; color:var(--resident-muted); font-size:.78rem; margin:0 0 8px; }
+  .admission-current { margin-top:.7rem; }
+  .admission-current h3 { font-size:1rem; margin-bottom:.55rem; }
+}
