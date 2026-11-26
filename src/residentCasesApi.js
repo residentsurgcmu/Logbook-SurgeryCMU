@@ -64,6 +64,12 @@ export async function hnPilotCreateAction(operation, args = {}) {
   return data;
 }
 
+export async function hnPilotWebExport(operation, args = {}) {
+  const { data, error } = await supabase.rpc("rc_hn_pilot_web_export", { p_operation: operation, ...args });
+  fail(error);
+  return data;
+}
+
 // One database step: the edit and its Type are saved together (all or nothing). Returns the final version.
 export async function updateAdmissionCase(caseId, expectedUpdatedAt, form) {
   const { data, error } = await supabase.rpc("update_resident_admission_case_with_type", {
