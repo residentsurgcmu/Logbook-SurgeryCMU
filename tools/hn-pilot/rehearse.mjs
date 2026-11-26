@@ -24,6 +24,8 @@ try {
   const status=(id=uuid)=>q("select public.rc_hn_pilot_case($1,'status') as result",[id]);
   const save=(cipher,revision)=>q("select public.rc_hn_pilot_case($1,'save',$2,$3,$4) as result",[uuid,keyId,cipher,revision]);
   const exportBundle=(ids=[uuid])=>q("select rc_hn_prod_private.export_bundle($1::uuid[]) as result",[ids]);
+  const history=async (before=null, limit=50)=>(await db.query(
+    "select * from rc_hn_prod_private.export_history($1::uuid,$2::integer)",[before,limit])).rows;
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls; create role authenticator;
     create schema auth;
@@ -43,6 +45,7 @@ try {
   await run("20261122100000_hn_production_foundation.sql");
   await run("20261122110000_hn_production_pilot_interfaces.sql");
   await run("20261126160000_hn_pilot_create_case.sql");
+  await run("20261126161000_hn_pilot_export_history.sql");
   const host="https://dyiiivcyoatgmkmvgcnt.supabase.co";
   assert.equal(isCaseHnPilotEnabled("true",host,keyId),true);
   assert.equal(isCaseHnPilotEnabled("false",host,keyId),false);
@@ -66,16 +69,18 @@ try {
   assert.deepEqual(await save(sealed.ciphertext,0),{saved:true,revision:1});
   await assert.rejects(save(sealed.ciphertext,0),{code:"40001"});
   assert.deepEqual(await status(),{saved:true,revision:1,publicKey});
-  for(const [who,id] of [[auth,other],[auth,admin],["anon",null],["service_role",null]]){
+  for(const [who,id] of [[auth,other],[auth,admin],["anon",null],["service_role",null],["authenticator",null]]){
     await role(who,id);
     if(who===auth) assert.equal(await status(),null);
     else await assert.rejects(status(),{code:"42501"});
     await assert.rejects(save(sealed.ciphertext,1),{code:"42501"});
     await assert.rejects(exportBundle(),{code:"42501"});
+    await assert.rejects(history(),{code:"42501"});
     await assert.rejects(q("select ciphertext from rc_hn_prod_private.records"),{code:"42501"});
   }
   await role(auth,owner);
   await assert.rejects(exportBundle(),{code:"42501"});
+  await assert.rejects(history(),{code:"42501"});
   await assert.rejects(q("select public.rc_hn_pilot_case($1,'download') as result",[uuid]),{code:"42501"});
   await role(null);
   await assert.rejects(exportBundle([uuid,uuid2]),{code:"22023"});
@@ -116,6 +121,10 @@ try {
   assert.deepEqual(await create("save",fields,keyId,encrypted.ciphertext),{id:createId});
   await assert.rejects(create("save",{...fields,diagnosis:"different"},keyId,encrypted.ciphertext),{code:"40001"});
   await role(null);
+  for (const table of ["public.resident_admission_cases","rc_hn_prod_private.pilot_cases","rc_hn_prod_private.records"]) {
+    const column = table.startsWith("public.") ? "id" : "case_id";
+    assert.equal(await q(`select count(*)::int as result from ${table} where ${column}=$1`, [createId]), 1);
+  }
   const roundTrip=await exportBundle([createId]);
   assert.equal(roundTrip.records[0].ciphertext,encrypted.ciphertext);
   assert.equal(roundTrip.records[0].caseId,reserved.caseCode);
@@ -126,5 +135,47 @@ try {
   await role(null);
   await db.exec("update rc_hn_prod_private.pilot_config set enabled=false");
   await assert.rejects(exportBundle(),{code:"42501"});
+  await db.exec("update rc_hn_prod_private.pilot_config set enabled=true");
+  // Separate session logins model named non-owner operators, with only function grants.
+  await db.exec(`
+    create role fixture_export_a login;
+    create role fixture_export_b login;
+    grant usage on schema rc_hn_prod_private to fixture_export_a, fixture_export_b;
+    grant execute on function rc_hn_prod_private.export_bundle(uuid[]),
+      rc_hn_prod_private.export_history(uuid,integer) to fixture_export_a, fixture_export_b;
+    set session authorization fixture_export_a;
+  `);
+  assert.deepEqual(await history(), []);
+  await exportBundle([uuid,createId]);
+  await exportBundle([createId]);
+  const own = await history();
+  assert.equal(own.length, 2);
+  assert.deepEqual(own[0].case_ids, [createId]);
+  assert.deepEqual(own[1].case_ids, [uuid,createId]);
+  assert.deepEqual(own[1].revisions, [1,1]);
+  for (const receipt of own) {
+    assert.deepEqual(Object.keys(receipt).sort(), ["case_ids","export_id","exported_at","operator_login","revisions"]);
+    assert.equal(receipt.operator_login, "fixture_export_a");
+    assert.ok(Number.isFinite(new Date(receipt.exported_at).getTime()));
+  }
+  assert.deepEqual(await history(null,1), [own[0]]);
+  assert.deepEqual(await history(own[0].export_id,1), [own[1]]);
+  assert.deepEqual(await history(own[1].export_id,1), []);
+  await assert.rejects(history(null,101), {code:"22023"});
+  await assert.rejects(q("select * from rc_hn_prod_private.records"), {code:"42501"});
+  await assert.rejects(q("select * from rc_hn_prod_private.export_log"), {code:"42501"});
+  await db.exec("reset session authorization");
+  await db.exec("set session authorization fixture_export_b");
+  assert.deepEqual(await history(own[0].export_id), []);
+  assert.deepEqual(await history(), []);
+  await exportBundle([uuid]);
+  const otherReceipt = (await history())[0];
+  assert.equal(otherReceipt.operator_login, "fixture_export_b");
+  assert.deepEqual(otherReceipt.case_ids, [uuid]);
+  await db.exec("reset session authorization");
+  await db.exec("set session authorization fixture_export_a");
+  assert.deepEqual(await history(otherReceipt.export_id), []);
+  assert.deepEqual(await history(), own);
+  console.error("PASS: one case after replay; own export receipts only; no direct table access; freeze still blocks exports");
   console.log(JSON.stringify(roundTrip));
 } finally { await db.close(); }

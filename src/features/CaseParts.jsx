@@ -9,20 +9,20 @@ export const thaiDateTime = (value) =>
   value ? new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value)) : "—";
 export const personName = (people, id) => people.find((person) => person.user_id === id)?.full_name || "ไม่ทราบชื่อ";
 
-export function CaseModal({ title, onClose, children }) {
+export function CaseModal({ title, onClose, closeDisabled = false, children }) {
   useEffect(() => {
     const onKey = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !closeDisabled) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [closeDisabled, onClose]);
   return (
-    <div className="case-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="case-modal-backdrop" onMouseDown={(event) => { if (!closeDisabled && event.target === event.currentTarget) onClose(); }}>
       <section className="case-modal" role="dialog" aria-modal="true" aria-label={title}>
         <div className="case-modal-head">
           <h2>{title}</h2>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="ปิด"><XIcon /></button>
+          <button type="button" className="icon-button" onClick={onClose} disabled={closeDisabled} aria-label="ปิด"><XIcon /></button>
         </div>
         <div className="case-modal-body">{children}</div>
       </section>

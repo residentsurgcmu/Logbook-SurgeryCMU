@@ -71,6 +71,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
   const hnInput = useRef(null);
   const requestId = useRef(null);
   const retryPayload = useRef(null);
+  const hnCloseLocked = useRef(false);
   const [retryLocked, setRetryLocked] = useState(false);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
@@ -93,6 +94,10 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
   );
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
+  function closeForm() {
+    if (!hnRequired || !hnCloseLocked.current) onClose();
+  }
+
   async function submit(event) {
     event.preventDefault();
     if (busy) return;
@@ -102,6 +107,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
       hnInput.current?.focus();
       return setError("กรุณากรอก HN ให้ครบ 7 หลัก");
     }
+    if (hnRequired) hnCloseLocked.current = true;
     setBusy(true);
     setError("");
     setConflict(false);
@@ -130,14 +136,15 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         caseId = await createAdmissionCase(form);
       }
     } catch (nextError) {
-      setConflict(isCaseConflict(nextError));
+      setConflict(!hnRequired && isCaseConflict(nextError));
       if (hnRequired) {
-        if (retryPayload.current && (!nextError?.code || !/^(22|23|42|P0)/.test(nextError.code))) {
+        if (retryPayload.current && (retryLocked || !nextError?.code || !/^(22|23|42|P0)/.test(nextError.code))) {
           setRetryLocked(true);
           setError("ยังยืนยันการบันทึกไม่ได้ กดบันทึกอีกครั้งเพื่อตรวจคำขอเดิม ไม่ต้องกรอก HN ซ้ำ");
         } else {
           retryPayload.current = null;
           requestId.current = null;
+          hnCloseLocked.current = false;
           setRetryLocked(false);
           setError("บันทึกเคส Grand Rounds ไม่สำเร็จ ตรวจข้อมูลและกรอก HN ใหม่ หากยังไม่ผ่านให้ติดต่อผู้ดูแล");
         }
@@ -167,7 +174,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
     }
   }
 
-  return (
+  const fields = (
     <form className="case-form" noValidate onSubmit={submit}>
       {hnRequired ? <p className="case-muted">กรอก HN ในช่องที่กำหนดเท่านั้น ห้ามใส่ชื่อหรือข้อมูลระบุตัวผู้ป่วยในช่องอื่นหรือภาพแนบ</p> : <PrivacyNotice />}
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -219,10 +226,16 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         )}
       </div>
       <div className="button-row case-actions">
-        <button type="button" className="secondary-button" onClick={onClose} disabled={busy || retryLocked}>ยกเลิก</button>
+        <button type="button" className="secondary-button" onClick={closeForm} disabled={busy || retryLocked}>ยกเลิก</button>
         <button type="submit" className="primary-button" disabled={busy}>{stage === "upload" ? "กำลังอัปโหลดภาพ…" : busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </form>
+  );
+  return (
+    <CaseModal title={initial ? `แก้ไข ${initial.case_code}` : hnRequired ? "เพิ่มเคส Grand Rounds" : "เพิ่มเคสใหม่"}
+      closeDisabled={hnRequired && (busy || retryLocked)} onClose={closeForm}>
+      {fields}
+    </CaseModal>
   );
 }
 
@@ -515,9 +528,7 @@ export default function ResidentCases({ user, onPresent }) {
         {!cases && !error && <p className="case-muted">กำลังโหลดเคส…</p>}
       </div>
       {dialog?.type === "form" && (!dialog.hnRequired || dialog.actorId === user.id) && (!dialog.id || current) && (
-        <CaseModal title={dialog.id ? `แก้ไข ${current.case_code}` : dialog.hnRequired ? "เพิ่มเคส Grand Rounds" : "เพิ่มเคสใหม่"} onClose={() => setDialog(null)}>
-          <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
-        </CaseModal>
+        <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "excel" && (
         <CaseModal title="Export Excel · New admissions" onClose={() => setDialog(null)}>
