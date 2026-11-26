@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hnPilotWebExport } from "../residentCasesApi";
 
+const MAX_EXPORT_CASES = 50;
+
 export default function CaseHnExport({ keyId, onClose }) {
   const [prefix, setPrefix] = useState("");
   const [search, setSearch] = useState({ prefix: "" });
@@ -63,8 +65,22 @@ export default function CaseHnExport({ keyId, onClose }) {
     }
   }
 
+  const visibleRows = rows ?? [];
+  const selectedIds = new Set(selected.map(({ id }) => id));
+  const unselectedVisible = visibleRows.filter(({ id }) => !selectedIds.has(id));
+  const allVisibleSelected = visibleRows.length > 0 && unselectedVisible.length === 0;
+  const wouldExceedLimit = selected.length + unselectedVisible.length > MAX_EXPORT_CASES;
+
+  function selectAllVisible() {
+    setSelected((current) => {
+      const ids = new Set(current.map(({ id }) => id));
+      const next = [...current, ...visibleRows.filter(({ id }) => !ids.has(id))];
+      return next.length <= MAX_EXPORT_CASES ? next : current;
+    });
+  }
+
   return <div className="case-form">
-    <p>เลือกเฉพาะเคสที่จะใช้ใน Grand Rounds ได้ไม่เกิน 50 เคส ไฟล์ที่ดาวน์โหลดต้องเปิดด้วยกุญแจบนเครื่องของคุณ</p>
+    <p>เลือกเฉพาะเคสที่จะใช้ใน Grand Rounds ได้ไม่เกิน {MAX_EXPORT_CASES} เคสต่อไฟล์ ไฟล์ที่ดาวน์โหลดต้องเปิดด้วยกุญแจบนเครื่องของคุณ</p>
     <form className="button-row" onSubmit={find}>
       <label>ค้นหารหัสเคส <input value={prefix} maxLength={9} disabled={busy}
         onChange={(e) => setPrefix(e.target.value)} placeholder="ADM-00012" /></label>
@@ -73,17 +89,22 @@ export default function CaseHnExport({ keyId, onClose }) {
     {error && <p role="alert" className="form-error">{error}</p>}
     {rows === null && <p role="status">กำลังโหลดเคส…</p>}
     {rows?.length === 0 && <p>ไม่พบเคสที่ส่งออกได้</p>}
-    {rows?.length === 50 && <p>แสดง 50 รายการล่าสุด ค้นหาด้วยรหัสเคสเพื่อดูรายการอื่น</p>}
+    {rows?.length === MAX_EXPORT_CASES && <p>แสดงได้สูงสุด {MAX_EXPORT_CASES} รายการล่าสุดที่ตรงกับคำค้น ค้นหาด้วยรหัสเคสเพื่อดูรายการอื่น</p>}
     {!!rows?.length && <fieldset>
       <legend>รหัสเคสที่ส่งออกได้</legend>
-      {rows.map((row) => {
-        const checked = selected.some(({ id }) => id === row.id);
+      <div className="button-row">
+        <button type="button" className="secondary-button" disabled={busy || allVisibleSelected || wouldExceedLimit}
+          onClick={selectAllVisible}>เลือกทั้งหมดที่แสดง ({visibleRows.length})</button>
+      </div>
+      {wouldExceedLimit && <p className="case-muted">เลือกทั้งหมดไม่ได้ เพราะรวมกับเคสที่เลือกไว้แล้วจะเกิน {MAX_EXPORT_CASES} เคส กรุณาล้างรายการหรือเลือกเฉพาะเคสที่ต้องการ</p>}
+      {visibleRows.map((row) => {
+        const checked = selectedIds.has(row.id);
         return <label key={row.id} className="case-check">
-          <input type="checkbox" checked={checked} disabled={busy || (!checked && selected.length >= 50)}
+          <input type="checkbox" checked={checked} disabled={busy || (!checked && selected.length >= MAX_EXPORT_CASES)}
             onChange={(e) => {
               const add = e.target.checked;
               setSelected((all) => add
-                ? (all.length >= 50 || all.some(({ id }) => id === row.id) ? all : [...all, row])
+                ? (all.length >= MAX_EXPORT_CASES || all.some(({ id }) => id === row.id) ? all : [...all, row])
                 : all.filter(({ id }) => id !== row.id));
             }} /> {row.code}
         </label>;
