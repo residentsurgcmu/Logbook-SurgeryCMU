@@ -3,8 +3,9 @@ import { managedExamsApi as api, listAdminAccounts } from "../residentApi";
 import { groupManagedRows, managedAttempt, managedCellLabel, OVERALL_LABELS } from "../managedExams.js";
 import { buildManagedTemplate, buildManagedResultsWorkbook, downloadManagedBook, loadManagedExcel, parseManagedTemplate, XLSX_LIMITS } from "../managedExamExcel.js";
 import "./ManagedExams.css";
-import { XrayRadarResult } from "./MySpaceXrayRadar";
+import { XrayRadarPreviewCard, XrayRadarResult } from "./MySpaceXrayRadar";
 import { useXrayRadarPilot } from "./useXrayRadarPilot";
+import { isXrayRadarDemoHost } from "../xrayRadarPreview";
 import { buildMySpaceXray } from "../mySpaceXray";
 
 function useAction(onDone) {
@@ -133,7 +134,7 @@ export function ManagedPublishedResults({ role, userId, initialYear = "", onYear
       if (e.name !== "AbortError" && !task.signal.aborted && identity.current === startedIdentity) { setError(e.message); setBundle(null); }
     } finally { if (exportTask.current === task) { exportTask.current = null; setExporting(false); } }
   }
-  return <div className="rc04-area"><div className="button-row"><button className="secondary-button" onClick={() => setReload((n) => n + 1)}>โหลดผลใหม่</button><button className="secondary-button" disabled={!bundle || exporting || !visible.length} onClick={exportResults}>{exporting ? "กำลังสร้าง…" : "ส่งออกผลประกาศ Excel"}</button></div>
+  return <div className="rc04-area">{xrayPilot && isXrayRadarDemoHost(window.location.hostname) && <XrayRadarPreviewCard />}<div className="button-row"><button className="secondary-button" onClick={() => setReload((n) => n + 1)}>โหลดผลใหม่</button><button className="secondary-button" disabled={!bundle || exporting || !visible.length} onClick={exportResults}>{exporting ? "กำลังสร้าง…" : "ส่งออกผลประกาศ Excel"}</button></div>
     {error && <p role="alert" className="form-error">{error} กรุณาโหลดใหม่ทั้งชุด</p>}{!bundle && !error && <p role="status">กำลังโหลดผลประกาศทุกปี…</p>}
     {bundle && <><div className="rc04-grid"><label>ปีการศึกษา<select aria-label="ปีการศึกษา" value={year} onChange={(e) => { setYear(e.target.value); onYearChange?.(e.target.value); }}><option value="">ทุกปี (รวมประวัติ)</option>{years.map((y) => <option key={y}>{y}</option>)}</select></label>
       {role !== "resident" && <><label>PGY ณ วันสอบ<select value={pgy} onChange={(e) => setPgy(e.target.value)}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((y) => <option key={y}>{y}</option>)}</select></label><label>ผู้สอบ<select value={resident} onChange={(e) => setResident(e.target.value)}><option value="">ทุกคน</option>{residents.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select></label></>}

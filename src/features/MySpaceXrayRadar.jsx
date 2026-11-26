@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from "react";
 import { managedExamsApi } from "../residentApi";
+import { demoResidentId, demoXrayRows } from "../xrayRadarPreview";
 import { buildMySpaceXray } from "../mySpaceXray";
 import { thaiDate } from "../residentAssessmentRules";
 
@@ -69,6 +70,16 @@ export function XrayRadarResult({ radar }) {
         <tr key={axis}><th scope="row">{axis}</th><td>{score} / {max}</td><td>{percent(value)}%</td></tr>)}</tbody>
     </table>
   </>;
+}
+
+export function XrayRadarPreviewCard() {
+  return <section className="ms-card">
+    <h2>กราฟ X-ray Anatomy · ทดสอบด้วยข้อมูลสมมติ</h2>
+    <p className="ms-muted">ตัวอย่างสำหรับตรวจหน้าจอและการจับคู่แกน ไม่ใช้ผลสอบจริง</p>
+    <details><summary>เปิดกราฟตัวอย่าง</summary>
+      <XrayRadarResult radar={buildMySpaceXray(demoXrayRows, demoResidentId)} />
+    </details>
+  </section>;
 }
 
 export default function MySpaceXrayRadar({ userId }) {
