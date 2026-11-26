@@ -14,6 +14,7 @@ try {
   await context.route("**/*", async (route) => {
     const url = new URL(route.request().url());
     if (url.hostname === "127.0.0.1") return route.continue();
+    if (url.pathname.endsWith("/list_resident_calendar_events")) return route.fulfill({ json: [] });
     if (url.pathname.endsWith("/resident_round_attendance")) return route.fulfill({ status: attendanceError ? 500 : 200, contentType: "application/json", body: JSON.stringify(attendanceError ? { message: "Synthetic attendance failure" } : [{ session_id: "fixture-meeting", checked_in_at: "2026-10-16T04:03:00Z" }]) });
     if (url.pathname.endsWith("/rc04_open_read_set")) { ownReadCalls++; ok(route.request().postDataJSON().p_scope === "own", "My Space requests own scope only"); return route.fulfill({ contentType: "application/json", body: JSON.stringify(at(28)) }); }
     if (url.pathname.endsWith("/rc04_read_page")) { const data = at(29); data.manifest_id = route.request().postDataJSON().p_manifest_id; data.rows = data.rows.filter((r) => r.resident_id === data.rows[0].resident_id); data.row_count = data.rows.length; return route.fulfill({ contentType: "application/json", body: JSON.stringify(data) }); }
