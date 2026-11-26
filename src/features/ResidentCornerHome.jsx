@@ -22,7 +22,7 @@ export default function ResidentCornerHome({ workspace, onNavigate, onOpenReques
         <h2>{staff ? "งานสอนและการประเมิน" : admin ? "ดูแลพื้นที่ทำงานของภาควิชา" : "เริ่มวันทำงานของคุณ"}</h2>
         <p>{staff ? "ติดตามคำขอประเมิน ให้ feedback และเตรียมเคสสำหรับการสอน" : admin ? "จัดการสมาชิก กิจกรรม และติดตามภาพรวมการฝึกอบรม" : "รวบรวมเคส เตรียมประชุม และติดตามการฝึกอบรมในพื้นที่เดียว"}</p>
       </div>
-      <button type="button" className="primary-button" onClick={() => onNavigate(staff ? "pending" : admin ? "admin" : "cases")}>{staff ? "เปิดคิวประเมิน" : admin ? "จัดการระบบ" : "เปิด New admissions"}<ChevronIcon size={18} /></button>
+      <button type="button" className="primary-button" onClick={() => onNavigate(staff ? "pending" : admin ? "admin" : "myspace")}>{staff ? "เปิดคิวประเมิน" : admin ? "จัดการระบบ" : "เปิด My Space"}<ChevronIcon size={18} /></button>
     </section>
     <div className="corner-columns">
       <div className="corner-stack">
