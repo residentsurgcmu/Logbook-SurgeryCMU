@@ -1,4 +1,5 @@
 import { isCaseHn, sealPilotHn } from "../caseHnPilotCrypto";
+import CaseHnExport from "./CaseHnExport";
 import CaseHnPilot, { caseHnPilotEnabled, pinnedKeyId } from "./CaseHnPilot";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "../components/Icons";
@@ -21,6 +22,7 @@ import { bangkokIsoDate } from "../roundSchedule";
 import {
   createAdmissionCase,
   hnPilotCreateAction,
+  hnPilotWebExport,
   deleteCaseMedia,
   loadAdmissionCases,
   loadCaseMedia,
@@ -423,6 +425,17 @@ export default function ResidentCases({ user, onPresent }) {
     }).catch(() => { if (!stale) setPilotActor(null); });
     return () => { stale = true; };
   }, [user.id, user.role]);
+  const [exportPermission, setExportPermission] = useState(null);
+  useEffect(() => {
+    setExportPermission(null);
+    if (!caseHnPilotEnabled) return;
+    let current = true;
+    hnPilotWebExport("status").then((value) => {
+      if (current && value?.allowed) setExportPermission({ id: user.id, role: user.role });
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [user.id, user.role]);
+  const canExportHn = exportPermission?.id === user.id && exportPermission?.role === user.role;
   const [dialog, setDialog] = useState(null); // { type: "form" | "detail", id? }
 
   const load = useCallback(async () => {
@@ -458,6 +471,8 @@ export default function ResidentCases({ user, onPresent }) {
         <div className="button-row">
           <button type="button" className="secondary-button" disabled={!cases?.length} onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
           <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
+          {canExportHn && <button type="button" className="secondary-button"
+            onClick={() => setDialog({ type: "hnExport", permission: exportPermission })}>ส่งออกไฟล์ Grand Rounds</button>}
           {pilotActor === user.id && <button type="button" className="primary-button"
             onClick={() => setDialog({ type: "form", hnRequired: true, actorId: user.id })}>
             <PlusIcon size={16} /> เพิ่มเคส Grand Rounds (นำร่อง)
@@ -529,6 +544,11 @@ export default function ResidentCases({ user, onPresent }) {
       </div>
       {dialog?.type === "form" && (!dialog.hnRequired || dialog.actorId === user.id) && (!dialog.id || current) && (
         <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.type === "hnExport" && canExportHn && dialog.permission === exportPermission && (
+        <CaseModal title="ส่งออกไฟล์ Grand Rounds" onClose={() => setDialog(null)}>
+          <CaseHnExport keyId={pinnedKeyId} onClose={() => setDialog(null)} />
+        </CaseModal>
       )}
       {dialog?.type === "excel" && (
         <CaseModal title="Export Excel · New admissions" onClose={() => setDialog(null)}>

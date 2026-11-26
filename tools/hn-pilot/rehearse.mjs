@@ -48,6 +48,7 @@ try {
   await run("20261126160000_hn_pilot_create_case.sql");
   await run("20261126161000_hn_pilot_export_history.sql");
   await run("20261126190000_hn_pilot_active_residents.sql");
+  await run("20261126210000_hn_pilot_web_export.sql");
   const host="https://dyiiivcyoatgmkmvgcnt.supabase.co";
   assert.equal(isCaseHnPilotEnabled("true",host,keyId),true);
   assert.equal(isCaseHnPilotEnabled("false",host,keyId),false);
@@ -173,6 +174,53 @@ try {
   await assert.rejects(create("save",fields,keyId,futureEnvelope.ciphertext,futureCaseId),{code:"42501"});
   await role(null);
   await db.exec("update rc_hn_prod_private.pilot_config set enabled=true");
+  const web=(op, ids=null, prefix="")=>q("select public.rc_hn_pilot_web_export($1,$2::uuid[],$3) as result",[op,ids,prefix]);
+  for(const [who,id] of [[auth,future],[auth,other],[auth,null],["anon",null],["service_role",null],["authenticator",null]]) {
+    await role(who,id);
+    if(who===auth) assert.equal(await web("status"),null);
+    else await assert.rejects(web("status"),{code:"42501"});
+    await assert.rejects(web("list"),{code:"42501"});
+    await assert.rejects(web("download",[createId]),{code:"42501"});
+  }
+  await role(null);
+  await db.query("insert into rc_hn_prod_private.web_export_operators values($1)",[other]);
+  await role(auth,other);
+  assert.deepEqual(await web("status"),{allowed:true});
+  assert.deepEqual(await web("list",null,reserved.caseCode),[{id:createId,code:reserved.caseCode}]);
+  assert.deepEqual(await web("list",null,"99999"),[]);
+  await assert.rejects(web("list",null,"ADM-%"),{code:"22023"});
+  await assert.rejects(web("download",[]),{code:"22023"});
+  await assert.rejects(web("download",[createId,createId]),{code:"22023"});
+  await assert.rejects(web("download",[createId,null]),{code:"22023"});
+  await assert.rejects(web("download",[createId,uuid2]),{code:"22023"});
+  assert.deepEqual(await web("download",[createId]),roundTrip);
+  await assert.rejects(q("select * from rc_hn_prod_private.web_export_log"),{code:"42501"});
+  await assert.rejects(q("select * from rc_hn_prod_private.records"),{code:"42501"});
+  await role(auth,admin);
+  assert.deepEqual(await web("status"),{allowed:true});
+  assert.deepEqual(await web("download",[createId]),roundTrip);
+  await role(null);
+  for(const id of [other,admin]) {
+    assert.equal(await q("select count(*)::int as result from rc_hn_prod_private.web_export_log where operator_id=$1 and case_ids=array[$2]::uuid[] and revisions=array[1]",[id,createId]),1);
+  }
+  assert.equal(await q("select count(*)::int as result from rc_hn_prod_private.web_export_log"),2);
+  await db.query("update public.resident_profiles set active=false where user_id=$1",[other]);
+  await role(auth,other);
+  assert.equal(await web("status"),null);
+  await assert.rejects(web("download",[createId]),{code:"42501"});
+  await role(null);
+  await db.query("update public.resident_user_roles set active=false where user_id=$1",[admin]);
+  await role(auth,admin);
+  assert.equal(await web("status"),null);
+  await role(null);
+  await db.query("update public.resident_user_roles set active=true where user_id=$1",[admin]);
+  await db.exec("update rc_hn_prod_private.pilot_config set enabled=false");
+  await role(auth,admin);
+  assert.equal(await web("status"),null);
+  await assert.rejects(web("download",[createId]),{code:"42501"});
+  await role(null);
+  await db.exec("update rc_hn_prod_private.pilot_config set enabled=true");
+  console.error("PASS: web export authorization, private receipts, fail-closed bundle, deactivate, and freeze");
   // Separate session logins model named non-owner operators, with only function grants.
   await db.exec(`
     create role fixture_export_a login;

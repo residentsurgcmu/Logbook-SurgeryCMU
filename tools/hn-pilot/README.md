@@ -37,3 +37,8 @@ python3 tools/hn-pilot/check_modal_retry.py /path/to/synthetic-public.json
 ```
 
 The browser check requires Python Playwright and Chromium (use `--chromium /path/to/chromium` for an installed executable). The retry is retained in the open form only; after refresh or navigation, check the case list before entering the case again.
+
+
+### Web export
+
+The **ส่งออกไฟล์ Grand Rounds** button appears in New admissions while the pilot is on, for active Admin accounts and named active web accounts listed by user ID in the private operator table. The migration creates an empty operator table and does not enable the pilot. Keep operator grants out of source control. Select only the codes needed for the meeting and open the downloaded encrypted JSON in the offline viewer. Successful web exports record the authenticated operator, time, case IDs and revisions in a private audit table. The web action never accepts or returns plaintext HN. The older PostgreSQL export path is unchanged.
