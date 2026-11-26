@@ -199,14 +199,21 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
       <p className="account-foot" aria-live="polite">แสดง {filtered.length} จาก {accounts.length} บัญชี</p>
     </section> : <>
       <button type="button" className="text-button account-back" disabled={busy || uncertain} onClick={back}>← รายชื่อบัญชี</button>
-      {view === "edit" ? <section className="resident-panel account-edit-panel"><h2>แก้ไขข้อมูลบัญชี</h2><div className="account-card-heading"><AccountIdentity account={selected} self={isSelf(selected)} /><AccountState account={selected} /></div><p className="account-email">อีเมล: {selected.email}</p>
+      {view === "edit" ? <section className="resident-panel account-edit-panel"><h2>แก้ไขข้อมูลบัญชี</h2><div className="account-card-heading"><AccountIdentity account={selected} self={isSelf(selected)} /><AccountState account={selected} /></div><p className="account-email">อีเมลสำหรับเข้าสู่ระบบ: {selected.email} · แก้ไขจากหน้านี้ไม่ได้</p>
         <form onSubmit={saveEdit} noValidate>
           <fieldset disabled={blocked}><legend className="visually-hidden">ข้อมูลบัญชี</legend><div className="account-form-grid">
-            <label className="wide">ชื่อ *<input {...fieldProps("full_name")} value={draft.full_name} maxLength={160} required onChange={(event) => updateDraft("full_name", event.target.value)} />{validationText("full_name")}</label>
+            <label className="wide">ชื่อที่แสดง (รวมคำนำหน้าและยศ) *<input {...fieldProps("full_name")} value={draft.full_name} maxLength={160} required onChange={(event) => updateDraft("full_name", event.target.value)} />{validationText("full_name")}</label>
             {selected.role === "resident" && <label>ชั้นปี (PGY)<select {...fieldProps("pgy")} value={draft.pgy} onChange={(event) => updateDraft("pgy", event.target.value)}><option value="">เลือก PGY</option>{[1,2,3,4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select>{validationText("pgy")}</label>}
             {selected.role === "staff" && <label className="wide">หน่วย<input {...fieldProps("unit_name")} value={draft.unit_name} maxLength={80} onChange={(event) => updateDraft("unit_name", event.target.value)} /><small>ชื่อและหน่วยจะเปลี่ยนในรายชื่อ Staff ด้วย</small>{validationText("unit_name")}</label>}
             {selected.role === "admin" && <label className="wide">ป้าย Admin<input {...fieldProps("admin_tag")} value={draft.admin_tag} maxLength={40} list="account-admin-tags" onChange={(event) => updateDraft("admin_tag", event.target.value)} /><datalist id="account-admin-tags"><option value="F" /><option value="N" /></datalist><small>เป็นป้ายกำกับ ไม่เพิ่มสิทธิ์การใช้งาน</small>{validationText("admin_tag")}</label>}
           </div>
+          {editPlan.valid && (Object.hasOwn(editPlan.changes, "full_name") || Object.hasOwn(editPlan.changes, "unit_name")) && (
+            <div className="account-notice">
+              <strong>ตรวจการเปลี่ยนแปลงก่อนบันทึก</strong>
+              {Object.hasOwn(editPlan.changes, "full_name") && <div>ชื่อ: {selected.full_name} → {editPlan.changes.full_name}</div>}
+              {Object.hasOwn(editPlan.changes, "unit_name") && <div>หน่วย: {selected.unit_name || "ยังไม่ระบุ"} → {editPlan.changes.unit_name}</div>}
+            </div>
+          )}
           {Object.hasOwn(editPlan.changes, "pgy") && <p className="account-notice warning">PGY {selected.pgy} → PGY {draft.pgy}<br />รายงานเช็คชื่อจะใช้ PGY ใหม่ รวมถึงกิจกรรมที่ผ่านมา ผลสอบและผลประเมินเดิมไม่เปลี่ยน</p>}
           <label>{Object.hasOwn(editPlan.changes, "pgy") ? "เหตุผลที่เปลี่ยน PGY *" : "เหตุผลในการแก้ไข (ถ้ามี)"}<textarea {...fieldProps("reason")} value={draft.reason} maxLength={300} onChange={(event) => updateDraft("reason", event.target.value)} /><small>ไม่ใส่ข้อมูลผู้ป่วยหรือข้อมูลส่วนตัวที่ไม่จำเป็น</small>{validationText("reason")}</label></fieldset>
           {validationText("general")}{errorBox}
