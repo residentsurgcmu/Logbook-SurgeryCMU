@@ -72,18 +72,17 @@ export function conferenceWeek(iso) {
 }
 
 // Friday conference window: everything admitted since the previous Friday
-// conference (Saturday..Friday), so weekend admissions are never skipped.
+// through the Thursday before this meeting.
 export function conferenceWindow(weekStart) {
-  return { from: shiftIsoDate(weekStart, -2), to: shiftIsoDate(weekStart, 4) };
+  return { from: shiftIsoDate(weekStart, -3), to: shiftIsoDate(weekStart, 3) };
 }
 
-// The conference week whose window contains this admission date: Saturday and
-// Sunday admissions are presented at the following Friday conference.
+// Friday, Saturday and Sunday admissions belong to the following Friday meeting.
 export function conferenceWeekForCase(iso) {
   const ms = Date.parse(`${iso}T00:00:00Z`);
   if (Number.isNaN(ms)) return null;
   const day = new Date(ms).getUTCDay();
-  return conferenceWeek(shiftIsoDate(iso, day === 6 ? 2 : day === 0 ? 1 : 0));
+  return conferenceWeek(shiftIsoDate(iso, day === 5 ? 3 : day === 6 ? 2 : day === 0 ? 1 : 0));
 }
 
 export function caseImagePath(caseId, fileId = crypto.randomUUID()) {

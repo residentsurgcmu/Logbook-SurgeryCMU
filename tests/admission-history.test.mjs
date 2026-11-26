@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { conferenceWeekForCase, conferenceWindow } from "../src/residentCases.js";
 import { bangkokIsoDate } from "../src/roundSchedule.js";
 import { admissionWeek, archiveRange, caseMatchesSearch, groupAdmissionWeeks } from "../src/admissionHistory.js";
 
@@ -9,6 +10,8 @@ test("admission windows join Friday to Thursday, with a Friday midnight rollover
   assert.deepEqual(admissionWeek(bangkokIsoDate(new Date("2026-12-31T16:59:59Z"))), previous);
   assert.deepEqual(admissionWeek(bangkokIsoDate(new Date("2026-12-31T17:00:00Z"))), current);
   assert.deepEqual(admissionWeek("2027-01-07"), current);
+  assert.deepEqual(conferenceWindow(conferenceWeekForCase("2027-01-01").start), current);
+  assert.deepEqual(conferenceWindow(conferenceWeekForCase("2026-12-31").start), previous);
   assert.deepEqual(archiveRange(current.from, 4), { from: "2026-12-04", to: previous.to });
   assert.deepEqual(archiveRange(current.from, 0), { from: "2020-01-01", to: previous.to });
 });

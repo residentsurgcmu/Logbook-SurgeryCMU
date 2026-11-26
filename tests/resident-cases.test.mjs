@@ -160,14 +160,14 @@ test("conflict and permission errors become Thai messages", () => {
   assert.equal(caseErrorMessage(null), "ทำรายการไม่สำเร็จ");
 });
 
-test("conference window starts on the Saturday after the previous Friday conference", () => {
-  assert.deepEqual(conferenceWindow("2026-09-28"), { from: "2026-09-26", to: "2026-10-02" });
+test("conference window is the preceding Friday through Thursday", () => {
+  assert.deepEqual(conferenceWindow("2026-09-28"), { from: "2026-09-25", to: "2026-10-01" });
 });
 
-test("a weekend admission belongs to the following week's conference", () => {
+test("a Friday or weekend admission belongs to the following Friday's conference", () => {
   assert.deepEqual(conferenceWeekForCase("2026-10-03"), { start: "2026-10-05", end: "2026-10-09" }); // Sat
   assert.deepEqual(conferenceWeekForCase("2026-10-04"), { start: "2026-10-05", end: "2026-10-09" }); // Sun
-  assert.deepEqual(conferenceWeekForCase("2026-10-02"), { start: "2026-09-28", end: "2026-10-02" }); // Fri
+  assert.deepEqual(conferenceWeekForCase("2026-10-02"), { start: "2026-10-05", end: "2026-10-09" }); // Fri
   assert.deepEqual(conferenceWeekForCase("2026-09-28"), { start: "2026-09-28", end: "2026-10-02" }); // Mon
   assert.equal(conferenceWeekForCase("bad"), null);
   // Every admission date falls inside the window of the week it is assigned to.

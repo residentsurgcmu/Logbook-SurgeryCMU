@@ -13,7 +13,7 @@ import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./Case
 // date, so everyone sees the same list. Table = the list; Deck = present one case at a time.
 export default function ResidentConference({ user, initialCase = null }) {
   const [weekStart, setWeekStart] = useState(
-    // A weekend admission is presented at the following Friday conference; with
+    // An admission on or after Friday is presented at the following Friday conference; with
     // no case selected, open the week that contains (or just ended before) today.
     () => (initialCase ? conferenceWeekForCase(initialCase.admit_date) : conferenceWeek(bangkokIsoDate())).start,
   );
@@ -119,7 +119,7 @@ export default function ResidentConference({ user, initialCase = null }) {
     }
   }
 
-  const label = `${thaiDate(week.start)} – ${thaiDate(week.end)}`;
+  const label = `ประชุมวันศุกร์ที่ ${thaiDate(meetingDate)}`;
   const changed = session && (session.excluded_case_ids.length || session.added_case_ids.length || session.case_order.length);
   return (
     <section className="resident-panel case-present">
@@ -136,7 +136,7 @@ export default function ResidentConference({ user, initialCase = null }) {
       </div>
       <small className="case-muted">
         รวมเคสที่รับตั้งแต่ {thaiDate(range.from)} ถึง {thaiDate(range.to)}
-        {changed ? ` · จัดรายการแล้ว (ยกเว้น ${session.excluded_case_ids.length} · เพิ่มเคสเก่า ${session.added_case_ids.length})` : " · รายการอัตโนมัติ"}
+        {session ? (changed ? ` · จัดรายการแล้ว (ยกเว้น ${session.excluded_case_ids.length} · เพิ่มเคสเก่า ${session.added_case_ids.length})` : " · ช่วงวันที่ที่บันทึกไว้") : " · รายการอัตโนมัติ"}
       </small>
       {error && <p className="form-error" role="alert">{error}</p>}
       {notice && <p className="form-success" role="status">{notice}</p>}
@@ -447,6 +447,8 @@ function AgendaEditor({ meetingDate, session, defaultRange, people, onClose, onS
       <div className="conf-range">
         <label>รับตั้งแต่<input type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>ถึงวันที่<input type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} /></label>
+        {(from !== defaultRange.from || to !== defaultRange.to) && <button type="button" className="secondary-button" disabled={busy}
+          onClick={() => { setFrom(defaultRange.from); setTo(defaultRange.to); }}>ใช้ช่วงศุกร์–พฤหัสบดี</button>}
       </div>
       {rangeProblem && <p className="form-error" role="alert">{rangeProblem}</p>}
       {!pool && !loadError && <p className="case-muted">กำลังโหลดเคส…</p>}
