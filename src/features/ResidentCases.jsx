@@ -16,6 +16,8 @@ import {
   caseErrorMessage,
   caseSexLabel,
   caseTypeLabel,
+  caseTreatmentField,
+  caseFormForSave,
   caseUnitLabel,
   isCaseConflict,
   splitCaseImageFiles,
@@ -59,8 +61,8 @@ const caseToForm = (row) => ({
   age_years: String(row.age_years),
   sex: row.sex,
   diagnosis: row.diagnosis,
-  management: row.management,
-  operation: row.operation,
+  management: row.management ?? "",
+  operation: row.operation ?? "",
   unit_name: row.unit_name,
   status: row.status,
   treatment_type: row.treatment_type || "",
@@ -69,6 +71,7 @@ const caseToForm = (row) => ({
 
 function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClose }) {
   const [form, setForm] = useState(() => (initial ? caseToForm(initial) : emptyForm(user)));
+  const treatmentField = caseTreatmentField(form.treatment_type);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
@@ -107,7 +110,8 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
   async function submit(event) {
     event.preventDefault();
     if (busy) return;
-    const problem = validateCaseForm(form, new Date(), { requireType: !initial });
+    const payload = caseFormForSave(form, initial);
+    const problem = validateCaseForm(payload, new Date(), { requireType: !initial, requireTreatmentDetail: true });
     if (problem) return setError(problem);
     if (hnRequired && !retryPayload.current && !isCaseHn(hnInput.current?.value.trim())) {
       hnInput.current?.focus();
@@ -121,7 +125,7 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
     let caseId;
     try {
       if (initial) {
-        await updateAdmissionCase(initial.id, initial.updated_at, form);
+        await updateAdmissionCase(initial.id, initial.updated_at, payload);
         caseId = initial.id;
       } else if (hnRequired) {
         if (!retryPayload.current) {
@@ -132,14 +136,14 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
           const sealed = await sealPilotHn({
             publicKey: reserved.publicKey, configuredKey: pinnedKeyId, caseUuid: id, caseCode: reserved.caseCode, hn,
           });
-          const { owner_id: _ownerId, ...fields } = form;
+          const { owner_id: _ownerId, ...fields } = payload;
           retryPayload.current = Object.freeze({
             p_case_id: id, p_fields: fields, p_key_id: sealed.keyId, p_ciphertext: sealed.ciphertext,
           });
         }
         caseId = (await hnPilotCreateAction("save", retryPayload.current)).id;
       } else {
-        caseId = await createAdmissionCase(form);
+        caseId = await createAdmissionCase(payload);
       }
     } catch (nextError) {
       setConflict(!hnRequired && isCaseConflict(nextError));
@@ -200,9 +204,9 @@ function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClos
         <label>เพศ<select value={form.sex} onChange={set("sex")}>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>หน่วย<select value={form.unit_name} onChange={set("unit_name")}>{CASE_UNITS.map((unit) => <option key={unit} value={unit}>{caseUnitLabel(unit)}</option>)}</select></label>
         <label className="case-full">Diagnosis<input maxLength={CASE_LIMITS.diagnosis} value={form.diagnosis} onChange={set("diagnosis")} required /></label>
-        <label className="case-full">Management<textarea rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>
-        <label className="case-full">Operation<input maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>
-        <label>{initial ? "Type" : "Type (จำเป็น)"}<select value={form.treatment_type} onChange={set("treatment_type")} aria-required={!initial}><option value="">{initial ? "ยังไม่ระบุ" : "เลือก Type"}</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="case-full">{initial ? "Type" : "Type (จำเป็น)"}<select value={form.treatment_type} onChange={set("treatment_type")} aria-required={!initial}><option value="">{initial ? "ยังไม่ระบุ" : "เลือก Type"}</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {treatmentField === "operation" && <label className="case-full">Operation (จำเป็น)<input required maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>}
+        {treatmentField === "management" && <label className="case-full">Management (จำเป็น)<textarea required rows={2} maxLength={CASE_LIMITS.management} value={form.management} onChange={set("management")} /></label>}
         <label>Owner (Resident)
           <select value={form.owner_id} onChange={set("owner_id")} disabled={hnRequired} required>
             <option value="">เลือก Resident</option>
@@ -490,7 +494,17 @@ function ResidentCasesPage({ user, onPresent }) {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [unit, setUnit] = useState("all");
-  const [view, setView] = useState("table");
+  const [wideView, setWideView] = useState("table");
+  const listPanel = useRef(null);
+  const [wide, setWide] = useState(false);
+  const view = wide ? wideView : "cards";
+  useEffect(() => {
+    const panel = listPanel.current;
+    // Reserve room for the archive inset so both sections use the same layout.
+    const resize = new ResizeObserver(([entry]) => setWide(entry.contentRect.width >= 990));
+    resize.observe(panel);
+    return () => resize.disconnect();
+  }, []);
   const [showDeleted, setShowDeleted] = useState(false);
   const [pilotActor, setPilotActor] = useState(null);
   useEffect(() => {
@@ -588,7 +602,7 @@ function ResidentCasesPage({ user, onPresent }) {
   };
 
   return (
-    <section className="resident-panel case-list-page">
+    <section ref={listPanel} className="resident-panel case-list-page">
       <div className="panel-title-row">
         <div><h2>เคสรับใหม่ของภาควิชา</h2><p>ทุกคนที่ active เห็นเคสร่วมกัน · ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</p></div>
         <div className="button-row">
@@ -614,10 +628,10 @@ function ResidentCasesPage({ user, onPresent }) {
         <label>ค้นหา<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Diagnosis, รหัสเคส หรือผู้รับผิดชอบ" /></label>
         <label>Type<select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="all">ทุก Type</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="unset">ยังไม่ระบุ</option></select></label>
         <label>หน่วย<select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="all">ทุกหน่วย</option>{CASE_UNITS.map((name) => <option key={name} value={name}>{caseUnitLabel(name)}</option>)}</select></label>
-        <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงเคส">
-          <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setView("table")}>Table</button>
-          <button type="button" className={view === "cards" ? "active" : ""} aria-pressed={view === "cards"} onClick={() => setView("cards")}>Flashcards</button>
-        </div>
+        {wide && <div className="case-view-switch" role="group" aria-label="รูปแบบการแสดงเคส">
+          <button type="button" className={view === "table" ? "active" : ""} aria-pressed={view === "table"} onClick={() => setWideView("table")}>Table</button>
+          <button type="button" className={view === "cards" ? "active" : ""} aria-pressed={view === "cards"} onClick={() => setWideView("cards")}>Flashcards</button>
+        </div>}
         {user.role === "admin" && (
           <label className="case-check"><input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} /> แสดงเคสที่ถูกลบ</label>
         )}

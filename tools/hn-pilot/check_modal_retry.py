@@ -97,6 +97,7 @@ async def check(page, public_key, origin, entry):
     await page.get_by_label("อายุ (ปี)").fill("40")
     await page.get_by_label("Diagnosis").fill("fixture")
     await page.get_by_label("Type (จำเป็น)").select_option("conservative")
+    await page.get_by_label("Management (จำเป็น)").fill("Fixture management")
     await page.get_by_placeholder("ตัวเลข 7 หลัก").fill(HN)
     submit = dialog.get_by_role("button", name="บันทึก", exact=True)
     await submit.click()

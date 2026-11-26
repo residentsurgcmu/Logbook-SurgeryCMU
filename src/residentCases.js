@@ -24,8 +24,24 @@ const labelOf = (pairs, value) => pairs.find(([key]) => key === value)?.[1] || v
 export const caseSexLabel = (value) => labelOf(CASE_SEXES, value);
 export const caseTypeLabel = (value) => (value ? labelOf(CASE_TYPES, value) : "ยังไม่ระบุ");
 
+export function caseTreatmentField(type) {
+  if (type === "operative") return "operation";
+  if (type === "conservative") return "management";
+  return null;
+}
+
+// Do not save hidden drafts on new cases or erase historical fields on edits.
+export function caseFormForSave(form, initial) {
+  const field = caseTreatmentField(form.treatment_type);
+  return {
+    ...form,
+    operation: field === "operation" ? String(form.operation ?? "").trim() : (initial?.operation ?? ""),
+    management: field === "management" ? String(form.management ?? "").trim() : (initial?.management ?? ""),
+  };
+}
+
 // Returns "" when the form is acceptable, otherwise a Thai message.
-export function validateCaseForm(form, at = new Date(), { requireType = false } = {}) {
+export function validateCaseForm(form, at = new Date(), { requireType = false, requireTreatmentDetail = false } = {}) {
   const date = String(form.admit_date || "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "กรุณาเลือกวันที่รับ";
   const year = Number(date.slice(0, 4));
@@ -43,6 +59,10 @@ export function validateCaseForm(form, at = new Date(), { requireType = false } 
   if (!CASE_UNITS.includes(form.unit_name)) return "กรุณาเลือกหน่วย";
   if (requireType && !form.treatment_type) return "กรุณาเลือก Type (Non-operative หรือ Operative)";
   if (form.treatment_type && !CASE_TYPES.some(([key]) => key === form.treatment_type)) return "กรุณาเลือก Type ให้ถูกต้อง";
+  if (requireTreatmentDetail) {
+    const field = caseTreatmentField(form.treatment_type);
+    if (field && !String(form[field] ?? "").trim()) return field === "operation" ? "กรุณาระบุ Operation" : "กรุณาระบุ Management";
+  }
   if (!form.owner_id) return "กรุณาเลือก Owner (Resident)";
   return "";
 }

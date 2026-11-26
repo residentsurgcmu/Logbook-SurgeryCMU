@@ -6,12 +6,12 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("cases screen validates, blocks double submit, and handles conflicts", async () => {
   const ui = await read("src/features/ResidentCases.jsx");
-  assert.match(ui, /validateCaseForm\(form, new Date\(\), \{ requireType: !initial \}\)/);
+  assert.match(ui, /validateCaseForm\(payload, new Date\(\), \{ requireType: !initial, requireTreatmentDetail: true \}\)/);
   assert.match(ui, /if \(busy\) return;/);
   assert.match(ui, /disabled=\{busy\}/);
   assert.match(ui, /isCaseConflict\(/);
   assert.match(ui, /โหลดข้อมูลล่าสุด/);
-  assert.match(ui, /updateAdmissionCase\(initial\.id, initial\.updated_at, form\)/);
+  assert.match(ui, /updateAdmissionCase\(initial\.id, initial\.updated_at, payload\)/);
   assert.match(ui, /softDeleteAdmissionCase\(row\.id, row\.updated_at\)/);
 });
 

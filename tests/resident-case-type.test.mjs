@@ -41,8 +41,8 @@ test("a case and its Type are saved in ONE database step, both when creating and
   assert.doesNotMatch(api, /set_resident_case_treatment_type|setAdmissionCaseType/);
   assert.doesNotMatch(ui, /setAdmissionCaseType|CASE_TYPE_SAVE_FAILED/);
   const submit = ui.slice(ui.indexOf("async function submit"), ui.indexOf("return (\n    <form className=\"case-form\""));
-  assert.match(submit, /await updateAdmissionCase\(initial\.id, initial\.updated_at, form\);/);
-  assert.match(submit, /caseId = await createAdmissionCase\(form\);/);
+  assert.match(submit, /await updateAdmissionCase\(initial\.id, initial\.updated_at, payload\);/);
+  assert.match(submit, /caseId = await createAdmissionCase\(payload\);/);
 });
 
 test("the Type migration is additive: new column + new function only, nothing existing is dropped or rewritten", async () => {

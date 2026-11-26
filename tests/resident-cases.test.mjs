@@ -10,6 +10,7 @@ import {
   canEditCase,
   canEditNote,
   caseErrorMessage,
+  caseFormForSave,
   caseImagePath,
   caseSexLabel,
   caseTypeLabel,
@@ -35,6 +36,31 @@ const good = {
   status: "admit",
   owner_id: "11111111-1111-4111-8111-111111111111",
 };
+
+test("typed admissions require the matching detail and omit other new drafts", () => {
+  const options = { requireType: true, requireTreatmentDetail: true };
+  const operative = { ...good, treatment_type: "operative", operation: "  " };
+  assert.match(validateCaseForm(caseFormForSave(operative), NOW, options), /Operation/);
+  const ready = caseFormForSave({ ...operative, operation: " Procedure " });
+  assert.equal(ready.operation, "Procedure");
+  assert.equal(ready.management, "");
+  assert.equal(validateCaseForm(ready, NOW, options), "");
+  const nonOperative = { ...ready, treatment_type: "conservative", management: "   " };
+  assert.match(validateCaseForm(caseFormForSave(nonOperative), NOW, options), /Management/);
+  const alternate = caseFormForSave({ ...nonOperative, management: " Observation " });
+  assert.equal(alternate.operation, "");
+  assert.equal(alternate.management, "Observation");
+  assert.equal(validateCaseForm(alternate, NOW, options), "");
+});
+
+test("editing a case retains saved values in hidden treatment fields", () => {
+  const original = { ...good, treatment_type: "operative", operation: "Earlier procedure" };
+  const draft = { ...original, treatment_type: "conservative", management: "Follow-up", operation: "Hidden draft" };
+  assert.equal(caseFormForSave(draft, original).operation, original.operation);
+  assert.equal(caseFormForSave(draft, original).management, "Follow-up");
+  const untyped = caseFormForSave({ ...draft, treatment_type: "" }, original);
+  assert.deepEqual([untyped.management, untyped.operation], [original.management, original.operation]);
+});
 
 test("labels fall back to the raw value", () => {
   assert.equal(caseTypeLabel("operative"), "Operative");
