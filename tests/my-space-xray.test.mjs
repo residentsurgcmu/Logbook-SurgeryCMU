@@ -1,6 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMySpaceXray } from "../src/mySpaceXray.js";
+import { createHash } from "node:crypto";
+import { buildMySpaceXray, matchesXrayPilotEmail } from "../src/mySpaceXray.js";
+
+test("pilot is opt-in for the configured account only", async () => {
+  const email = "pilot@example.test";
+  const digest = createHash("sha256").update(email).digest("hex");
+  assert.equal(await matchesXrayPilotEmail(" PILOT@example.test ", digest), true);
+  assert.equal(await matchesXrayPilotEmail("other@example.test", digest), false);
+  assert.equal(await matchesXrayPilotEmail(email, ""), false);
+  assert.equal(await matchesXrayPilotEmail(email, digest, {}), false);
+});
 
 const row = (part_name, fields) => ({
   resident_id: "my-account", exam_type: "xray_anatomy", exam_id: "e2", revision_id: "r2",

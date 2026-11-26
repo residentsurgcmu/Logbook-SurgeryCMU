@@ -51,7 +51,12 @@ function OwnXrayResults({ userId }) {
   if (result.loading) return <p className="ms-muted" role="status">กำลังโหลดผลสอบ…</p>;
   if (result.error) return <div><p className="ms-error" role="alert">โหลดผลสอบไม่สำเร็จ</p><button type="button" className="ms-link" onClick={() => setReload((value) => value + 1)}>ลองใหม่</button></div>;
   if (!result.radar) return <p className="ms-empty">ยังไม่มีผล X-ray Anatomy ที่ประกาศสำหรับคุณ</p>;
-  const { title, date, axes, unmapped } = result.radar;
+  return <XrayRadarResult radar={result.radar} />;
+}
+
+export function XrayRadarResult({ radar }) {
+  if (!radar) return <p className="ms-empty">ไม่พบผล X-ray Anatomy ที่ประกาศสำหรับผู้สอบในช่วงที่เลือก</p>;
+  const { title, date, axes, unmapped } = radar;
   return <>
     <p className="ms-muted">{title} · สอบ {thaiDate(date)}</p>
     <Radar axes={axes} />
