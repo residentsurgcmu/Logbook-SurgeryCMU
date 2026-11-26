@@ -29,16 +29,10 @@
 }
 
 .conf-type-legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin:8px 0; font-size:12px; color:var(--resident-muted); }
-.conf-type-legend > span,.conf-unit-name { display:inline-flex; align-items:center; gap:5px; }
+.conf-type-legend > span { display:inline-flex; align-items:center; gap:5px; }
 .conf-status-dot { display:inline-block; flex:none; width:.65rem; height:.65rem; border-radius:50%; background:#64748b; }
 .conf-status-dot[data-variant="operative"] { background:#7c3aed; }
 .conf-status-dot[data-variant="non-operative"] { background:#15803d; }
-.conf-status-dot[data-variant="upper-gi"] { background:#c2410c; }
-.conf-status-dot[data-variant="colorectal"] { background:#2563eb; }
-.conf-status-dot[data-variant="hbp"] { background:#a16207; }
-.conf-status-dot[data-variant="breast-endocrine"] { background:#f9a8d4; box-shadow:inset 0 0 0 1px #a93d72; }
-.conf-status-dot[data-variant="vascular"] { background:#b91c1c; }
-.conf-status-dot[data-variant="trauma"] { background:#4338ca; }
 .conf-treatment { min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
 .conf-treatment small { display:block; font-weight:700; color:var(--resident-muted); }
 .conf-table td { overflow-wrap:anywhere; }

@@ -8,10 +8,6 @@ import ConferenceDateFilter from "../components/ConferenceDateFilter";
 import { includesConferenceDay } from "../conferenceDisplayDates";
 import { CaseModal, CaseNotes, CaseTypeChip, personName, thaiDate } from "./CaseParts";
 
-const unitDots = {
-  "Upper GI": "upper-gi", Colorectal: "colorectal", HPB: "hbp",
-  "B&E": "breast-endocrine", Vascular: "vascular", Trauma: "trauma",
-};
 const typeDots = { operative: "operative", conservative: "non-operative" };
 
 function ConferenceStatusDot({ variant }) {
@@ -20,9 +16,6 @@ function ConferenceStatusDot({ variant }) {
 function ConferenceTypeDot({ type }) {
   const label = caseTypeLabel(type);
   return <span title={label}><ConferenceStatusDot variant={typeDots[type]} /><span className="visually-hidden">{label}</span></span>;
-}
-function ConferenceUnit({ unit }) {
-  return <span className="conf-unit-name">{caseUnitLabel(unit)} <ConferenceStatusDot variant={unitDots[unit]} /></span>;
 }
 function ConferenceTreatment({ row }) {
   const field = caseTreatmentField(row.treatment_type);
@@ -197,7 +190,7 @@ export default function ResidentConference({ user, initialCase = null }) {
                     <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong>{addedIds.has(row.id) && <span className="case-count">เพิ่มเอง</span>}<br /><small>{thaiDate(row.admit_date)}</small></div></td>
                     <td data-label="Diagnosis"><div className="case-cell">{row.diagnosis}<br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
                     <td data-label="Operation / Management"><ConferenceTreatment row={row} /></td>
-                    <td data-label="หน่วย / Owner"><div className="case-cell"><ConferenceUnit unit={row.unit_name} /><br /><small>{personName(people, row.owner_id)}</small></div></td>
+                    <td data-label="หน่วย / Owner"><div className="case-cell">{caseUnitLabel(row.unit_name)}<br /><small>{personName(people, row.owner_id)}</small></div></td>
                     <td data-label="Type"><ConferenceTypeDot type={row.treatment_type} /></td>
                     <td><button type="button" className="secondary-button" onClick={() => { setIndex(position); setView("deck"); }}>เปิด Deck</button></td>
                   </tr>
@@ -220,7 +213,7 @@ export default function ResidentConference({ user, initialCase = null }) {
                         <div className="conf-mobile-details">
                           <dl>
                             <dt>Diagnosis</dt><dd>{row.diagnosis} · {caseSexLabel(row.sex)} · {row.age_years} ปี</dd>
-                            <dt>หน่วย / Owner</dt><dd><ConferenceUnit unit={row.unit_name} /> · {personName(people, row.owner_id)}</dd>
+                            <dt>หน่วย / Owner</dt><dd>{caseUnitLabel(row.unit_name)} · {personName(people, row.owner_id)}</dd>
                             <dt>Type</dt><dd><ConferenceTypeDot type={row.treatment_type} /></dd>
                             <dt>การรักษา</dt><dd><ConferenceTreatment row={row} /></dd>
                           </dl>
