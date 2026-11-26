@@ -1,4 +1,5 @@
-import CaseHnPilot, { caseHnPilotEnabled } from "./CaseHnPilot";
+import { isCaseHn, sealPilotHn } from "../caseHnPilotCrypto";
+import CaseHnPilot, { caseHnPilotEnabled, pinnedKeyId } from "./CaseHnPilot";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlusIcon } from "../components/Icons";
 import {
@@ -19,6 +20,7 @@ import {
 import { bangkokIsoDate } from "../roundSchedule";
 import {
   createAdmissionCase,
+  hnPilotCreateAction,
   deleteCaseMedia,
   loadAdmissionCases,
   loadCaseMedia,
@@ -59,13 +61,17 @@ const caseToForm = (row) => ({
   owner_id: row.owner_id,
 });
 
-function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
+function CaseForm({ user, people, initial, hnRequired, onSaved, onReload, onClose }) {
   const [form, setForm] = useState(() => (initial ? caseToForm(initial) : emptyForm(user)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [stage, setStage] = useState("");
   const [pending, setPending] = useState([]); // [{ file, url }] previews, uploaded after save
+  const hnInput = useRef(null);
+  const requestId = useRef(null);
+  const retryPayload = useRef(null);
+  const [retryLocked, setRetryLocked] = useState(false);
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   useEffect(() => () => pendingRef.current.forEach((item) => URL.revokeObjectURL(item.url)), []);
@@ -92,6 +98,10 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
     if (busy) return;
     const problem = validateCaseForm(form, new Date(), { requireType: !initial });
     if (problem) return setError(problem);
+    if (hnRequired && !retryPayload.current && !isCaseHn(hnInput.current?.value.trim())) {
+      hnInput.current?.focus();
+      return setError("กรุณากรอก HN ให้ครบ 7 หลัก");
+    }
     setBusy(true);
     setError("");
     setConflict(false);
@@ -101,12 +111,39 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
       if (initial) {
         await updateAdmissionCase(initial.id, initial.updated_at, form);
         caseId = initial.id;
+      } else if (hnRequired) {
+        if (!retryPayload.current) {
+          const hn = hnInput.current.value.trim();
+          hnInput.current.value = "";
+          const id = requestId.current ??= globalThis.crypto.randomUUID();
+          const reserved = await hnPilotCreateAction("reserve", { p_case_id: id });
+          const sealed = await sealPilotHn({
+            publicKey: reserved.publicKey, configuredKey: pinnedKeyId, caseUuid: id, caseCode: reserved.caseCode, hn,
+          });
+          const { owner_id: _ownerId, ...fields } = form;
+          retryPayload.current = Object.freeze({
+            p_case_id: id, p_fields: fields, p_key_id: sealed.keyId, p_ciphertext: sealed.ciphertext,
+          });
+        }
+        caseId = (await hnPilotCreateAction("save", retryPayload.current)).id;
       } else {
         caseId = await createAdmissionCase(form);
       }
     } catch (nextError) {
       setConflict(isCaseConflict(nextError));
-      setError(caseErrorMessage(nextError));
+      if (hnRequired) {
+        if (retryPayload.current && (!nextError?.code || !/^(22|23|42|P0)/.test(nextError.code))) {
+          setRetryLocked(true);
+          setError("ยังยืนยันการบันทึกไม่ได้ กดบันทึกอีกครั้งเพื่อตรวจคำขอเดิม ไม่ต้องกรอก HN ซ้ำ");
+        } else {
+          retryPayload.current = null;
+          requestId.current = null;
+          setRetryLocked(false);
+          setError("บันทึกเคส Grand Rounds ไม่สำเร็จ ตรวจข้อมูลและกรอก HN ใหม่ หากยังไม่ผ่านให้ติดต่อผู้ดูแล");
+        }
+      } else {
+        setError(caseErrorMessage(nextError));
+      }
       setBusy(false);
       setStage("");
       return;
@@ -132,14 +169,19 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
 
   return (
     <form className="case-form" noValidate onSubmit={submit}>
-      <PrivacyNotice />
+      {hnRequired ? <p className="case-muted">กรอก HN ในช่องที่กำหนดเท่านั้น ห้ามใส่ชื่อหรือข้อมูลระบุตัวผู้ป่วยในช่องอื่นหรือภาพแนบ</p> : <PrivacyNotice />}
       {error && <p className="form-error" role="alert">{error}</p>}
       {conflict && (
         <div className="button-row">
           <button type="button" className="secondary-button" onClick={async () => { await onReload(); onClose(); }}>โหลดข้อมูลล่าสุดและปิด</button>
         </div>
       )}
-      <div className="case-grid">
+      <fieldset className="case-grid" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }} disabled={busy || retryLocked}>
+        {hnRequired && <label className="case-full">HN ผู้ป่วย (จำเป็น)
+          <input ref={hnInput} inputMode="numeric" autoComplete="off" spellCheck={false} required
+            aria-describedby="case-create-hn-note" placeholder="ตัวเลข 7 หลัก" />
+          <small id="case-create-hn-note">กรอก HN ในช่องนี้เท่านั้น ระบบจะเข้ารหัสก่อนส่ง</small>
+        </label>}
         <label>วันที่รับ<input type="date" value={form.admit_date} min={CASE_MIN_ADMIT_DATE} max={bangkokIsoDate()} onChange={set("admit_date")} required /></label>
         <label>อายุ (ปี)<input type="number" inputMode="numeric" min={0} max={120} step={1} value={form.age_years} onChange={set("age_years")} required /></label>
         <label>เพศ<select value={form.sex} onChange={set("sex")}>{CASE_SEXES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -149,12 +191,12 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
         <label className="case-full">Operation<input maxLength={CASE_LIMITS.operation} value={form.operation} onChange={set("operation")} /></label>
         <label>{initial ? "Type" : "Type (จำเป็น)"}<select value={form.treatment_type} onChange={set("treatment_type")} aria-required={!initial}><option value="">{initial ? "ยังไม่ระบุ" : "เลือก Type"}</option>{CASE_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>Owner (Resident)
-          <select value={form.owner_id} onChange={set("owner_id")} required>
+          <select value={form.owner_id} onChange={set("owner_id")} disabled={hnRequired} required>
             <option value="">เลือก Resident</option>
             {owners.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}</option>)}
           </select>
         </label>
-      </div>
+      </fieldset>
       <div className="case-form-images">
         <div className="case-images-head">
           <strong>ภาพแนบ {pending.length ? `(${pending.length})` : ""}</strong>
@@ -177,7 +219,7 @@ function CaseForm({ user, people, initial, onSaved, onReload, onClose }) {
         )}
       </div>
       <div className="button-row case-actions">
-        <button type="button" className="secondary-button" onClick={onClose}>ยกเลิก</button>
+        <button type="button" className="secondary-button" onClick={onClose} disabled={busy || retryLocked}>ยกเลิก</button>
         <button type="submit" className="primary-button" disabled={busy}>{stage === "upload" ? "กำลังอัปโหลดภาพ…" : busy ? "กำลังบันทึก…" : "บันทึก"}</button>
       </div>
     </form>
@@ -359,6 +401,15 @@ export default function ResidentCases({ user, onPresent }) {
   const [unit, setUnit] = useState("all");
   const [view, setView] = useState("table");
   const [showDeleted, setShowDeleted] = useState(false);
+  const [pilotActor, setPilotActor] = useState(null);
+  useEffect(() => {
+    if (!caseHnPilotEnabled || user.role !== "resident") return;
+    let stale = false;
+    hnPilotCreateAction("status").then((value) => {
+      if (!stale) setPilotActor(value?.eligible ? user.id : null);
+    }).catch(() => { if (!stale) setPilotActor(null); });
+    return () => { stale = true; };
+  }, [user.id, user.role]);
   const [dialog, setDialog] = useState(null); // { type: "form" | "detail", id? }
 
   const load = useCallback(async () => {
@@ -394,6 +445,10 @@ export default function ResidentCases({ user, onPresent }) {
         <div className="button-row">
           <button type="button" className="secondary-button" disabled={!cases?.length} onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
           <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
+          {pilotActor === user.id && <button type="button" className="primary-button"
+            onClick={() => setDialog({ type: "form", hnRequired: true, actorId: user.id })}>
+            <PlusIcon size={16} /> เพิ่มเคส Grand Rounds (นำร่อง)
+          </button>}
         </div>
       </div>
       {error && <p className="form-error" role="alert">{error} <button type="button" className="link-button" onClick={load}>ลองใหม่</button></p>}
@@ -459,9 +514,9 @@ export default function ResidentCases({ user, onPresent }) {
         {cases && visible.length === 0 && <p className="case-muted">ไม่พบเคสที่ตรงกับเงื่อนไข</p>}
         {!cases && !error && <p className="case-muted">กำลังโหลดเคส…</p>}
       </div>
-      {dialog?.type === "form" && (!dialog.id || current) && (
-        <CaseModal title={dialog.id ? `แก้ไข ${current.case_code}` : "เพิ่มเคสใหม่"} onClose={() => setDialog(null)}>
-          <CaseForm user={user} people={people} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
+      {dialog?.type === "form" && (!dialog.hnRequired || dialog.actorId === user.id) && (!dialog.id || current) && (
+        <CaseModal title={dialog.id ? `แก้ไข ${current.case_code}` : dialog.hnRequired ? "เพิ่มเคส Grand Rounds" : "เพิ่มเคสใหม่"} onClose={() => setDialog(null)}>
+          <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
       {dialog?.type === "excel" && (

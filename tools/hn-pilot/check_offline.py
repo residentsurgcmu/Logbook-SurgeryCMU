@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as folder, sync_playwright() as p:
     bundle=json.loads(raw)
     (t/"bundle.json").write_text(raw)
     page.set_input_files("#private-file", t/"private.json")
-    page.fill("#expect","ADM-00001")
+    page.fill("#expect","ADM-00003")
     for mutation in (True,False):
         if mutation:
             broken = json.loads(raw)
@@ -39,8 +39,8 @@ with tempfile.TemporaryDirectory() as folder, sync_playwright() as p:
             expect(page.locator("#status")).to_contain_text("เปิดไม่ได้")
             expect(page.locator("#result")).to_be_empty()
         else:
-            expect(page.locator("#result")).to_have_text("ADM-00001 · 0123456")
+            expect(page.locator("#result")).to_have_text("ADM-00003 · 0123456")
             page.click("#hide")
             expect(page.locator("#result")).to_be_empty()
     assert all(url.startswith("file:") for url in urls)
-    print("PASS: seven-digit string → restricted SQL save → audited private export → offline browser; leading zero retained")
+    print("PASS: seven-digit string → required atomic case create → audited private export → offline browser; leading zero retained")

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabase";
 import { isCaseHnPilotEnabled, isCaseHn, sealPilotHn } from "../caseHnPilotCrypto";
 
-const pinnedKeyId = import.meta.env.VITE_CASE_HN_PILOT_KEY_ID;
+export const pinnedKeyId = import.meta.env.VITE_CASE_HN_PILOT_KEY_ID;
 export const caseHnPilotEnabled = isCaseHnPilotEnabled(
   import.meta.env.VITE_CASE_HN_PILOT, import.meta.env.VITE_SUPABASE_URL, pinnedKeyId,
 );
