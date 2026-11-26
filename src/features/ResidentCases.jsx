@@ -1,7 +1,8 @@
 import { isCaseHn, sealPilotHn } from "../caseHnPilotCrypto";
 import CaseHnExport from "./CaseHnExport";
 import CaseHnPilot, { caseHnPilotEnabled, pinnedKeyId } from "./CaseHnPilot";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { admissionWeek, archiveRange, caseMatchesSearch, groupAdmissionWeeks } from "../admissionHistory";
 import { PlusIcon } from "../components/Icons";
 import {
   CASE_LIMITS,
@@ -27,6 +28,7 @@ import {
   loadAdmissionCases,
   loadCaseMedia,
   loadCasePeople,
+  loadCasesByIds,
   purgeAdmissionCase,
   purgeCaseMedia,
   softDeleteAdmissionCase,
@@ -350,14 +352,29 @@ function CaseDetail({ user, people, row, notice, onEdit, onPresent, onChanged, o
 
 const EXPORT_PRESETS = [["week", "สัปดาห์นี้"], ["month", "เดือนนี้"], ["last-month", "เดือนที่แล้ว"], ["custom", "กำหนดเอง"]];
 
-function ExcelExportDialog({ cases, people, onClose }) {
+function ExcelExportDialog({ people, onClose }) {
   const [preset, setPreset] = useState("month");
   const [range, setRange] = useState(() => caseExportRange("month"));
   const [unit, setUnit] = useState("all");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const problem = validateExportRange(range.from, range.to);
-  const rows = problem ? [] : filterCasesForExport(cases || [], { ...range, unit });
+  const [loaded, setLoaded] = useState(null);
+  const rangeKey = `${range.from}/${range.to}`;
+  const rows = problem || loaded?.key !== rangeKey ? null : filterCasesForExport(loaded.rows, { ...range, unit });
+  useEffect(() => {
+    if (problem) return;
+    const request = new AbortController();
+    setLoaded(null);
+    setError("");
+    loadAdmissionCases({ from: range.from, to: range.to, signal: request.signal }).then((rows) => {
+      if (!request.signal.aborted) setLoaded({ key: rangeKey, rows });
+    }).catch((failure) => {
+      if (!request.signal.aborted) setError(caseErrorMessage(failure));
+    });
+    return () => request.abort();
+  }, [range.from, range.to, rangeKey, problem]);
+
   const choose = (key) => {
     setPreset(key);
     if (key !== "custom") setRange(caseExportRange(key));
@@ -367,7 +384,7 @@ function ExcelExportDialog({ cases, people, onClose }) {
     setRange((current) => ({ ...current, [key]: event.target.value }));
   };
   async function download() {
-    if (busy || problem || !rows.length) return;
+    if (busy || problem || !rows?.length) return;
     setBusy(true);
     setError("");
     try {
@@ -398,17 +415,74 @@ function ExcelExportDialog({ cases, people, onClose }) {
         </label>
       </div>
       {(problem || error) && <p className="form-error" role="alert">{problem || error}</p>}
-      {!problem && <p className="case-muted">พบ {rows.length} เคสในช่วงนี้</p>}
+      {!problem && !error && <p className="case-muted" role="status">{rows ? `พบ ${rows.length} เคสในช่วงนี้` : "กำลังโหลดเคสสำหรับส่งออก…"}</p>}
       <div className="button-row case-actions">
         <button type="button" className="secondary-button" onClick={onClose}>ยกเลิก</button>
-        <button type="button" className="primary-button" disabled={busy || Boolean(problem) || !rows.length} onClick={download}>{busy ? "กำลังสร้างไฟล์…" : "ดาวน์โหลด .xlsx"}</button>
+        <button type="button" className="primary-button" disabled={busy || Boolean(problem) || !rows?.length} onClick={download}>{busy ? "กำลังสร้างไฟล์…" : "ดาวน์โหลด .xlsx"}</button>
       </div>
     </div>
   );
 }
 
-export default function ResidentCases({ user, onPresent }) {
+function AdmissionCaseList({ rows, view, people, user, onPresent, openCase }) {
+  return <>
+      {view === "cards" ? (
+        <div className="case-cards">
+          {rows.map((row) => (
+            <article key={row.id} className={`case-card${row.deleted_at ? " case-row-deleted" : ""}`}>
+              <button type="button" className="case-card-open" onClick={() => openCase("detail", row)} aria-label={`เปิด ${row.case_code} ${row.diagnosis}`}>
+                <div className="case-card-top"><span>{row.case_code}</span><CaseTypeChip type={row.treatment_type} /></div>
+                <strong>{row.diagnosis}</strong>
+                <small>{caseSexLabel(row.sex)} · {row.age_years} ปี · {row.unit_name}</small>
+                <small>รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</small>
+                {row.media_count ? <small>ภาพแนบ {row.media_count}</small> : null}
+              </button>
+              {!row.deleted_at && (
+                <div className="case-card-actions">
+                  <button type="button" className="secondary-button" onClick={() => openCase("detail", row)}>เปิดเคส / ภาพ</button>
+                  <button type="button" className="secondary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>เปิด Deck</button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : (
+      <div className="resident-table-wrap">
+        <table className="case-table">
+          <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management</th><th>Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className={row.deleted_at ? "case-row-deleted" : undefined}>
+                <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong><br /><small>{thaiDate(row.admit_date)}</small></div></td>
+                <td data-label="Diagnosis"><div className="case-cell"><button type="button" className="link-button" onClick={() => openCase("detail", row)}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
+                <td data-label="Management"><div className="case-cell case-clamp">{row.management || "—"}</div></td>
+                <td data-label="Operation"><div className="case-cell case-clamp">{row.operation || "—"}</div></td>
+                <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
+                <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} />{!row.deleted_at ? null : <> <span className="case-status case-status-deleted">ถูกลบ</span></>}</div></td>
+                <td data-label="ภาพ">{row.media_count}</td>
+                <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => openCase("form", row)}>แก้ไข</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      )}
+  </>;
+}
+
+export default function ResidentCases(props) {
+  return <ResidentCasesPage key={`${props.user.id}/${props.user.role}`} {...props} />;
+}
+
+function ResidentCasesPage({ user, onPresent }) {
+  const [week, setWeek] = useState(() => admissionWeek(bangkokIsoDate()));
   const [cases, setCases] = useState(null);
+  const [revision, setRevision] = useState(0);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveWeeks, setArchiveWeeks] = useState(4);
+  const [archiveState, setArchiveState] = useState(null);
+  const archivePanelId = useId();
+
   const [people, setPeople] = useState([]);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -436,40 +510,87 @@ export default function ResidentCases({ user, onPresent }) {
     return () => { current = false; };
   }, [user.id, user.role]);
   const canExportHn = exportPermission?.id === user.id && exportPermission?.role === user.role;
-  const [dialog, setDialog] = useState(null); // { type: "form" | "detail", id? }
+  const [dialog, setDialog] = useState(null);
+  const [saveNotice, setSaveNotice] = useState("");
 
-  const load = useCallback(async () => {
-    try {
-      const [rows, ppl] = await Promise.all([
-        loadAdmissionCases({ includeDeleted: user.role === "admin" && showDeleted }),
-        loadCasePeople(),
-      ]);
+  const includeDeleted = user.role === "admin" && showDeleted;
+  useEffect(() => {
+    const refreshWeek = () => {
+      const next = admissionWeek(bangkokIsoDate());
+      setWeek((current) => current.from === next.from ? current : next);
+    };
+    window.addEventListener("focus", refreshWeek);
+    const timer = setInterval(refreshWeek, 60_000);
+    return () => { window.removeEventListener("focus", refreshWeek); clearInterval(timer); };
+  }, []);
+  const load = useCallback(() => { setRevision((n) => n + 1); }, []);
+  useEffect(() => {
+    const request = new AbortController();
+    setCases(null);
+    setError("");
+    Promise.all([
+      loadAdmissionCases({ ...week, includeDeleted, signal: request.signal }),
+      loadCasePeople(),
+    ]).then(([rows, ppl]) => {
+      if (request.signal.aborted) return;
       setCases(rows);
       setPeople(ppl);
-      setError("");
-    } catch (nextError) {
-      setError(caseErrorMessage(nextError));
-    }
-  }, [user.role, showDeleted]);
-  useEffect(() => { load(); }, [load]);
+    }).catch((nextError) => {
+      if (!request.signal.aborted) setError(caseErrorMessage(nextError));
+    });
+    return () => request.abort();
+  }, [week, includeDeleted, revision]);
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return (cases || []).filter((row) =>
-      (typeFilter === "all" || (typeFilter === "unset" ? !row.treatment_type : row.treatment_type === typeFilter)) &&
-      (unit === "all" || row.unit_name === unit) &&
-      (!needle || `${row.diagnosis} ${row.case_code} ${personName(people, row.owner_id)}`.toLowerCase().includes(needle)));
-  }, [cases, people, search, typeFilter, unit]);
-  const current = dialog?.id ? (cases || []).find((row) => row.id === dialog.id) : null;
+  const needle = search.trim().toLowerCase();
+  const searching = Boolean(needle);
+  const archiveVisible = archiveOpen || searching;
+  const { from: archiveFrom, to: archiveTo } = archiveRange(week.from, needle ? 0 : archiveWeeks);
+  const archiveKey = JSON.stringify([archiveFrom, archiveTo, includeDeleted, revision]);
+  const archive = archiveState?.key === archiveKey ? archiveState : null;
+  useEffect(() => {
+    if (!archiveVisible) return;
+    const request = new AbortController();
+    loadAdmissionCases({
+      from: archiveFrom, to: archiveTo, includeDeleted,
+      signal: request.signal,
+    }).then((rows) => {
+      if (!request.signal.aborted) setArchiveState({ key: archiveKey, rows });
+    }).catch((nextError) => {
+      if (!request.signal.aborted) setArchiveState({ key: archiveKey, error: caseErrorMessage(nextError) });
+    });
+    return () => request.abort();
+  }, [archiveVisible, archiveFrom, archiveTo, archiveKey, includeDeleted]);
+
+  const matches = (row) =>
+    (typeFilter === "all" || (typeFilter === "unset" ? !row.treatment_type : row.treatment_type === typeFilter)) &&
+    (unit === "all" || row.unit_name === unit) &&
+    (!needle || caseMatchesSearch(row, needle, personName(people, row.owner_id)));
+  const currentRows = (cases || []).filter(matches);
+  const archiveGroups = groupAdmissionWeeks((archive?.rows || []).filter(matches));
+  const current = dialog?.row;
   const live = (cases || []).filter((row) => !row.deleted_at);
   const count = (key) => live.filter((row) => (key === "unset" ? !row.treatment_type : row.treatment_type === key)).length;
+  const openCase = (type, row) => setDialog({ type, id: row.id, row });
+  const listProps = { view, people, user, onPresent, openCase };
+  const afterSave = async (caseId, notice) => {
+    setSaveNotice("");
+    load();
+    try {
+      const [row] = await loadCasesByIds([caseId]);
+      if (!row) throw new Error("Saved case no longer available");
+      setDialog({ type: "detail", id: caseId, row, notice });
+    } catch {
+      setDialog(null);
+      setSaveNotice(["บันทึกเคสแล้ว แต่เปิดรายละเอียดไม่ได้ กรุณาค้นหาจากรายการเคส", notice].filter(Boolean).join(" · "));
+    }
+  };
 
   return (
     <section className="resident-panel case-list-page">
       <div className="panel-title-row">
         <div><h2>เคสรับใหม่ของภาควิชา</h2><p>ทุกคนที่ active เห็นเคสร่วมกัน · ห้ามบันทึกข้อมูลระบุตัวผู้ป่วย</p></div>
         <div className="button-row">
-          <button type="button" className="secondary-button" disabled={!cases?.length} onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
+          <button type="button" className="secondary-button" onClick={() => setDialog({ type: "excel" })}>Export Excel</button>
           <button type="button" className="primary-button" onClick={() => setDialog({ type: "form" })}><PlusIcon size={16} /> เพิ่มเคส</button>
           {canExportHn && <button type="button" className="secondary-button"
             onClick={() => setDialog({ type: "hnExport", permission: exportPermission })}>ส่งออกไฟล์ Grand Rounds</button>}
@@ -480,8 +601,9 @@ export default function ResidentCases({ user, onPresent }) {
         </div>
       </div>
       {error && <p className="form-error" role="alert">{error} <button type="button" className="link-button" onClick={load}>ลองใหม่</button></p>}
+      {saveNotice && <p className="form-error" role="status">{saveNotice}</p>}
       <div className="case-stats">
-        <div><small>เคสทั้งหมด</small><strong>{cases ? live.length : "…"}</strong></div>
+        <div><small>เคสรอบปัจจุบัน</small><strong>{cases ? live.length : "…"}</strong></div>
         <div><small>Operative</small><strong>{cases ? count("operative") : "…"}</strong></div>
         <div><small>Conservative</small><strong>{cases ? count("conservative") : "…"}</strong></div>
         <div><small>ยังไม่ระบุ Type</small><strong>{cases ? count("unset") : "…"}</strong></div>
@@ -498,52 +620,32 @@ export default function ResidentCases({ user, onPresent }) {
           <label className="case-check"><input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} /> แสดงเคสที่ถูกลบ</label>
         )}
       </div>
-      {view === "cards" && (
-        <div className="case-cards">
-          {visible.map((row) => (
-            <article key={row.id} className={`case-card${row.deleted_at ? " case-row-deleted" : ""}`}>
-              <button type="button" className="case-card-open" onClick={() => setDialog({ type: "detail", id: row.id })} aria-label={`เปิด ${row.case_code} ${row.diagnosis}`}>
-                <div className="case-card-top"><span>{row.case_code}</span><CaseTypeChip type={row.treatment_type} /></div>
-                <strong>{row.diagnosis}</strong>
-                <small>{caseSexLabel(row.sex)} · {row.age_years} ปี · {row.unit_name}</small>
-                <small>รับไว้ {thaiDate(row.admit_date)} · Owner: {personName(people, row.owner_id)}</small>
-                {row.media_count ? <small>ภาพแนบ {row.media_count}</small> : null}
-              </button>
-              {!row.deleted_at && (
-                <div className="case-card-actions">
-                  <button type="button" className="secondary-button" onClick={() => setDialog({ type: "detail", id: row.id })}>เปิดเคส / ภาพ</button>
-                  <button type="button" className="secondary-button" onClick={() => onPresent({ id: row.id, admit_date: row.admit_date })}>เปิด Deck</button>
-                </div>
-              )}
-            </article>
-          ))}
-          {cases && visible.length === 0 && <p className="case-muted">ไม่พบเคสที่ตรงกับเงื่อนไข</p>}
-          {!cases && !error && <p className="case-muted">กำลังโหลดเคส…</p>}
+      <section className="admission-current">
+        <h3>เคสรอบปัจจุบัน · {thaiDate(week.from)} – {thaiDate(week.to)}</h3>
+        {!cases && !error && <p className="case-muted" role="status">กำลังโหลดเคสรอบนี้…</p>}
+        {cases && currentRows.length === 0 && <p className="case-muted">{cases.length ? "ไม่พบเคสที่ตรงกับเงื่อนไขในรอบนี้" : "ยังไม่มีเคสในรอบนี้"}</p>}
+        {currentRows.length > 0 && <AdmissionCaseList rows={currentRows} {...listProps} />}
+      </section>
+      <section className="admission-archive">
+        {searching ? <h3 className="admission-archive-heading">เคสย้อนหลัง · ผลการค้นหา</h3>
+          : <button type="button" className="admission-archive-heading" aria-expanded={archiveVisible} aria-controls={archivePanelId}
+            onClick={() => setArchiveOpen((open) => !open)}><span aria-hidden="true">{archiveVisible ? "▾" : "▸"}</span> เคสย้อนหลัง</button>}
+        <div id={archivePanelId} className="admission-archive-body" hidden={!archiveVisible}>
+          {archiveVisible && <>
+            {archive?.error ? <p className="form-error" role="alert">{archive.error} <button className="link-button" type="button" onClick={() => setRevision((n) => n + 1)}>ลองใหม่</button></p>
+              : !archive ? <p role="status">กำลังโหลดเคสย้อนหลัง…</p>
+              : archiveGroups.length === 0 ? <p className="case-muted">{needle ? "ไม่พบเคสย้อนหลังที่ตรงกับคำค้น" : "ไม่พบเคสที่ตรงกับเงื่อนไขในช่วงที่โหลด"}</p>
+              : archiveGroups.map((group) => <details className="admission-week" key={`${Boolean(needle)}/${group.from}`} open={Boolean(needle) || undefined}>
+                <summary>{thaiDate(group.from)} – {thaiDate(group.to)} · {group.rows.length} เคส</summary>
+                <AdmissionCaseList rows={group.rows} {...listProps} />
+              </details>)}
+            {!needle && !archive?.error && archive && archiveFrom > CASE_MIN_ADMIT_DATE && <button type="button" className="secondary-button"
+              onClick={() => setArchiveWeeks((n) => n + 4)}>โหลดย้อนหลังอีก 4 สัปดาห์</button>}
+          </>}
         </div>
-      )}
-      <div className="resident-table-wrap" hidden={view === "cards"}>
-        <table className="case-table">
-          <thead><tr><th>เคส / วันที่รับ</th><th>Diagnosis</th><th>Management</th><th>Operation</th><th>หน่วย / Owner</th><th>Type</th><th>ภาพ</th><th /></tr></thead>
-          <tbody>
-            {visible.map((row) => (
-              <tr key={row.id} className={row.deleted_at ? "case-row-deleted" : undefined}>
-                <td data-label="เคส"><div className="case-cell"><strong>{row.case_code}</strong><br /><small>{thaiDate(row.admit_date)}</small></div></td>
-                <td data-label="Diagnosis"><div className="case-cell"><button type="button" className="link-button" onClick={() => setDialog({ type: "detail", id: row.id })}>{row.diagnosis}</button><br /><small>{caseSexLabel(row.sex)} · {row.age_years} ปี</small></div></td>
-                <td data-label="Management"><div className="case-cell case-clamp">{row.management || "—"}</div></td>
-                <td data-label="Operation"><div className="case-cell case-clamp">{row.operation || "—"}</div></td>
-                <td data-label="หน่วย / Owner"><div className="case-cell">{row.unit_name}<br /><small>{personName(people, row.owner_id)}</small></div></td>
-                <td data-label="Type"><div className="case-cell"><CaseTypeChip type={row.treatment_type} />{!row.deleted_at ? null : <> <span className="case-status case-status-deleted">ถูกลบ</span></>}</div></td>
-                <td data-label="ภาพ">{row.media_count}</td>
-                <td><button type="button" className="secondary-button" disabled={!canEditCase(user, row)} title={canEditCase(user, row) ? "" : row.deleted_at ? "เคสที่ถูกลบแก้ไขไม่ได้" : "Resident แก้ได้เฉพาะเคสที่ตนสร้างหรือเป็น Owner"} onClick={() => setDialog({ type: "form", id: row.id })}>แก้ไข</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {cases && visible.length === 0 && <p className="case-muted">ไม่พบเคสที่ตรงกับเงื่อนไข</p>}
-        {!cases && !error && <p className="case-muted">กำลังโหลดเคส…</p>}
-      </div>
+      </section>
       {dialog?.type === "form" && (!dialog.hnRequired || dialog.actorId === user.id) && (!dialog.id || current) && (
-        <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={async (caseId, notice) => { await load(); setDialog({ type: "detail", id: caseId, notice }); }} onReload={load} onClose={() => setDialog(null)} />
+        <CaseForm user={user} people={people} hnRequired={dialog.hnRequired} initial={dialog.id ? current : null} onSaved={afterSave} onReload={load} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "hnExport" && canExportHn && dialog.permission === exportPermission && (
         <CaseModal title="ส่งออกไฟล์ Grand Rounds" onClose={() => setDialog(null)}>
@@ -552,12 +654,12 @@ export default function ResidentCases({ user, onPresent }) {
       )}
       {dialog?.type === "excel" && (
         <CaseModal title="Export Excel · New admissions" onClose={() => setDialog(null)}>
-          <ExcelExportDialog cases={cases} people={people} onClose={() => setDialog(null)} />
+          <ExcelExportDialog people={people} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
       {dialog?.type === "detail" && current && (
         <CaseModal title={`${current.case_code} · ${current.diagnosis}`} onClose={() => setDialog(null)}>
-          <CaseDetail user={user} people={people} row={current} notice={dialog.notice} onEdit={() => setDialog({ type: "form", id: current.id })} onPresent={onPresent} onChanged={load} onClose={() => setDialog(null)} />
+          <CaseDetail user={user} people={people} row={current} notice={dialog.notice} onEdit={() => openCase("form", current)} onPresent={onPresent} onChanged={load} onClose={() => setDialog(null)} />
         </CaseModal>
       )}
     </section>

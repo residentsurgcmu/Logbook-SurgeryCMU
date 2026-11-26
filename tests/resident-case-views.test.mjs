@@ -18,10 +18,10 @@ test("the case list can show the same filtered cases as a table or as flashcards
   const ui = await read("src/features/ResidentCases.jsx");
   assert.match(ui, /const \[view, setView\] = useState\("table"\)/);
   assert.match(ui, /aria-label="รูปแบบการแสดงเคส"/);
-  assert.match(ui, /view === "cards" && \(/);
-  // flashcards iterate the same `visible` rows, so filters and search apply to both views
+  assert.match(ui, /view === "cards" \? \(/);
+  // flashcards iterate the same `rows` prop, so filters and search apply to both views
   const cards = ui.slice(ui.indexOf('className="case-cards"'), ui.indexOf('className="resident-table-wrap"'));
-  assert.match(cards, /visible\.map\(\(row\)/);
-  assert.match(cards, /setDialog\(\{ type: "detail", id: row\.id \}\)/);
+  assert.match(cards, /rows\.map\(\(row\)/);
+  assert.match(cards, /openCase\("detail", row\)/);
   assert.doesNotMatch(cards, /present_illness|physical_exam|bp_systolic|heart_rate/);
 });
