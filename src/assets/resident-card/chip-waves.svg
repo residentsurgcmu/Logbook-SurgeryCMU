@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 42" fill="none">
+  <defs><linearGradient id="foil" x1="0" y1="1" x2=".9" y2="0" gradientUnits="objectBoundingBox"><stop stop-color="#a1997e"/><stop offset=".27" stop-color="#e1d6b6"/><stop offset=".52" stop-color="#faf1d4"/><stop offset=".73" stop-color="#c3b897"/><stop offset="1" stop-color="#e4dbc5"/></linearGradient></defs>
+  <rect x="1.3" y="2" width="51.2" height="37.5" rx="7" fill="url(#foil)" stroke="#746a57" stroke-width="1.4"/>
+  <rect x="3.6" y="4.4" width="46.5" height="32.7" rx="5" stroke="#fff5df" opacity=".72"/>
+  <g stroke="#706752" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35">
+    <path d="M1.7 13h12l6-5.3h14l6 5.3h12.5M1.7 28.6h12l6.1 5.3h13.9l5.9-5.3h12.2M18.8 2.5v5.8m15.4-5.8v5.8M19 33.2v6m15-6v6M2 20.8h13.5m23.5 0h13"/>
+    <path d="M20.3 12.7h12.8l4.1 4.1v8.2l-4.1 4H20.3l-4.1-4v-8.2z"/>
+  </g>
+  <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M65 15q5.4 5.8 0 11.6M71.3 11.7q8.6 9.1 0 18.2"/></g>
+  <circle cx="61.3" cy="20.8" r="1.6" fill="currentColor"/>
+</svg>

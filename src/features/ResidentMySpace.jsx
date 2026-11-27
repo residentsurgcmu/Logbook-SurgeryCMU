@@ -9,6 +9,7 @@ import { ManagedPersonalScores } from "./ManagedExams";
 import MySpaceXrayRadar from "./MySpaceXrayRadar";
 import { useXrayRadarPilot } from "./useXrayRadarPilot";
 import MySpaceLayoutSettings from "./MySpaceLayoutSettings";
+import ResidentStudioCard from "./ResidentStudioCard";
 import { MY_SPACE_CARD_LABELS, MY_SPACE_CARD_ORDER, loadMySpacePreferences, saveMySpacePreferences, withMySpaceCardSize } from "../mySpaceLayouts";
 
 const TABS = [["overview", "ภาพรวม"], ["assessment", "EPA / PBA"], ["exams", "ผลสอบ"], ["attendance", "การประชุม"]];
@@ -138,14 +139,15 @@ function ResidentMySpaceAccount({ workspace, onOpenHistory, onOpenRequest, onNav
         <Progress label="PBA เสร็จแล้ว" count={counters.pbaFinished} total={counters.pbaTarget} unit="เรื่อง"><span>ประเมินเสร็จปีนี้ (PBA) <b>{counters.finishedPbaThisYear}</b> เรื่อง</span><span>รอประเมิน (PBA) <b>{counters.waitingPba}</b> เรื่อง</span></Progress></> : <Metrics counters={counters} rings />}
         <button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("assessment")}>ดูเกณฑ์และรายการทั้งหมด →</button>
       </section>;
-  const initials = (data.greeting.name || "R").trim().split(/\s+/).slice(0, 2).map((word) => Array.from(word)[0]).join("");
   const cards = {
     progress, waiting, recent,
     calendar: <UpcomingCalendar key={accountId} userId={accountId} onOpenCalendar={() => onNavigate?.("calendar")} onExams={() => onNavigate?.("exams")} />,
     exams: <section className="ms-card ms-private-summary"><div><h2>ผลการสอบของฉัน</h2><p className="ms-muted">ซ่อนคะแนนอยู่ · เปิดดูเมื่อพร้อม</p></div><button type="button" className="ms-link" onClick={() => changeTab("exams")}>เปิดดู</button></section>,
     radar: xrayPilot ? <MySpaceXrayRadar key={accountId} userId={accountId} /> : null,
     attendance: <section className="ms-card"><h2>การเข้าร่วมประชุมของฉัน</h2>{attendanceSummary}<p className="ms-muted">ข้อมูลประกอบ ไม่ใช่คะแนน</p><button type="button" className="ms-link ms-link-quiet" onClick={() => changeTab("attendance")}>ดูประวัติประชุม →</button></section>,
-    profile: <section className="ms-card ms-achiever-profile"><span className="ms-profile-initials" aria-hidden="true">{initials}</span><div><h2>{data.greeting.name || "Resident"}</h2><p>{data.greeting.pgy ? `PGY ${data.greeting.pgy} · ` : ""}{data.year.label}</p></div></section>,
+    profile: <section className="ms-card ms-achiever-profile"><h2>การ์ด Resident</h2>
+      <ResidentStudioCard card={preferences.residentCard} name={data.greeting.name} pgy={data.greeting.pgy} hideAwards={preferences.hideAwards} />
+    </section>,
     awards: !preferences.hideAwards && <section className="ms-card"><h2>ผลงานและเหรียญ</h2><p className="ms-muted">ยังไม่มีทะเบียนผลงานที่ยืนยันแล้ว</p></section>,
   };
 
@@ -156,7 +158,7 @@ function ResidentMySpaceAccount({ workspace, onOpenHistory, onOpenRequest, onNav
       </div>
     </div>
     {storageFailed && <p role="status" className="ms-note">ใช้รูปแบบนี้ได้ในหน้านี้ แต่เบราว์เซอร์ไม่อนุญาตให้บันทึกการตั้งค่า</p>}
-    {draft && <MySpaceLayoutSettings draft={draft} setDraft={setDraft} radarAvailable={xrayPilot} onClose={() => setDraft(null)} onSave={() => {
+    {draft && <MySpaceLayoutSettings draft={draft} setDraft={setDraft} radarAvailable={xrayPilot} name={data.greeting.name} pgy={data.greeting.pgy} onClose={() => setDraft(null)} onSave={() => {
       if (draft.layout !== layout) changeTab("overview");
       applyPreferences(draft);
       setDraft(null);
