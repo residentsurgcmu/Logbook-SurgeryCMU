@@ -19,10 +19,15 @@ create table auth.users (
   email text unique,
   raw_user_meta_data jsonb default '{}',
   raw_app_meta_data jsonb default '{}',
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  invited_at timestamptz,
+  last_sign_in_at timestamptz
 );
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+$$;
+create function auth.jwt() returns jsonb language sql stable as $$
+  select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb)
 $$;
 create function auth.role() returns text language sql stable as $$
   select nullif(current_setting('request.jwt.claim.role', true), '')

@@ -207,6 +207,8 @@ export async function loadResidentWorkspace() {
   const counterpartProfiles = (counterpartStaff || [])
     .filter((row) => !profileIds.has(row.user_id))
     .map((row) => mapProfile({ ...row, email: null, pgy: null, active: false }));
+  // The server checks the authenticated session method; this bookkeeping must never block access.
+  void supabase.rpc("resident_record_password_activation").then(() => {}, () => {});
   return {
     user: { ...mapProfile(profile), role: role.role },
     templates: (templates || []).map((template) => {
@@ -719,6 +721,24 @@ export async function inviteStaff(email) {
   if (error) throw await residentAdminError(error, "ไม่สามารถบันทึกบัญชีได้");
   if (!data?.ok) throw new Error(data?.error || "ไม่สามารถบันทึกบัญชีได้");
   return data;
+}
+
+export async function listAdminInviteStates(accountIds) {
+  const rows = [];
+  for (let start = 0; start < accountIds.length; start += 200) {
+    const { data, error } = await supabase.rpc("admin_list_invite_states", { p_user_ids: accountIds.slice(start, start + 200) });
+    fail(error);
+    rows.push(...(data || []));
+  }
+  return rows;
+}
+
+export async function resendAccountInvite(userId) {
+  const { data, error } = await supabase.functions.invoke("resident-admin", {
+    body: { action: "resend_invite", userId },
+  });
+  if (error) throw await residentAdminError(error, "ยังยืนยันผลการส่งอีเมลไม่ได้");
+  if (!data?.ok) throw new Error("ยังยืนยันผลการส่งอีเมลไม่ได้");
 }
 
 export const ACCOUNTS_PAUSED_MESSAGE =

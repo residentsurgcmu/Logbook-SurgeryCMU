@@ -6,7 +6,7 @@
 .account-heading p,.account-counts,.account-hint,.account-email,.admin-accounts small { color:var(--resident-muted); }
 .account-heading p { margin:4px 0 0; }
 .account-counts { margin:16px 0; font-size:13px; }
-.account-filters { display:grid; grid-template-columns:minmax(0,1.6fr) repeat(2,minmax(0,1fr)); gap:12px; margin:20px 0; }
+.account-filters { display:grid; grid-template-columns:minmax(0,1.6fr) repeat(3,minmax(0,1fr)); gap:12px; margin:20px 0; }
 .account-identity { display:flex; align-items:center; gap:10px; min-width:0; }
 .account-identity strong,.account-identity small { display:block; }
 .account-identity small { font-size:12px; margin-top:3px; }
@@ -56,7 +56,7 @@
 .account-reason-text { white-space:pre-wrap; overflow-wrap:anywhere; }
 @media(max-width:800px) {
   .account-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .account-filters > label:first-child { grid-column:1/-1; }
+  .account-filters > label:first-child, .account-filters > label:last-child { grid-column:1/-1; }
   .account-table { display:none; }
   .account-cards { display:grid; gap:12px; }
   .account-cards article { border-top:1px solid var(--resident-line); padding:16px 0; min-width:0; }
@@ -67,3 +67,11 @@
   .account-form-actions button { flex:1 1 150px; }
   .admin-accounts input,.admin-accounts select,.admin-accounts textarea { font-size:16px; }
 }
+
+.account-invite-state { display: grid; gap: .18rem; margin-block: .4rem .25rem; font-size: .86rem; }
+.account-invite-state small { opacity: .78; font-size: .77rem; }
+.account-notice strong { overflow-wrap: anywhere; }
+.admin-workspace-nav { display: flex; flex-wrap: wrap; gap: .5rem; }
+.admin-add-account summary { cursor: pointer; font-weight: 700; }
+.admin-add-account form { display: grid; gap: .85rem; margin-top: 1rem; max-width: 34rem; }
+.admin-add-account form button { justify-self: start; }
