@@ -12,6 +12,7 @@ import {
 import ResidentDashboard from "./ResidentDashboard";
 import AdminAttemptPages from "./AdminAttemptPages";
 import AdminAccounts from "./AdminAccounts";
+import { accountProvisionMessage } from "../adminInviteState.js";
 import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
 import ResidentSchedule from "./ResidentSchedule";
 import ResidentMySpace from "./ResidentMySpace";
@@ -203,7 +204,7 @@ function StaffDirectory({ staffDirectory, onInvite, busyEmail }) {
       <div className="section-heading">
         <h2>รายชื่อ Staff ที่อนุมัติ</h2>
         <p>
-          นำเข้าจากรายชื่ออาจารย์ ปี 4 แล้ว; Admin ส่งคำเชิญได้รายบุคคลเท่านั้น
+          ส่งคำเชิญได้รายบุคคล ดูผลการส่งและส่งซ้ำได้ใน “บัญชีและคำเชิญ”
         </p>
       </div>
       <div className="resident-table-wrap">
@@ -227,7 +228,7 @@ function StaffDirectory({ staffDirectory, onInvite, busyEmail }) {
                   {!staff.active
                     ? "ไม่เปิดใช้งาน"
                     : staff.auth_user_id
-                      ? "ส่งคำเชิญแล้ว / มีบัญชี"
+                      ? "ผูกบัญชีแล้ว"
                       : "รอส่งคำเชิญ"}
                 </td>
                 <td>
@@ -486,6 +487,7 @@ function HistoricalAssessmentEntry({ workspace, onRefresh }) {
 }
 
 function Admin({ workspace, onRefresh }) {
+  const [adminPage, setAdminPage] = useState("accounts");
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -537,15 +539,8 @@ function Admin({ workspace, onRefresh }) {
         ...account,
         pgy: Number(account.pgy),
       });
-      setMessage(
-        result.invitationSent
-          ? "ส่งคำเชิญเปิดบัญชีแล้ว"
-          : result.linkedExistingAccount
-            ? "ผูกบัญชีเดิมของอีเมลนี้แล้ว และส่งลิงก์ตั้งรหัสผ่านไปทางอีเมล"
-            : result.alreadyProvisioned
-            ? "Staff นี้มีบัญชีในระบบแล้ว"
-            : "อัปเดตสิทธิ์บัญชีแล้ว",
-      );
+      setMessage("");
+      (result.linkedExistingAccount && result.setupMailStatus !== "sent" ? setError : setMessage)(accountProvisionMessage(result));
       setAccount({
         fullName: "",
         email: "",
@@ -583,13 +578,8 @@ function Admin({ workspace, onRefresh }) {
     setError("");
     try {
       const result = await inviteStaff(staffMember.email);
-      setMessage(
-        result.invitationSent
-          ? `ส่งคำเชิญให้ ${staffMember.full_name} แล้ว`
-          : result.linkedExistingAccount
-            ? `ผูกบัญชีเดิมของ ${staffMember.full_name} แล้ว และส่งลิงก์ตั้งรหัสผ่านไปทางอีเมล`
-            : `${staffMember.full_name} มีบัญชีอยู่แล้ว`,
-      );
+      setMessage("");
+      (result.linkedExistingAccount && result.setupMailStatus !== "sent" ? setError : setMessage)(`${staffMember.full_name} · ${accountProvisionMessage(result)}`);
       await onRefresh();
     } catch (nextError) {
       setError(nextError.message);
@@ -599,7 +589,18 @@ function Admin({ workspace, onRefresh }) {
   }
   return (
     <>
-      <AdminAccounts userId={workspace.user.id} onRefresh={onRefresh} refreshKey={workspace} />
+      <nav className="resident-panel admin-workspace-nav" aria-label="ส่วนงาน Admin">
+        {Object.entries({
+          accounts: "บัญชีและคำเชิญ",
+          staff: "รายชื่อและมอบหมาย Staff",
+          assessment: "จัดการ EPA / PBA",
+        }).map(([id, label]) => <button key={id} type="button" aria-pressed={adminPage === id}
+          className={adminPage === id ? "primary-button" : "secondary-button"}
+          disabled={Boolean(formBusy || busyEmail || syncing)}
+          onClick={() => { setAdminPage(id); setMessage(""); setError(""); }}>{label}</button>)}
+      </nav>
+      {(message || error) && <p className={error ? "form-error" : "form-success"} role={error ? "alert" : "status"}>{error || message}</p>}
+      {adminPage === "assessment" && <>
       <section className="resident-panel admin-summary">
         <div>
           <h2>Catalog EPA/PBA</h2>
@@ -615,9 +616,11 @@ function Admin({ workspace, onRefresh }) {
       {workspace.user.role === "admin" && <AdminAttemptPages workspace={workspace} />}
       <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
       <HistoricalAssessmentEntry workspace={workspace} onRefresh={onRefresh} />
-      <div className="admin-grid">
-        <form className="resident-panel" onSubmit={addAccount}>
-          <h2>เพิ่มบัญชี Resident / Staff / Admin</h2>
+      </>}
+      {adminPage === "accounts" && <>
+        <details className="resident-panel admin-add-account">
+          <summary>เพิ่มบัญชี Resident / Staff / Admin</summary>
+          <form onSubmit={addAccount}>
           <label>
             ชื่อ–นามสกุล
             <input
@@ -687,6 +690,10 @@ function Admin({ workspace, onRefresh }) {
             {formBusy === "account" ? "กำลังส่งคำเชิญ…" : "ส่งคำเชิญ"}
           </button>
         </form>
+        </details>
+        <AdminAccounts userId={workspace.user.id} onRefresh={onRefresh} refreshKey={workspace} />
+      </>}
+      {adminPage === "staff" && <>
         <form className="resident-panel" onSubmit={assign}>
           <h2>มอบหมาย Staff</h2>
           <label>
@@ -727,17 +734,12 @@ function Admin({ workspace, onRefresh }) {
             {formBusy === "assign" ? "กำลังบันทึก…" : "บันทึกการมอบหมาย"}
           </button>
         </form>
-      </div>
-      {(message || error) && (
-        <p className={error ? "form-error" : "form-success"}>
-          {error || message}
-        </p>
-      )}
       <StaffDirectory
         staffDirectory={workspace.staffDirectory}
         onInvite={invite}
         busyEmail={busyEmail}
       />
+      </>}
     </>
   );
 }

@@ -1,22 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction,
-  updateAdminAccount, setAdminAccountActive,
+  updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite,
 } from "../residentApi";
 import {
   ACCOUNT_ROLE_LABELS, accountDraft, accountEditPlan, accountErrorCode,
   accountErrorMessage, accountEventSummary, accountStatusReason, prepareAccountAttempt,
 } from "../adminAccounts.js";
+import { inviteState } from "../adminInviteState.js";
 import "./AdminAccounts.css";
 
-const liveApi = { listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction, updateAdminAccount, setAdminAccountActive };
+const liveApi = { listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction, updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite };
 const detail = (account) => account.role === "resident" ? `PGY ${account.pgy ?? "—"}` : account.role === "staff" ? account.unit_name || "ไม่ระบุหน่วย" : account.admin_tag || "ไม่ระบุป้าย";
 const displayValue = (value) => value === true ? "ใช้งาน" : value === false ? "ปิดใช้งาน" : value == null || value === "" ? "ไม่ระบุ" : String(value);
 const dateTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const fieldLabels = { full_name: "ชื่อ", pgy: "PGY", unit_name: "หน่วย", admin_tag: "ป้าย Admin", active: "สถานะ" };
 
 function AccountState({ account }) {
-  return <span className={`account-state${account.active ? "" : " inactive"}`}>{account.active ? "ใช้งาน" : "ปิดใช้งาน"}</span>;
+  return <span className={`account-state${account.active ? "" : " inactive"}`}>{account.active ? "มีสิทธิ์ใช้งาน" : "ปิดสิทธิ์ใช้งาน"}</span>;
 }
 function AccountIdentity({ account, self }) {
   return <div className="account-identity"><span className="account-initials" aria-hidden="true">{Array.from(account.full_name || "?").slice(0,2).join("")}</span><div><strong>{account.full_name}</strong><small>{ACCOUNT_ROLE_LABELS[account.role] || "—"}{account.role === "resident" ? ` · ${detail(account)}` : ""}{self ? " · บัญชีของคุณ" : ""}</small></div></div>;
@@ -56,6 +57,14 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
+  const [onboarding, setOnboarding] = useState("");
+  const [invites, setInvites] = useState({});
+  const [inviteError, setInviteError] = useState("");
+  const [resendTarget, setResendTarget] = useState(null);
+  const [resending, setResending] = useState(false);
+  const [resendFeedback, setResendFeedback] = useState(null);
+  const sending = useRef(false);
+  const resendConfirmation = useRef(null);
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("list");
   const [draft, setDraft] = useState(null);
@@ -78,10 +87,22 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
 
   async function reloadAccounts() {
     const sequence = ++listSequence.current;
-    setLoading(true); setListError("");
+    setLoading(true); setListError(""); setInviteError("");
     try {
       const rows = await api.listAdminAccounts();
       if (mounted.current && sequence === listSequence.current) setAccounts(rows);
+      if (api.listAdminInviteStates) {
+        try {
+          const states = await api.listAdminInviteStates(rows.map((row) => row.user_id));
+          if (mounted.current && sequence === listSequence.current)
+            setInvites(Object.fromEntries(states.map((state) => [state.user_id, state])));
+        } catch {
+          if (mounted.current && sequence === listSequence.current) {
+            setInvites({});
+            setInviteError("โหลดสถานะคำเชิญไม่ได้ กรุณาโหลดรายชื่อใหม่");
+          }
+        }
+      }
       return rows;
     } catch (nextError) {
       if (mounted.current && sequence === listSequence.current) setListError(accountErrorMessage(nextError));
@@ -92,7 +113,7 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; listSequence.current++; previewSequence.current++; }; }, []);
   useEffect(() => { reloadAccounts().catch(() => {}); }, [api, refreshKey]);
-  const filtered = useMemo(() => accounts.filter((account) => (!role || account.role === role) && (!status || String(account.active) === status) && `${account.full_name} ${account.email}`.toLocaleLowerCase("th").includes(search.trim().toLocaleLowerCase("th"))), [accounts, role, status, search]);
+  const filtered = useMemo(() => accounts.filter((account) => (!role || account.role === role) && (!status || String(account.active) === status) && (!onboarding || inviteState(invites[account.user_id]).key === onboarding) && `${account.full_name} ${account.email}`.toLocaleLowerCase("th").includes(search.trim().toLocaleLowerCase("th"))), [accounts, role, status, search, onboarding, invites]);
   const editPlan = selected && draft ? accountEditPlan(selected, draft) : null;
   const mustReload = ["ACCOUNT_CONFLICT", "PREVIEW_CHANGED", "ROLE_RULE"].includes(error?.code);
   const blocked = busy || uncertain || mustReload;
@@ -180,7 +201,32 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   }
   function updateDraft(key, value) { setDraft((current) => ({ ...current, [key]: value })); setValidation({}); }
   const errorBox = error && <div className="account-error" role="alert"><p>{error.message}</p>{(mustReload || uncertain || !preview && view === "status") && <button type="button" className="secondary-button" disabled={busy || loading || previewLoading} onClick={inspectLatest}>{view === "status" && !uncertain ? "ตรวจผลกระทบล่าสุด" : "โหลดข้อมูลล่าสุด"}</button>}</div>;
-  const accountActions = (account) => <div className="account-actions"><button type="button" className="text-button" disabled={loading || Boolean(listError)} onClick={() => beginEdit(account)} aria-label={`แก้ไข ${account.full_name}`}>แก้ไข</button>{isSelf(account) ? <button type="button" className="secondary-button" disabled>บัญชีของคุณ</button> : <button type="button" className="secondary-button" disabled={loading || Boolean(listError)} onClick={() => beginStatus(account)} aria-label={`${account.active ? "ปิด" : "เปิด"}ใช้งาน ${account.full_name}`}>{account.active ? "ปิดใช้งาน" : "เปิดกลับ"}</button>}</div>;
+  async function confirmResend() {
+    if (!resendTarget || sending.current) return;
+    sending.current = true;
+    setResending(true); setResendFeedback(null);
+    try {
+      await api.resendAccountInvite(resendTarget.user_id);
+      if (mounted.current) setResendFeedback({ message: `ส่งลิงก์ตั้งรหัสผ่านให้ ${resendTarget.email} แล้ว กรุณาให้ผู้รับตรวจ Inbox และ Junk` });
+    } catch (nextError) {
+      if (mounted.current) setResendFeedback({ error: true, message: nextError.message });
+    } finally {
+      if (mounted.current) {
+        setResendTarget(null);
+        await reloadAccounts().catch(() => {});
+      }
+      sending.current = false;
+      if (mounted.current) setResending(false);
+    }
+  }
+  useEffect(() => { if (resendTarget) resendConfirmation.current?.focus(); }, [resendTarget]);
+  const showInviteStatus = (account) => {
+    const row = invites[account.user_id];
+    const state = inviteState(row);
+    return <div className="account-invite-state"><span>{state.label}</span>{(row?.activated_at || row?.sent_at) && <small>{row.activated_at ? "เข้าใช้ครั้งแรกที่บันทึก" : "ส่งคำเชิญล่าสุด"} · {dateTime(row.activated_at || row.sent_at)}</small>}</div>;
+  };
+  const accountActions = (account) => <div className="account-actions"><button type="button" className="text-button" disabled={loading || Boolean(listError)} onClick={() => beginEdit(account)} aria-label={`แก้ไข ${account.full_name}`}>แก้ไข</button>{isSelf(account) ? <button type="button" className="secondary-button" disabled>บัญชีของคุณ</button> : <button type="button" className="secondary-button" disabled={loading || Boolean(listError)} onClick={() => beginStatus(account)} aria-label={`${account.active ? "ปิด" : "เปิด"}ใช้งาน ${account.full_name}`}>{account.active ? "ปิดใช้งาน" : "เปิดกลับ"}</button>}
+    {account.active && !isSelf(account) && inviteState(invites[account.user_id]).resend && <button type="button" className="text-button" disabled={loading || resending || Boolean(listError)} onClick={() => { setResendTarget(account); setResendFeedback(null); focusSection(); }} aria-label={`ส่งอีเมลซ้ำให้ ${account.full_name}`}>ส่งอีเมลซ้ำ</button>}</div>;
   const validationText = (key) => validation[key] && <span className="form-error" role="alert" id={`account-error-${key}`}>{validation[key]}</span>;
   const fieldProps = (key) => ({ ref: (node) => { fields.current[key] = node; }, "aria-invalid": Boolean(validation[key]), "aria-describedby": validation[key] ? `account-error-${key}` : undefined });
 
@@ -190,12 +236,17 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
     {view === "list" ? <section className="resident-panel account-list-panel">
       <div className="account-heading"><div><h2>จัดการบัญชี</h2><p>แก้ไขข้อมูล และดูแลสถานะการใช้งานของบัญชี</p></div><button type="button" className="secondary-button" disabled={loading} onClick={() => reloadAccounts().catch(() => {})}>{loading ? "กำลังโหลด…" : "โหลดรายชื่อใหม่"}</button></div>
       <p className="account-counts">{accounts.length} บัญชีทั้งหมด · ใช้งาน {accounts.filter((account) => account.active).length} · ปิดใช้งาน {accounts.filter((account) => !account.active).length}</p>
-      <div className="account-filters"><label>ค้นหาบัญชี<input type="search" placeholder="ชื่อหรืออีเมล" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label>บทบาท<select value={role} onChange={(event) => setRole(event.target.value)}><option value="">ทุกบทบาท</option>{Object.entries(ACCOUNT_ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>สถานะ<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">ทุกสถานะ</option><option value="true">ใช้งาน</option><option value="false">ปิดใช้งาน</option></select></label></div>
+      <div className="account-filters"><label>ค้นหาบัญชี<input type="search" placeholder="ชื่อหรืออีเมล" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label>บทบาท<select value={role} onChange={(event) => setRole(event.target.value)}><option value="">ทุกบทบาท</option>{Object.entries(ACCOUNT_ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>สิทธิ์บัญชี<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">ทุกสถานะ</option><option value="true">ใช้งาน</option><option value="false">ปิดสิทธิ์</option></select></label>
+      <label>คำเชิญและการเข้าใช้งาน<select value={onboarding} onChange={(event) => setOnboarding(event.target.value)}><option value="">ทุกสถานะคำเชิญ</option><option value="activated">เปิดใช้งานแล้ว</option><option value="sent">ส่งคำเชิญแล้ว</option><option value="failed">ส่งไม่สำเร็จ</option><option value="pending">ไม่มีประวัติการส่ง</option><option value="unknown">ยังไม่ยืนยัน</option></select></label></div>
+      <p className="account-hint">“เปิดใช้งานแล้ว” ขึ้นเมื่อผู้ใช้เข้า Resident Corner ด้วยรหัสผ่าน “ส่งคำเชิญแล้ว” ยังยืนยันการเข้า Inbox ไม่ได้</p>
+      {inviteError && <p className="form-error" role="alert">{inviteError}</p>}
+      {resendTarget && <div className="account-notice" ref={resendConfirmation} tabIndex={-1}><strong>ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ {resendTarget.email}?</strong><div className="account-actions"><button type="button" className="secondary-button" disabled={resending} onClick={() => setResendTarget(null)}>ยกเลิก</button><button type="button" className="primary-button" disabled={resending} onClick={confirmResend}>{resending ? "กำลังส่ง…" : "ยืนยันส่งอีเมลซ้ำ"}</button></div></div>}
+      {resendFeedback && <p className={resendFeedback.error ? "form-error" : "form-success"} role={resendFeedback.error ? "alert" : "status"}>{resendFeedback.message}</p>}
       {listError && <p className="form-error" role="alert">{listError} กรุณาโหลดรายชื่อใหม่ก่อนทำรายการ</p>}
       {loading && <p role="status">กำลังโหลดบัญชี…</p>}
       {!loading && !listError && !filtered.length && <p className="account-empty">ไม่พบบัญชีที่ตรงกับการค้นหา</p>}
-      <div className="account-table"><table><thead><tr><th scope="col">บัญชี</th><th scope="col">ชั้นปี / หน่วย / ป้าย</th><th scope="col">สถานะ</th><th scope="col">จัดการ</th></tr></thead><tbody>{filtered.map((account) => <tr key={account.user_id}><td><AccountIdentity account={account} self={isSelf(account)} /><span className="account-email">{account.email}</span></td><td>{detail(account)}</td><td><AccountState account={account} /></td><td>{accountActions(account)}</td></tr>)}</tbody></table></div>
-      <div className="account-cards">{filtered.map((account) => <article key={account.user_id}><div className="account-card-heading"><AccountIdentity account={account} self={isSelf(account)} /><AccountState account={account} /></div><p className="account-email">{account.email}</p>{account.role !== "resident" && <p>{detail(account)}</p>}{accountActions(account)}</article>)}</div>
+      <div className="account-table"><table><thead><tr><th scope="col">บัญชี</th><th scope="col">ชั้นปี / หน่วย / ป้าย</th><th scope="col">สิทธิ์บัญชี / คำเชิญ</th><th scope="col">จัดการ</th></tr></thead><tbody>{filtered.map((account) => <tr key={account.user_id}><td><AccountIdentity account={account} self={isSelf(account)} /><span className="account-email">{account.email}</span></td><td>{detail(account)}</td><td><AccountState account={account} />{showInviteStatus(account)}</td><td>{accountActions(account)}</td></tr>)}</tbody></table></div>
+      <div className="account-cards">{filtered.map((account) => <article key={account.user_id}><div className="account-card-heading"><AccountIdentity account={account} self={isSelf(account)} /><AccountState account={account} /></div><p className="account-email">{account.email}</p>{account.role !== "resident" && <p>{detail(account)}</p>}{showInviteStatus(account)}{accountActions(account)}</article>)}</div>
       <p className="account-foot" aria-live="polite">แสดง {filtered.length} จาก {accounts.length} บัญชี</p>
     </section> : <>
       <button type="button" className="text-button account-back" disabled={busy || uncertain} onClick={back}>← รายชื่อบัญชี</button>

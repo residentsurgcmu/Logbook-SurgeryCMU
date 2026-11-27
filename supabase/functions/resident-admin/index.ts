@@ -17,6 +17,9 @@ const resetPasswordUrl = () => `${appUrl}/reset-password`;
 const normalizedEmail = (value: unknown) => typeof value === "string" ? value.trim().toLowerCase() : "";
 const normalizedText = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const hasLength = (value: string, minimum: number, maximum: number) => value.length >= minimum && value.length <= maximum;
+const isMailRateLimit = (error: { status?: number; code?: string; message?: string }) =>
+  error.status === 429 || error.code === "over_email_send_rate_limit" || /email rate limit exceeded/i.test(error.message || "");
+const rateLimitMessage = "ส่งอีเมลไม่สำเร็จ: ระบบส่งอีเมลถึงขีดจำกัดชั่วคราว กรุณารอแล้วลองใหม่";
 const isUuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 Deno.serve(async (request) => {
@@ -61,8 +64,6 @@ Deno.serve(async (request) => {
     const { data: existingUserId, error: lookupError } = await adminClient.rpc("admin_find_auth_user_id", { p_email: inviteEmail });
     if (lookupError) throw lookupError;
     if (!existingUserId) throw invitationError;
-    const { error: resetError } = await adminClient.auth.resetPasswordForEmail(inviteEmail, { redirectTo: resetPasswordUrl() });
-    if (resetError) console.warn("Could not send set-password email to linked account", resetError.message);
     return { userId: existingUserId as string, invitationSent: false, linkedExistingAccount: true };
   };
 
@@ -100,10 +101,44 @@ Deno.serve(async (request) => {
     return (data?.user_id as string | undefined) || null;
   };
 
+  const deliverSetupLink = async (userId: string) => {
+    const { data: claim, error } = await adminClient.rpc("admin_claim_invite_resend", {
+      p_actor_id: callerData.user!.id, p_user_id: userId,
+    });
+    if (error) throw new Error("ตรวจสอบสถานะบัญชีไม่สำเร็จ");
+    if (!claim?.email || !claim?.attemptedAt) return claim?.code || "RESEND_UNAVAILABLE";
+    let outcome = "failed";
+    try {
+      const { error: sendError } = await adminClient.auth.resetPasswordForEmail(claim.email, { redirectTo: resetPasswordUrl() });
+      outcome = !sendError ? "sent" : isMailRateLimit(sendError) ? "rate_limited" : "failed";
+    } catch {
+      // A lost upstream result does not prove success; leave a retryable state.
+      outcome = "unknown";
+    }
+    const { error: writeError } = await adminClient.rpc("admin_finish_invite_resend", {
+      p_user_id: userId, p_attempted_at: claim.attemptedAt, p_mail_status: outcome,
+    });
+    if (writeError) return "unknown";
+    return outcome;
+  };
+
   try {
     const payload = await request.json();
     const action = payload?.action;
     const email = normalizedEmail(payload?.email);
+
+    if (action === "resend_invite") {
+      if (!isUuid(payload?.userId)) return json({ error: "ข้อมูลบัญชีไม่ถูกต้อง" }, 400);
+      const outcome = await deliverSetupLink(payload.userId);
+      if (outcome === "sent") return json({ ok: true });
+      if (outcome === "ACCOUNTS_PAUSED") return accountsPaused();
+      if (outcome === "rate_limited") return json({ error: rateLimitMessage }, 429);
+      if (outcome === "RESEND_COOLDOWN") return json({ error: "เพิ่งขอส่งอีเมล กรุณารออย่างน้อย 1 นาทีแล้วลองใหม่" }, 429);
+      if (outcome === "ALREADY_ACTIVATED") return json({ error: "บัญชีนี้เข้าสู่ระบบแล้ว หากลืมรหัสผ่านให้ใช้เมนูลืมรหัสผ่าน" }, 409);
+      if (outcome === "FORBIDDEN" || outcome === "RESEND_UNAVAILABLE") return json({ error: "บัญชีนี้ยังส่งลิงก์ซ้ำไม่ได้ กรุณาตรวจสถานะและอีเมลบัญชี" }, 403);
+      if (outcome === "unknown") return json({ error: "ยังยืนยันผลการส่งไม่ได้ กรุณาตรวจสอบก่อนกดส่งอีกครั้ง" }, 502);
+      return json({ error: "ส่งอีเมลไม่สำเร็จ กรุณาลองใหม่ภายหลัง" }, 502);
+    }
 
     if (action === "delete_assessment") {
       const assessmentId = payload?.assessmentId;
@@ -154,7 +189,9 @@ Deno.serve(async (request) => {
 
       const { userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(directory.email, directory.full_name);
       const refused = await createAccount(userId, directory.email, directory.full_name, "staff", null, directory.unit_name);
-      return refused || json({ ok: true, userId, invitationSent, linkedExistingAccount });
+      if (refused) return refused;
+      const setupMailStatus = linkedExistingAccount ? await deliverSetupLink(userId).catch(() => "unknown") : null;
+      return json({ ok: true, userId, invitationSent, linkedExistingAccount, setupMailStatus });
     }
 
     if (action !== "provision_account") throw new Error("Invalid action");
@@ -187,8 +224,11 @@ Deno.serve(async (request) => {
 
     const { userId, invitationSent, linkedExistingAccount } = await inviteOrLinkUser(email, role === "staff" && directory ? directory.full_name : fullName);
     const refused = await createAccount(userId, email, fullName, role, role === "resident" ? Number(pgy) : null, role === "staff" ? unitName : null);
-    return refused || json({ ok: true, userId, invitationSent, linkedExistingAccount });
+    if (refused) return refused;
+    const setupMailStatus = linkedExistingAccount ? await deliverSetupLink(userId).catch(() => "unknown") : null;
+    return json({ ok: true, userId, invitationSent, linkedExistingAccount, setupMailStatus });
   } catch (error) {
+    if (error instanceof Error && isMailRateLimit(error)) return json({ error: rateLimitMessage }, 429);
     return json({ error: error instanceof Error ? error.message : "Could not save account" }, 400);
   }
 });

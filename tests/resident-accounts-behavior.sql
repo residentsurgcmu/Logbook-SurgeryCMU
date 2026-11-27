@@ -199,6 +199,39 @@ select t.ok((select bool_and(owner = 'postgres') from fn_class), 'C3b every brow
 select t.ok((select count(*) = 0 from fn_class where schema = 'public' and class not in ('guarded function', 'trigger function (cannot be called directly)', 'pause status (boolean only)')), 'C3c every browser-callable PUBLIC-schema function is guarded');
 select t.ok(pg_get_functiondef('private.resident_role_is'::regproc) ~ 'p\.active' and pg_get_functiondef('private.resident_can_evaluate'::regproc) ~ 'resident_account_active', 'C4 role check and evaluate check now require both flags');
 
+-- Invite lifecycle: all identifiers are synthetic and no tests send email.
+select t.err('r1', format('select * from public.admin_list_invite_states(array[%L::uuid])', t.uid('r1')), 'Active Admin account required', 'INV1 Residents cannot read statuses');
+select t.denied('anon', 'select public.resident_record_password_activation()', 'INV2 anonymous caller cannot mark activation');
+select t.denied('authenticated', format('select public.admin_claim_invite_resend(%L::uuid,%L::uuid)', t.uid('adm'), t.uid('r1')), 'INV3 browser cannot claim a send');
+select t.denied('authenticated', 'select * from private.resident_invite_lifecycle', 'INV4 browser cannot read private tracking');
+update auth.users set invited_at = now() - interval '3 days' where id = t.uid('r1');
+select set_config('request.jwt.claims','{"amr":[{"method":"invite"}]}',true);
+select t.rows_as('r1','select public.resident_record_password_activation()');
+select t.ok(not exists (select 1 from private.resident_invite_lifecycle where user_id = t.uid('r1')), 'INV5 opening an invite link is not activation');
+select set_config('request.jwt.claims','{"amr":[{"method":"recovery"}]}',true);
+select t.rows_as('r1','select public.resident_record_password_activation()');
+select t.ok(not exists (select 1 from private.resident_invite_lifecycle where user_id = t.uid('r1')), 'INV6 opening recovery is not activation');
+select t.ok(t.count_as('adm', format('select count(*) from public.admin_list_invite_states(array[%L::uuid]) where activated_at is null and sent_at is not null',t.uid('r1'))) = 1, 'INV7 sent invitation remains separate from activation');
+select t.ok((public.admin_claim_invite_resend(t.uid('r1'),t.uid('r2'))->>'code') = 'FORBIDDEN', 'INV8 rechecks a real active Admin');
+select t.ok((public.admin_claim_invite_resend(t.uid('adm'),t.uid('adm'))->>'code') = 'RESEND_UNAVAILABLE', 'INV8b Admin cannot resend to own account');
+create temp table invite_claim as select public.admin_claim_invite_resend(t.uid('adm'),t.uid('r1')) as info;
+select t.ok((select info->>'email' = (select email from auth.users where id=t.uid('r1')) from invite_claim), 'INV9 resolved email is tied to the existing Auth ID');
+select t.ok((public.admin_claim_invite_resend(t.uid('adm'),t.uid('r1'))->>'code') = 'RESEND_COOLDOWN', 'INV10 a duplicate attempt is blocked server-side');
+select public.admin_finish_invite_resend(t.uid('r1'), (select (info->>'attemptedAt')::timestamptz from invite_claim), 'rate_limited');
+select t.ok((select mail_status='rate_limited' and sent_at is null from private.resident_invite_lifecycle where user_id=t.uid('r1')), 'INV11 a rate-limited send never advances last sent');
+update private.resident_invite_lifecycle set attempted_at = now() - interval '2 minutes' where user_id=t.uid('r1');
+update invite_claim set info = public.admin_claim_invite_resend(t.uid('adm'),t.uid('r1'));
+select public.admin_finish_invite_resend(t.uid('r1'), (select (info->>'attemptedAt')::timestamptz from invite_claim), 'sent');
+select t.ok((select mail_status='sent' and sent_at is not null and activated_at is null from private.resident_invite_lifecycle where user_id=t.uid('r1')), 'INV12 confirmed send records timestamp but not activation');
+select set_config('request.jwt.claims','{"amr":[{"method":"password"}]}',true);
+select t.rows_as('r1','select public.resident_record_password_activation()');
+select t.ok(t.count_as('adm', format('select count(*) from public.admin_list_invite_states(array[%L::uuid]) where activated_at is not null',t.uid('r1'))) = 1, 'INV13 password session records activation');
+select t.ok((public.admin_claim_invite_resend(t.uid('adm'),t.uid('r1'))->>'code') = 'ALREADY_ACTIVATED', 'INV14 activated account cannot be resent');
+select set_config('request.jwt.claims','{}',true);
+update public.resident_maintenance_pause set paused = true where scope='accounts';
+select t.ok((public.admin_claim_invite_resend(t.uid('adm'),t.uid('r2'))->>'code') = 'ACCOUNTS_PAUSED', 'INV15 no resend while account maintenance is paused');
+update public.resident_maintenance_pause set paused = false where scope='accounts';
+
 -- ===== E. edit (spec 2.1, AC 1)
 select t.err('r1', $$select public.admin_list_accounts()$$, 'Active Admin account required', 'E1 a Resident cannot list accounts');
 select t.ok(t.count_as('adm', 'select count(*) from public.admin_list_accounts()') = 8, 'E2 Admin lists every account');
