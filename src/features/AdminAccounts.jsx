@@ -12,6 +12,14 @@ import "./AdminAccounts.css";
 
 const liveApi = { listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction, updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite };
 const detail = (account) => account.role === "resident" ? `PGY ${account.pgy ?? "—"}` : account.role === "staff" ? account.unit_name || "ไม่ระบุหน่วย" : account.admin_tag || "ไม่ระบุป้าย";
+const sortColumns = [
+  { key: "name", label: "บัญชี", value: (account) => account.full_name || account.email },
+  { key: "detail", label: "ชั้นปี / หน่วย / ป้าย", value: (account) => account.role === "resident" ? (account.pgy == null ? null : `PGY ${account.pgy}`) : account.role === "staff" ? account.unit_name : account.admin_tag },
+  { key: "status", label: "สิทธิ์บัญชี / คำเชิญ", value: (account, state) => `${account.active ? 1 : 2} ${inviteState(state).label}` },
+];
+const accountCollator = new Intl.Collator(["th", "en"], { numeric: true, sensitivity: "base" });
+const sortDirectionLabel = { ascending: "จากน้อยไปมาก", descending: "จากมากไปน้อย" };
+
 const displayValue = (value) => value === true ? "ใช้งาน" : value === false ? "ปิดใช้งาน" : value == null || value === "" ? "ไม่ระบุ" : String(value);
 const dateTime = (value) => new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const fieldLabels = { full_name: "ชื่อ", pgy: "PGY", unit_name: "หน่วย", admin_tag: "ป้าย Admin", active: "สถานะ" };
@@ -55,6 +63,7 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState("");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState(null);
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [onboarding, setOnboarding] = useState("");
@@ -113,7 +122,31 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; listSequence.current++; previewSequence.current++; }; }, []);
   useEffect(() => { reloadAccounts().catch(() => {}); }, [api, refreshKey]);
-  const filtered = useMemo(() => accounts.filter((account) => (!role || account.role === role) && (!status || String(account.active) === status) && (!onboarding || inviteState(invites[account.user_id]).key === onboarding) && `${account.full_name} ${account.email}`.toLocaleLowerCase("th").includes(search.trim().toLocaleLowerCase("th"))), [accounts, role, status, search, onboarding, invites]);
+  const filtered = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("th");
+    const rows = accounts.filter((account) => (!role || account.role === role) &&
+      (!status || String(account.active) === status) &&
+      (!onboarding || inviteState(invites[account.user_id]).key === onboarding) &&
+      `${account.full_name} ${account.email}`.toLocaleLowerCase("th").includes(query));
+    if (!sort) return rows;
+    const { value } = sortColumns.find(({ key }) => key === sort.key);
+    return rows.sort((left, right) => {
+      const a = value(left, invites[left.user_id]);
+      const b = value(right, invites[right.user_id]);
+      if (Boolean(a) !== Boolean(b)) return a ? -1 : 1;
+      const order = accountCollator.compare(a ?? "", b ?? "");
+      return (sort.direction === "descending" ? -order : order) ||
+        accountCollator.compare(left.full_name, right.full_name) ||
+        accountCollator.compare(left.email, right.email);
+    });
+  }, [accounts, role, status, search, onboarding, invites, sort]);
+
+  function toggleSort(key) {
+    setSort((current) => ({
+      key,
+      direction: current?.key === key && current.direction === "ascending" ? "descending" : "ascending",
+    }));
+  }
   const editPlan = selected && draft ? accountEditPlan(selected, draft) : null;
   const mustReload = ["ACCOUNT_CONFLICT", "PREVIEW_CHANGED", "ROLE_RULE"].includes(error?.code);
   const blocked = busy || uncertain || mustReload;
@@ -245,7 +278,30 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
       {listError && <p className="form-error" role="alert">{listError} กรุณาโหลดรายชื่อใหม่ก่อนทำรายการ</p>}
       {loading && <p role="status">กำลังโหลดบัญชี…</p>}
       {!loading && !listError && !filtered.length && <p className="account-empty">ไม่พบบัญชีที่ตรงกับการค้นหา</p>}
-      <div className="account-table"><table><thead><tr><th scope="col">บัญชี</th><th scope="col">ชั้นปี / หน่วย / ป้าย</th><th scope="col">สิทธิ์บัญชี / คำเชิญ</th><th scope="col">จัดการ</th></tr></thead><tbody>{filtered.map((account) => <tr key={account.user_id}><td><AccountIdentity account={account} self={isSelf(account)} /><span className="account-email">{account.email}</span></td><td>{detail(account)}</td><td><AccountState account={account} />{showInviteStatus(account)}</td><td>{accountActions(account)}</td></tr>)}</tbody></table></div>
+      <div className="account-mobile-sort">
+        <label>เรียงตาม<select value={sort ? `${sort.key}:${sort.direction}` : ""} onChange={(event) => {
+          const [key, direction] = event.target.value.split(":");
+          setSort(key ? { key, direction } : null);
+        }}>
+          <option value="">ลำดับเดิม</option>
+          {sortColumns.flatMap(({ key, label }) => Object.entries(sortDirectionLabel).map(([direction, text]) =>
+            <option key={`${key}:${direction}`} value={`${key}:${direction}`}>{label} · {text}</option>
+          ))}
+        </select></label>
+      </div>
+      <div className="account-table"><table><thead><tr>
+        {sortColumns.map(({ key, label }) => {
+          const direction = sort?.key === key ? sort.direction : undefined;
+          const next = direction === "ascending" ? "descending" : "ascending";
+          return <th key={key} scope="col" aria-sort={direction}>
+            <button type="button" className="account-sort-button" onClick={() => toggleSort(key)}
+              aria-label={`เรียง ${label} ${sortDirectionLabel[next]}`}>
+              <span>{label}</span><span aria-hidden="true">{direction === "ascending" ? "↑" : direction === "descending" ? "↓" : "↕"}</span>
+            </button>
+          </th>;
+        })}
+        <th scope="col">จัดการ</th>
+      </tr></thead><tbody>{filtered.map((account) => <tr key={account.user_id}><td><AccountIdentity account={account} self={isSelf(account)} /><span className="account-email">{account.email}</span></td><td>{detail(account)}</td><td><AccountState account={account} />{showInviteStatus(account)}</td><td>{accountActions(account)}</td></tr>)}</tbody></table></div>
       <div className="account-cards">{filtered.map((account) => <article key={account.user_id}><div className="account-card-heading"><AccountIdentity account={account} self={isSelf(account)} /><AccountState account={account} /></div><p className="account-email">{account.email}</p>{account.role !== "resident" && <p>{detail(account)}</p>}{showInviteStatus(account)}{accountActions(account)}</article>)}</div>
       <p className="account-foot" aria-live="polite">แสดง {filtered.length} จาก {accounts.length} บัญชี</p>
     </section> : <>

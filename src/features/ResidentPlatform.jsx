@@ -12,6 +12,7 @@ import {
 import ResidentDashboard from "./ResidentDashboard";
 import AdminAttemptPages from "./AdminAttemptPages";
 import AdminAccounts from "./AdminAccounts";
+import AssessmentSearchSelect from "../components/AssessmentSearchSelect";
 import { accountProvisionMessage } from "../adminInviteState.js";
 import ResidentCornerHome, { CornerService } from "./ResidentCornerHome";
 import ResidentSchedule from "./ResidentSchedule";
@@ -467,10 +468,46 @@ function HistoricalAssessmentEntry({ workspace, onRefresh }) {
         <p className="form-error">ต้องมี Resident, Staff ที่ลงทะเบียน และ catalog EPA/PBA ก่อนบันทึกรายการย้อนหลัง</p>
       ) : <>
         <div className="resident-form-grid">
-          <label>Resident<select value={residentId} onChange={(event) => setResidentId(event.target.value)} required>{residents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label>
-          <label>Staff ผู้ประเมินเดิม<select value={evaluatorId} onChange={(event) => setEvaluatorId(event.target.value)} required>{staff.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name}{person.unit_name ? ` · ${person.unit_name}` : ""}</option>)}</select></label>
+          <AssessmentSearchSelect
+            label="Resident"
+            placeholder="ค้นหาชื่อหรือชั้นปี"
+            value={residentId}
+            disabled={busy}
+            options={residents.map((resident) => ({
+              value: resident.id,
+              label: `${resident.name} · PGY ${resident.pgy}`,
+            }))}
+            onChange={setResidentId}
+          />
+          <AssessmentSearchSelect
+            label="Staff ผู้ประเมินเดิม"
+            placeholder="ค้นหาชื่อหรือหน่วย Staff"
+            value={evaluatorId}
+            disabled={busy}
+            options={staff.map((person) => ({
+              value: person.user_id,
+              label: [person.full_name, person.unit_name].filter(Boolean).join(" · "),
+            }))}
+            onChange={setEvaluatorId}
+          />
           <label>วันที่ประเมิน<input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} required /></label>
-          <label>แบบประเมิน<select value={templateId} onChange={(event) => { setTemplateId(event.target.value); setScores({}); setComments({}); setOutcome(""); }} required>{workspace.templates.map((item) => <option key={item.id} value={item.id}>{item.template_code} · {item.title}</option>)}</select></label>
+          <AssessmentSearchSelect
+            label="แบบประเมิน"
+            placeholder="ค้นหารหัสหรือชื่อแบบประเมิน"
+            value={templateId}
+            disabled={busy}
+            options={workspace.templates.map((item) => ({
+              value: item.id,
+              label: `${item.template_code} · ${item.title}`,
+            }))}
+            onChange={(id) => {
+              if (id === templateId) return;
+              setTemplateId(id);
+              setScores({});
+              setComments({});
+              setOutcome("");
+            }}
+          />
           <label className="wide">กิจกรรม/หัตถการ<input value={activity} maxLength="240" onChange={(event) => setActivity(event.target.value)} required /></label>
           <label className="wide">บริบททางคลินิก (ถ้ามี)<textarea value={context} maxLength="500" onChange={(event) => setContext(event.target.value)} /></label>
           <OutcomeSelect template={template} value={outcome} onChange={setOutcome} label="ผลสรุป" />
@@ -486,8 +523,18 @@ function HistoricalAssessmentEntry({ workspace, onRefresh }) {
   );
 }
 
+const adminAssessmentPages = {
+  catalog: "คลังแบบประเมิน",
+  grants: "เพิ่มครั้งประเมิน",
+  progress: "ความคืบหน้าและ Excel",
+  historical: "บันทึกย้อนหลัง",
+  deletion: "ลบผลประเมิน",
+};
+
 function Admin({ workspace, onRefresh }) {
   const [adminPage, setAdminPage] = useState("accounts");
+  const [assessmentPage, setAssessmentPage] = useState("catalog");
+  const [historicalOpened, setHistoricalOpened] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -601,21 +648,34 @@ function Admin({ workspace, onRefresh }) {
       </nav>
       {(message || error) && <p className={error ? "form-error" : "form-success"} role={error ? "alert" : "status"}>{error || message}</p>}
       {adminPage === "assessment" && <>
-      <section className="resident-panel admin-summary">
-        <div>
-          <h2>Catalog EPA/PBA</h2>
-          <p>
-            {workspace.templates.length} แบบประเมิน · สร้างจากไฟล์ใน EPA/ และ
-            PBA/ เท่านั้น
-          </p>
-        </div>
-        <button className="primary-button" onClick={sync} disabled={syncing}>
-          {syncing ? "กำลังซิงก์…" : "ซิงก์ source catalog"}
-        </button>
-      </section>
-      {workspace.user.role === "admin" && <AdminAttemptPages workspace={workspace} />}
-      <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />
-      <HistoricalAssessmentEntry workspace={workspace} onRefresh={onRefresh} />
+        <nav className="resident-panel admin-workspace-nav admin-assessment-nav" aria-label="หน้าย่อยการจัดการ EPA/PBA">
+          {Object.entries(adminAssessmentPages).map(([id, label]) => (
+            <button key={id} type="button" aria-pressed={assessmentPage === id}
+              className={assessmentPage === id ? "primary-button" : "secondary-button"}
+              disabled={syncing}
+              onClick={() => {
+                setAssessmentPage(id);
+                if (id === "historical") setHistoricalOpened(true);
+                setMessage("");
+                setError("");
+              }}>{label}</button>
+          ))}
+        </nav>
+        {assessmentPage === "catalog" && <section className="resident-panel admin-summary">
+          <div>
+            <h2>คลังแบบประเมิน EPA/PBA</h2>
+            <p>{workspace.templates.length} แบบประเมิน · สร้างจากไฟล์ใน EPA/ และ PBA/ เท่านั้น</p>
+          </div>
+          <button type="button" className="primary-button" onClick={sync} disabled={syncing}>
+            {syncing ? "กำลังซิงก์…" : "ซิงก์ source catalog"}
+          </button>
+        </section>}
+        {(assessmentPage === "grants" || assessmentPage === "progress") &&
+          workspace.user.role === "admin" && <AdminAttemptPages workspace={workspace} page={assessmentPage} />}
+        {historicalOpened && <div hidden={assessmentPage !== "historical"}>
+          <HistoricalAssessmentEntry workspace={workspace} onRefresh={onRefresh} />
+        </div>}
+        {assessmentPage === "deletion" && <AdminAssessmentDeletion workspace={workspace} onRefresh={onRefresh} />}
       </>}
       {adminPage === "accounts" && <>
         <details className="resident-panel admin-add-account">

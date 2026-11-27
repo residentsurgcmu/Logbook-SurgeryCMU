@@ -169,7 +169,7 @@ function ExportPanel({ rows, loadedAt, loading, error, reloadProgress }) {
   </section>;
 }
 
-function AdminAttemptContent() {
+function AdminAttemptContent({ page }) {
   const [rows, setRows] = useState([]);
   const [loadedAt, setLoadedAt] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -192,13 +192,13 @@ function AdminAttemptContent() {
   useEffect(() => { mounted.current = true; reloadProgress().catch(() => {}); return () => { mounted.current = false; sequence.current++; }; }, []);
   const retry = () => reloadProgress().catch(() => {});
   return <div className="admin-attempt-pages">
-    <GrantPanel rows={rows} loading={loading} error={error} reloadProgress={retry} />
-    <ExportPanel rows={rows} loadedAt={loadedAt} loading={loading} error={error} reloadProgress={reloadProgress} />
+    {page === "grants" && <GrantPanel rows={rows} loading={loading} error={error} reloadProgress={retry} />}
+    {page === "progress" && <ExportPanel rows={rows} loadedAt={loadedAt} loading={loading} error={error} reloadProgress={reloadProgress} />}
   </div>;
 }
 
 // Gate before mounting children: non-admin roles do not even load these RPCs.
-export default function AdminAttemptPages({ workspace }) {
+export default function AdminAttemptPages({ workspace, page }) {
   if (workspace.user.role !== "admin") return null;
-  return <AdminAttemptContent />;
+  return <AdminAttemptContent page={page} />;
 }
