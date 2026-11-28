@@ -82,7 +82,7 @@ test("mobile rules: 44px targets, no horizontal page scroll, wrapped long titles
   assert.doesNotMatch(css, /overflow-x:\s*scroll/);
 });
 
-test("navGroups: myspace sits right after home in the first group; calendar included; BOTTOM_NAV untouched", () => {
+test("navGroups: myspace sits right after home in the first group; calendar included; shortcuts match each role", () => {
   assert.deepEqual(NAV_GROUPS[0], ["พื้นที่ทำงาน", ["home", "myspace", "cases", "conference", "calendar", "schedule"]]);
   assert.deepEqual(NAV_GROUPS.slice(1), [
     ["การเรียนรู้และกิจกรรม", ["videos", "attendance", "round-admin"]],
@@ -90,7 +90,7 @@ test("navGroups: myspace sits right after home in the first group; calendar incl
     ["อื่นๆ", ["accounts", "notifications", "export", "admin"]],
   ]);
   assert.deepEqual(BOTTOM_NAV, {
-    resident: [["request", "ส่งประเมิน"], ["history", "ผลประเมิน"], ["qr", "QR ของฉัน"], ["cases", "เคส"]],
+    resident: [["request", "ส่งประเมิน"], ["attendance", "สแกนเช็กชื่อ"], ["qr", "QR ของฉัน"], ["cases", "กรอกเคสรับใหม่"]],
     staff: [["pending", "รอประเมิน"], ["scan", "สแกน"], ["dashboard", "ภาพรวม"], ["history", "ประวัติ"]],
     admin: [["dashboard", "ภาพรวม"], ["history", "ผลประเมิน"], ["cases", "เคส"], ["admin", "จัดการ"]],
   });

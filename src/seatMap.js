@@ -132,10 +132,14 @@ export const hnHint = (text) => /[0-9๐-๙]{6,}/.test(String(text ?? "").repla
 
 export const shouldPoll = ({ hidden, dialogOpen, ended }) => !hidden && !dialogOpen && !ended;
 
-export function pickDefaultSession(sessions, nowMs = Date.now()) {
+export const hasOnlyPastSeatSessions = (sessions, nowMs = Date.now()) =>
+  Boolean(sessions?.length) && sessions.every((session) => Date.parse(session.effective_end) < nowMs);
+
+export function pickDefaultSession(sessions, nowMs = Date.now(), checkedInSessionId = "") {
   if (!sessions?.length) return "";
+  if (checkedInSessionId && sessions.some((s) => s.session_id === checkedInSessionId)) return checkedInSessionId;
   const at = (value) => Date.parse(value);
-  const live = sessions.find((s) => nowMs >= at(s.starts_at) - 3600000 && nowMs <= at(s.effective_end));
+  const live = sessions.find((s) => nowMs >= at(s.starts_at) && nowMs <= at(s.effective_end));
   if (live) return live.session_id;
   const upcoming = sessions.filter((s) => at(s.starts_at) > nowMs).sort((a, b) => at(a.starts_at) - at(b.starts_at))[0];
   if (upcoming) return upcoming.session_id;

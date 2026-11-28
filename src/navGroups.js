@@ -18,7 +18,7 @@ export function groupNav(nav, role = "resident") {
 // Phone bottom bar: the few things each role does on the ward, with short labels.
 // The fifth slot is always "เพิ่มเติม", which opens the full menu drawer.
 export const BOTTOM_NAV = {
-  resident: [["request", "ส่งประเมิน"], ["history", "ผลประเมิน"], ["qr", "QR ของฉัน"], ["cases", "เคส"]],
+  resident: [["request", "ส่งประเมิน"], ["attendance", "สแกนเช็กชื่อ"], ["qr", "QR ของฉัน"], ["cases", "กรอกเคสรับใหม่"]],
   staff: [["pending", "รอประเมิน"], ["scan", "สแกน"], ["dashboard", "ภาพรวม"], ["history", "ประวัติ"]],
   admin: [["dashboard", "ภาพรวม"], ["history", "ผลประเมิน"], ["cases", "เคส"], ["admin", "จัดการ"]],
 };

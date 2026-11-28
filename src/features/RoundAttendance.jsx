@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
 import { RoundQrScanner } from "./RoundQrScanner";
+import { cmeRequiresTap } from "../roundCme";
 import { SeatMapPanel } from "./SeatMap";
 import { SeatAdminPanel } from "./SeatMapAdmin";
 import { adminListSeatConfigs } from "../seatMapApi";
@@ -445,7 +446,8 @@ const roundCheckIns = new Map();
 const CME_REDIRECT_SECONDS = 5;
 
 function RoundCmeNext({ href }) {
-  const [seconds, setSeconds] = useState(CME_REDIRECT_SECONDS);
+  const requiresTap = cmeRequiresTap();
+  const [seconds, setSeconds] = useState(() => requiresTap ? null : CME_REDIRECT_SECONDS);
   const pending = useRef(true);
   const [attempted, setAttempted] = useState(false);
   function stop() {
@@ -471,6 +473,7 @@ function RoundCmeNext({ href }) {
 
   return <div className="round-cme-next">
     {seconds != null && <p>กำลังจะเปิด CCME ในแท็บใหม่</p>}
+    {requiresTap && <p>แตะปุ่มด้านล่างเพื่อไปต่อที่ CCME แล้วกลับมาเลือกที่นั่งในแท็บนี้ได้</p>}
     <a className="primary-button" href={href} target="_blank" rel="noopener noreferrer" onClick={stop}>เปิด CCME ตอนนี้ (แท็บใหม่)</a>
     {seconds != null && <button className="secondary-button" type="button" onClick={stop}
       aria-label="ยกเลิกการเปิด CCME อัตโนมัติ">
@@ -480,7 +483,7 @@ function RoundCmeNext({ href }) {
   </div>;
 }
 
-export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user }) {
+export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user, quickScan, onQuickScanStarted }) {
   const [scannedToken, setScannedToken] = useState("");
   const token = linkToken || scannedToken;
   const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
@@ -544,10 +547,10 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
     {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p>{cme && <RoundCmeNext key={cme.sequence} href={cme.href} />}</div>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} /></>}
+    {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} quickScan={quickScan} onQuickScanStarted={onQuickScanStarted} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
-    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} />}
+    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} checkedInSessionId={result?.session_id || ""} />}
   </section>;
 }
 

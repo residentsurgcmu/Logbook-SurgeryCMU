@@ -386,6 +386,7 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
   .bottom-nav { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); position:fixed; left:0; right:0; bottom:0; z-index:40; height:calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); padding:0 4px env(safe-area-inset-bottom); background:rgba(255,255,255,.97); border-top:1px solid var(--line); box-shadow:0 -4px 16px rgba(17,51,33,.06); }
   .bottom-nav button { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-width:0; min-height:44px; padding:6px 2px; border:0; background:transparent; color:var(--text-muted); font-size:12px; font-weight:700; line-height:1.5; cursor:pointer; }
   .bottom-nav button > span:last-child { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bottom-nav button > span.bottom-nav-long-label { white-space:normal; overflow-wrap:anywhere; line-height:1.15; }
   .bottom-nav button[aria-current="page"] { color:var(--brand); }
   .bottom-nav button[aria-current="page"]::before { content:""; position:absolute; top:0; left:25%; right:25%; height:3px; border-radius:0 0 3px 3px; background:var(--brand); }
   .bottom-nav-icon { position:relative; display:grid; place-items:center; width:32px; height:28px; }

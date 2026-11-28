@@ -35,8 +35,8 @@ test("legacy colour names alias the tokens instead of repeating hex values", asy
 });
 
 test("phone bottom bar: at most four shortcuts per role, all real tabs, plus the menu", () => {
-  const nav = [["request", "x"], ["history", "x"], ["qr", "x"], ["cases", "x"], ["notifications", "x"]];
-  assert.deepEqual(bottomNav("resident", nav).map(([id]) => id), ["request", "history", "qr", "cases"]);
+  const nav = [["request", "x"], ["history", "x"], ["attendance", "x"], ["qr", "x"], ["cases", "x"], ["notifications", "x"]];
+  assert.deepEqual(bottomNav("resident", nav).map(([id]) => id), ["request", "attendance", "qr", "cases"]);
   assert.deepEqual(bottomNav("resident", [["request", "x"]]).map(([id]) => id), ["request"]);
   assert.deepEqual(bottomNav("nobody", nav), []);
   for (const [role, items] of Object.entries(BOTTOM_NAV)) assert.ok(items.length <= 4, `${role} + menu stays within five slots`);
@@ -47,7 +47,7 @@ test("the shell renders badges from counts, a bottom bar, and one shared navigat
   assert.match(shell, /<nav className="bottom-nav" inert=\{drawerOpen\} aria-label="เมนูด่วน">/);
   assert.match(shell, /function NavBadge\(\{ count \}\)/);
   assert.doesNotMatch(shell, /รอประเมิน \(\$\{/, "counts are badges, not part of the label");
-  assert.match(shell, /onClick=\{\(\) => goTo\(id\)\}/);
+  assert.match(shell, /onClick=\{\(\) => goTo\(id, id === "attendance"\)\}/);
   assert.match(shell, /onClick=\{openMenu\}/);
   const css = await read("src/resident.css");
   assert.match(css, /\.bottom-nav \{ display:none; \}/);

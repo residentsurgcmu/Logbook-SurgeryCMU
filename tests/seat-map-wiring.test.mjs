@@ -86,7 +86,7 @@ test("RoundAdmin lists past sessions with a seat map so the Admin can open last 
 test("when the session list cannot be loaded the seat map renders nothing and shows no error", async () => {
   const panel = await read("src/features/SeatMap.jsx");
   assert.match(panel, /if \(sessions === null \|\| !sessions\.length\) return null;/);
-  const loadSessions = panel.match(/const loadSessions = useCallback\([\s\S]*?\n  \}, \[\]\);/);
+  const loadSessions = panel.match(/const loadSessions = useCallback\([\s\S]*?(?=\n  const refresh =)/);
   assert.ok(loadSessions, "loadSessions found");
   assert.match(loadSessions[0], /catch \(nextError\) \{\n\s+if \(mounted\.current\) setSessions\(\[\]\);/);
   assert.doesNotMatch(loadSessions[0], /setLoadError/, "a failed session list is silent");

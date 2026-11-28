@@ -12,7 +12,7 @@ function stopScanner(scanner) {
   });
 }
 
-export function RoundQrScanner({ onToken, disabled = false, role, onNavigate = (path) => window.location.assign(path) }) {
+export function RoundQrScanner({ onToken, disabled = false, role, quickScan = false, onQuickScanStarted, onNavigate = (path) => window.location.assign(path) }) {
   const [camera, setCamera] = useState(false);
   const [manual, setManual] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +35,13 @@ export function RoundQrScanner({ onToken, disabled = false, role, onNavigate = (
     onToken(token);
     return true;
   }
+
+  useEffect(() => {
+    if (!quickScan || disabled) return;
+    setError("");
+    setCamera(true);
+    onQuickScanStarted?.();
+  }, [quickScan, disabled, onQuickScanStarted]);
 
   useEffect(() => {
     if (!camera) return undefined;

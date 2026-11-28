@@ -29,3 +29,9 @@ export async function decodeRoundCmeQr(file, kind = "attendee") {
     target.remove();
   }
 }
+
+// iPadOS can identify itself as a Mac when requesting the desktop site.
+export function cmeRequiresTap(client = typeof navigator === "undefined" ? {} : navigator) {
+  return /iPhone|iPad|iPod/i.test(client.userAgent || "") ||
+    (/Mac/i.test(client.platform || "") && client.maxTouchPoints > 1);
+}

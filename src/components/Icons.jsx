@@ -28,6 +28,7 @@ export const QrIcon = (props) => (
     <path fill="currentColor" stroke="none" d="M5 5h2v2H5zM17 5h2v2h-2zM5 17h2v2H5zM12 12h3v3h-3zM18 12h3v6h-3zM12 18h3v3h-3zM18 19h3v2h-3z" />
   </Icon>
 );
+export const CameraIcon = (props) => <Icon {...props}><path d="M4 7h4l2-3h4l2 3h4a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z" /><circle cx="12" cy="13" r="4" /></Icon>;
 export const ScanIcon = (props) => <Icon {...props}><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" /><path d="M7 12h10" /></Icon>;
 export const ClockIcon = (props) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>;
 export const ShieldIcon = (props) => <Icon {...props}><path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6Z" /><path d="m8.5 12 2.2 2.2 4.8-5" /></Icon>;

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   SEAT_POLL_MS, HOLD_SECONDS, ENDED_NOTE, STATUS_LABELS,
   seatErrorMessage, statusLabel, seatsByZone, zoneColumns, seatCell, seatAriaLabel, canPickSeat, canManageSeats, sessionPhase,
-  seatableResidents, filterPeople, hnHint, shouldPoll, pickDefaultSession, serverOffsetMs, holdSecondsLeft, bangkokHm, onTimeIso, eventText, canReviewRequests, isOwnRequest,
+  seatableResidents, filterPeople, hnHint, shouldPoll, hasOnlyPastSeatSessions, pickDefaultSession, serverOffsetMs, holdSecondsLeft, bangkokHm, onTimeIso, eventText, canReviewRequests, isOwnRequest,
 } from "../src/seatMap.js";
 
 const seat = (seat_code, zone, row_no, col_no, extra = {}) => ({ seat_code, zone, row_no, col_no, held: false, occupant: null, ...extra });
@@ -157,6 +157,24 @@ test("the default session is the live one, else the next, else the latest", () =
   assert.equal(pickDefaultSession([past, next], Date.parse("2026-10-16T12:00:00Z")), "next");
   assert.equal(pickDefaultSession([past, mk("older", "2026-10-02T01:45:00Z", "2026-10-02T05:00:00Z")], Date.parse("2026-10-16T12:00:00Z")), "past");
   assert.equal(pickDefaultSession([], Date.now()), "");
+});
+
+test("a check-in selects its own room, and a live room beats the next room", () => {
+  const live = { session_id: "live", starts_at: "2026-11-28T02:00:00Z", effective_end: "2026-11-28T03:00:00Z" };
+  const next = { session_id: "next", starts_at: "2026-11-28T03:00:00Z", effective_end: "2026-11-28T04:00:00Z" };
+  const now = Date.parse("2026-11-28T02:55:00Z");
+  assert.equal(pickDefaultSession([next, live], now), "live");
+  assert.equal(pickDefaultSession([next, live], now, "next"), "next");
+  assert.equal(pickDefaultSession([next, live], now, "without-layout"), "live");
+});
+
+test("historical seating is folded only when no current or upcoming seating exists", () => {
+  const now = Date.parse("2026-11-28T03:05:00Z");
+  const past = { effective_end: "2026-11-28T03:00:00Z" };
+  const next = { effective_end: "2026-11-28T04:00:00Z" };
+  assert.equal(hasOnlyPastSeatSessions([past], now), true);
+  assert.equal(hasOnlyPastSeatSessions([past, next], now), false);
+  assert.equal(hasOnlyPastSeatSessions([], now), false);
 });
 
 test("the countdown follows the server clock, not the phone clock", () => {

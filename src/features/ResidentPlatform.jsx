@@ -40,6 +40,7 @@ import {
   BellIcon,
   BookIcon,
   CalendarIcon,
+  CameraIcon,
   CheckIcon,
   ClipboardIcon,
   DownloadIcon,
@@ -845,6 +846,7 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   const initialTab =
     workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "home";
   const [tab, setTab] = useState(initialTab);
+  const [quickAttendanceScan, setQuickAttendanceScan] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef(null);
   const closeMenuButton = useRef(null);
@@ -932,7 +934,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
     await markNotificationRead(id);
     await onRefresh();
   }
-  function goTo(id) {
+  function goTo(id, startAttendanceScan = false) {
+    setQuickAttendanceScan(startAttendanceScan);
     if (id === "conference" && tab !== "conference") setPresentCase(null);
     setTab(id);
     setSelectedRequest(null);
@@ -1055,6 +1058,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           <RoundCheckIn
             token={roundToken}
             user={workspace.user}
+            quickScan={quickAttendanceScan}
+            onQuickScanStarted={() => setQuickAttendanceScan(false)}
             onTokenUsed={() => {
               setRoundToken("");
               window.history.replaceState({}, document.title, "/");
@@ -1122,17 +1127,17 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
       </div>
       <nav className="bottom-nav" inert={drawerOpen} aria-label="เมนูด่วน">
         {quickNav.map(([id, label]) => {
-          const Icon = navIcons[id] || FileIcon;
+          const Icon = id === "attendance" ? CameraIcon : navIcons[id] || FileIcon;
           return (
             <button
               key={id}
               type="button"
-              className={id === "scan" ? "bottom-nav-primary" : ""}
+              className={id === "scan" || id === "attendance" ? "bottom-nav-primary" : ""}
               aria-current={tab === id ? "page" : undefined}
-              onClick={() => goTo(id)}
+              onClick={() => goTo(id, id === "attendance")}
             >
               <span className="bottom-nav-icon"><Icon size={22} /><NavBadge count={badges[id]} /></span>
-              <span>{label}</span>
+              <span className={id === "cases" && workspace.user.role === "resident" ? "bottom-nav-long-label" : undefined}>{label}</span>
             </button>
           );
         })}

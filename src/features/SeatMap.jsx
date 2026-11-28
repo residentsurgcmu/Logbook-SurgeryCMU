@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ENDED_NOTE, MODERATOR_ZONE, REAR_ZONE_INFO, SEAT_POLL_MS, ZONE_INFO, bangkokHm, canManageSeats, canPickSeat, canReviewRequests, pickDefaultSession, seatCell, seatErrorMessage, serverOffsetMs, shouldPoll,
+  ENDED_NOTE, MODERATOR_ZONE, REAR_ZONE_INFO, SEAT_POLL_MS, ZONE_INFO, bangkokHm, canManageSeats, canPickSeat, canReviewRequests, hasOnlyPastSeatSessions, pickDefaultSession, seatCell, seatErrorMessage, serverOffsetMs, shouldPoll,
 } from "../seatMap";
 import {
   certifySeatMap, confirmSeat, holdSeat, listSeatSessions, loadMySeatEvents, loadSeatMap, moveToReserveArea, releaseSeat,
@@ -14,10 +14,11 @@ const TABS = [["map", "ผังที่นั่ง"], ["people", "ผู้�
 
 // Shown on the "เช็คชื่อประชุม" page for every session that has a seat map. Renders nothing when there is none and also
 // nothing when the session list cannot be loaded (the page works without it); only refresh() failures show a message.
-export function SeatMapPanel({ user, refreshKey = "" }) {
+export function SeatMapPanel({ user, refreshKey = "", checkedInSessionId = "" }) {
   const [sessions, setSessions] = useState(null);
   const [sessionId, setSessionId] = useState("");
   const [map, setMap] = useState(null);
+  const [showPastRooms, setShowPastRooms] = useState(false);
   const [offsetMs, setOffsetMs] = useState(0);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -43,11 +44,14 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
       const list = await listSeatSessions();
       if (!mounted.current) return;
       setSessions(list);
-      setSessionId((previous) => (previous && list.some((item) => item.session_id === previous) ? previous : pickDefaultSession(list, Date.now())));
+      setSessionId((previous) => {
+        const preferred = checkedInSessionId || previous;
+        return pickDefaultSession(list, Date.now(), preferred);
+      });
     } catch (nextError) {
       if (mounted.current) setSessions([]);
     }
-  }, []);
+  }, [checkedInSessionId]);
 
   const refresh = useCallback(async (id) => {
     if (!id) return;
@@ -119,6 +123,15 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
   }
 
   if (sessions === null || !sessions.length) return null;
+  const historyOnly = hasOnlyPastSeatSessions(sessions, Date.now() + offsetMs);
+  if (historyOnly && !showPastRooms) return <section className="resident-panel seatmap" aria-labelledby="seatmap-title">
+    <div className="seatmap-head"><h2 id="seatmap-title">ผังที่นั่งประชุม</h2></div>
+    <p>ตอนนี้ไม่มีรอบที่เปิดให้เลือกที่นั่ง</p>
+    <div className="seatmap-viewswitch">
+      <button type="button" className="secondary-button" onClick={() => setShowPastRooms(true)}>ดูผังย้อนหลัง</button>
+      <button type="button" className="text-button" onClick={loadSessions}>ตรวจสอบรอบใหม่</button>
+    </div>
+  </section>;
   const session = sessions.find((item) => item.session_id === sessionId) || sessions[0];
   const pendingRequests = requests.filter((request) => request.state === "pending" && request.user_id !== map?.me?.user_id).length;
   const tabs = map && canReviewRequests(map) ? [...TABS, ["requests", pendingRequests ? `คำขอรอตรวจ (${pendingRequests})` : "คำขอ"]] : TABS;
@@ -130,6 +143,7 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
         ? <label>รอบ<select value={sessionId} onChange={(event) => setSessionId(event.target.value)}>{sessions.map((item) => <option key={item.session_id} value={item.session_id}>{thaiDate(item.meeting_date)} · {bangkokHm(item.starts_at)}–{bangkokHm(item.ends_at)} น.</option>)}</select></label>
         : <span>{thaiDate(session.meeting_date)} · {bangkokHm(session.starts_at)}–{bangkokHm(session.ends_at)} น.</span>}
     </div>
+    {historyOnly && <button type="button" className="text-button" onClick={() => { setShowPastRooms(false); setView("2d"); }}>ซ่อนผังย้อนหลัง</button>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {loadError && <p className="form-error" role="alert">{loadError}</p>}
     {notice && <p className="form-success" role="status">{notice}</p>}
