@@ -1,8 +1,9 @@
-// Outside pages shown inside "ตารางเวร / OR". Addresses live in the database (set by an Admin), never in the code.
+// Outside pages shown on the work schedule page. Addresses live in the database (set by an Admin), never in the code.
+export const SCHEDULE_TITLE = "คิว OR / Rotation / เวรวันนี้";
 export const EMBED_LINKS = [
-  { key: "or_schedule", label: "ตารางห้องผ่าตัด (OR)", defaultTitle: "ตารางห้องผ่าตัด (OR)" },
-  { key: "rota", label: "Surgical Rotation Manager", defaultTitle: "Surgical Rotation Manager" },
-  { key: "duty_today", label: "ทีมเวรวันนี้", defaultTitle: "ทีมเวรวันนี้" },
+  { key: "or_schedule", label: "คิว OR", defaultTitle: "ตารางห้องผ่าตัด (OR)" },
+  { key: "rota", label: "Rotation", defaultTitle: "Surgical Rotation Manager" },
+  { key: "duty_today", label: "เวรวันนี้", defaultTitle: "ทีมเวรวันนี้" },
 ];
 
 // Same rule as the database check: https only, a real port (1-65535) if any, no spaces, no user:password@ part, at most 500 characters.

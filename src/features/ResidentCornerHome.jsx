@@ -1,3 +1,4 @@
+import { SCHEDULE_TITLE } from "../embedLinkRules";
 import React from "react";
 import { BedIcon, BookIcon, CalendarIcon, ChevronIcon, ClipboardIcon, MicIcon, BellIcon, KeyIcon } from "../components/Icons";
 import { cornerSummary, CORNER_SERVICES } from "../residentCorner";
@@ -58,7 +59,7 @@ export default function ResidentCornerHome({ workspace, onNavigate, onOpenReques
         <section className="resident-panel corner-tasks">
           <div className="corner-panel-heading"><h2>แหล่งเรียนรู้และตารางงาน</h2></div>
           <Shortcut title="คลังวิดีโอ" description="ยังไม่เชื่อมแหล่งวิดีโอ" icon={BookIcon} onClick={() => onNavigate("videos")} />
-          <Shortcut title="ตารางเวร / ตาราง OR" description="ยังไม่เชื่อมตารางจริง" icon={CalendarIcon} onClick={() => onNavigate("schedule")} />
+          <Shortcut title={SCHEDULE_TITLE} description="ยังไม่เชื่อมตารางจริง" icon={CalendarIcon} onClick={() => onNavigate("schedule")} />
           <Shortcut title="Microsoft 365 / Google" description="ดูสถานะการเชื่อมบัญชี" icon={KeyIcon} onClick={() => onNavigate("accounts")} />
         </section>
         <button type="button" className="corner-inbox" onClick={() => onNavigate("notifications")}><BellIcon /><span>การแจ้งเตือนที่ยังไม่อ่าน</span><strong>{summary.unread}</strong><ChevronIcon size={18} /></button>

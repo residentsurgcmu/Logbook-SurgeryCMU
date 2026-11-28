@@ -1,3 +1,4 @@
+import { SCHEDULE_TITLE } from "../embedLinkRules";
 import ResidentCalendar from "./ResidentCalendar";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -904,13 +905,13 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
     nav.push(["round-admin", "MM & Grand Round"], ["exams", "การสอบ"], ["export", "Export ข้อมูล"], ["admin", "จัดการระบบ"]);
   else
     nav.push(["exams", workspace.user.role === "resident" ? "ผลการสอบของฉัน" : "ผลการสอบ"]);
-  nav.push(["videos", "คลังวิดีโอ"], ["schedule", "ตารางเวร / OR"], ["accounts", "บัญชีที่เชื่อมต่อ"]);
+  nav.push(["videos", "คลังวิดีโอ"], ["schedule", SCHEDULE_TITLE], ["accounts", "บัญชีที่เชื่อมต่อ"]);
   const titles = {
     home: "Resident Corner",
     myspace: "My space",
     videos: "คลังวิดีโอ",
     calendar: "ปฏิทินสอบและกิจกรรม",
-    schedule: "ตารางเวร / ตาราง OR",
+    schedule: SCHEDULE_TITLE,
     accounts: "บัญชีที่เชื่อมต่อ",
     dashboard: "Dashboard การประเมิน",
     request: "ส่งแบบประเมิน EPA/PBA",

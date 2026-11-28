@@ -1,7 +1,8 @@
+import { SCHEDULE_TITLE } from "../embedLinkRules";
 import React, { useCallback, useEffect, useState } from "react";
 import { EMBED_LINKS, clearEmbedLink, embedAddressProblem, embedErrorMessage, embedHost, loadEmbedLinks, setEmbedLink } from "../residentEmbedLinks";
 
-// "ตารางเวร / OR": outside web pages shown inside this page. Everyone signed in can look; only an Admin sets
+// Outside web pages shown inside this page. Everyone signed in can look; only an Admin sets
 // the addresses. Nothing here talks to those sites except the browser frame itself.
 const DUTY_TODAY = EMBED_LINKS.find((item) => item.key === "duty_today");
 
@@ -19,7 +20,7 @@ export default function ResidentSchedule({ user, onNavigate }) {
       const rows = await loadEmbedLinks();
       setLinks(rows);
       setActive((current) => current === DUTY_TODAY.key || rows.some((row) => row.link_key === current)
-        ? current : rows.find((row) => row.link_key !== DUTY_TODAY.key)?.link_key || DUTY_TODAY.key);
+        ? current : EMBED_LINKS.find(({ key }) => rows.some((row) => row.link_key === key))?.key || DUTY_TODAY.key);
     } catch (nextError) {
       setError(embedErrorMessage(nextError));
       setLinks(null);
@@ -28,12 +29,11 @@ export default function ResidentSchedule({ user, onNavigate }) {
   useEffect(() => { load(); }, [load]);
 
   const current = (links || []).find((row) => row.link_key === active) || null;
-  const tabs = [...(links || []).filter((row) => row.link_key !== DUTY_TODAY.key),
-    { link_key: DUTY_TODAY.key, title: DUTY_TODAY.defaultTitle }];
+  const tabs = EMBED_LINKS.filter(({ key }) => key === DUTY_TODAY.key || links?.some((row) => row.link_key === key));
   return (
     <section className="resident-panel sched">
       <div className="panel-title-row">
-        <div><h2>ตารางเวร / ตาราง OR</h2><p>ดูตารางจากเว็บภายนอกในหน้านี้ · ข้อมูลแสดงสดจากเว็บต้นทาง</p></div>
+        <div><h2>{SCHEDULE_TITLE}</h2><p>ดูตารางจากเว็บภายนอกในหน้านี้ · ข้อมูลแสดงสดจากเว็บต้นทาง</p></div>
         {isAdmin && <button type="button" className="secondary-button" onClick={() => { setEditing((value) => !value); setNotice(""); }}>{editing ? "ปิดการตั้งค่า" : "ตั้งค่าที่อยู่"}</button>}
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -47,14 +47,14 @@ export default function ResidentSchedule({ user, onNavigate }) {
       {links && (
         <>
           <div className="lib-chips" role="tablist" aria-label="เลือกตาราง">
-            {tabs.map((row) => (
-              <button key={row.link_key} type="button" role="tab" aria-selected={active === row.link_key} className={active === row.link_key ? "active" : ""} onClick={() => setActive(row.link_key)}>{row.title}</button>
+            {tabs.map(({ key, label }) => (
+              <button key={key} type="button" role="tab" aria-selected={active === key} className={active === key ? "active" : ""} onClick={() => setActive(key)}>{label}</button>
             ))}
           </div>
           {active === DUTY_TODAY.key && !current && (
             <div className="sched-empty" role="status">
-              <strong>ทีมเวรวันนี้ · ยังไม่เปิดใช้งาน</strong>
-              <p>{isAdmin ? 'ยังไม่ได้ตั้งค่าที่อยู่ กด "ตั้งค่าที่อยู่" แล้วกรอกช่อง "ทีมเวรวันนี้"' : "Admin ยังไม่ได้ตั้งค่าที่อยู่ของทีมเวรวันนี้"}</p>
+              <strong>เวรวันนี้ · ยังไม่เปิดใช้งาน</strong>
+              <p>{isAdmin ? 'ยังไม่ได้ตั้งค่าที่อยู่ กด "ตั้งค่าที่อยู่" แล้วกรอกช่อง "เวรวันนี้"' : "Admin ยังไม่ได้ตั้งค่าที่อยู่ของเวรวันนี้"}</p>
               <button type="button" className="secondary-button" onClick={() => onNavigate?.("home")}>กลับหน้าแรก</button>
             </div>
           )}

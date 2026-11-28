@@ -1,3 +1,4 @@
+import { SCHEDULE_TITLE } from "./embedLinkRules.js";
 // Summaries use only the workspace already authorized by the server.
 // Filtering here is presentation, never a replacement for RLS.
 export function cornerSummary(workspace) {
@@ -13,6 +14,6 @@ export function cornerSummary(workspace) {
 
 export const CORNER_SERVICES = {
   videos: { title: "คลังวิดีโอ", subtitle: "ทบทวนการผ่าตัดและบทเรียนของภาควิชา", items: ["วิดีโอการผ่าตัด", "บทเรียนและ conference ย้อนหลัง"], note: "ยังไม่เปิดคลังวิดีโอในระบบนี้ รอเชื่อมแหล่งวิดีโอและกำหนดสิทธิ์การรับชม" },
-  schedule: { title: "ตารางเวร / ตาราง OR", subtitle: "ดูงาน service และวางแผนวันทำงาน", items: ["ตารางเวรและทีมรับผิดชอบ", "ตารางห้องผ่าตัด"], note: "ยังไม่เชื่อมตารางจริง จึงยังไม่มีข้อมูลเวรหรือคิวผ่าตัดให้แสดง" },
+  schedule: { title: SCHEDULE_TITLE, subtitle: "ดูงาน service และวางแผนวันทำงาน", items: ["ตารางเวรและทีมรับผิดชอบ", "ตารางห้องผ่าตัด"], note: "ยังไม่เชื่อมตารางจริง จึงยังไม่มีข้อมูลเวรหรือคิวผ่าตัดให้แสดง" },
   accounts: { title: "บัญชีที่เชื่อมต่อ", subtitle: "Microsoft 365 และ Google", items: ["Microsoft 365", "Google"], note: "ยังไม่เปิดเชื่อมบัญชีภายนอก การเข้าสู่ระบบยังใช้บัญชีที่ภาควิชาจัดให้" },
 };
