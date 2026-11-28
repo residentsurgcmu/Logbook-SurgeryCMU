@@ -669,3 +669,9 @@ button.admission-archive-heading { cursor: pointer; }
   .hn-export-content { display:block; overflow:auto; overscroll-behavior:contain; }
   .hn-export-results { overflow:visible; }
 }
+.round-cme-next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.round-cme-next p, .round-cme-next small { flex-basis: 100%; margin: 0; }
+.round-admin-nav { display: flex; gap: 8px; flex-wrap: wrap; }
+.round-cme-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.round-cme-admin-grid .round-cme-qr { border: 1px solid var(--resident-line); border-radius: 12px; padding: 16px; align-content: start; }
+@media (max-width: 680px) { .round-cme-admin-grid { grid-template-columns: minmax(0, 1fr); } }

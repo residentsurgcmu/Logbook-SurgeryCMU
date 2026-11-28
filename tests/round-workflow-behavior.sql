@@ -6,7 +6,7 @@ insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000
 insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident');
 select set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
 do $$
-declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz;
+declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text;
 begin
  v_id := public.schedule_resident_round(v_day+30,'09:00','12:00','09:00','12:00',true);
  if not exists(select 1 from public.resident_round_seat_config where session_id=v_id and on_time_at=((v_day+30+time '09:00') at time zone 'Asia/Bangkok')) then raise exception 'default seating/cutoff missing';end if;
@@ -31,10 +31,45 @@ begin
  -- A live window independent of midnight and time-of-day.
  insert into public.resident_round_sessions(meeting_date,starts_at,ends_at,opened_at,opened_by) values(v_day,clock_timestamp()-interval '30 minutes',clock_timestamp()+interval '30 minutes',clock_timestamp(),auth.uid()) returning id into v_live;
  insert into public.resident_round_qr_tokens(session_id,minute_start) values(v_live,date_trunc('minute',clock_timestamp())) returning token into v_tok;
+ insert into storage.objects(bucket_id,name) values
+   ('resident-round-cme-qr','fixture-attendee.png'),('resident-round-cme-qr','fixture-replacement.png');
+ perform public.set_resident_round_cme_attendee_qr(v_live,'fixture-attendee.png','https://score.ccme.or.th/event/fixture/audience/join');
+ v_speaker_path := auth.uid()::text || '/' || v_live::text || '/speaker/fixture.png';
+ insert into storage.objects(bucket_id,name) values ('resident-round-cme-qr',v_speaker_path);
+ perform public.admin_set_round_cme_speaker_qr(v_live,v_speaker_path,'https://score.ccme.or.th/event/fixture/speaker/join');
+ if not exists (select 1 from public.admin_get_round_cme_speaker_qr(v_live) where storage_path=v_speaker_path) then raise exception 'Admin cannot find saved speaker QR'; end if;
+ begin
+   perform public.admin_set_round_cme_speaker_qr(v_live,v_speaker_path,'https://score.ccme.or.th/event/fixture/audience/join');
+   raise exception 'attendee link unexpectedly accepted in speaker slot';
+ exception when check_violation then null; end;
+ begin
+   perform public.set_resident_round_cme_attendee_qr(v_live,'fixture-replacement.png','https://score.ccme.or.th/event/fixture/speaker/join');
+   raise exception 'speaker url unexpectedly accepted';
+ exception when check_violation then null; end;
+ if has_function_privilege('anon','public.get_my_resident_round_cme_url(uuid)','EXECUTE') then raise exception 'anonymous CME leak'; end if;
  perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000002',true);
+ if exists(select 1 from public.admin_get_round_cme_speaker_qr(v_live)) then raise exception 'speaker QR leaked to Resident'; end if;
+ begin
+   perform public.admin_set_round_cme_speaker_qr(v_live,null,null);
+   raise exception 'resident cleared speaker QR';
+ exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
+ if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'CME link visible before check-in'; end if;
+ begin
+   perform public.set_resident_round_cme_attendee_qr(v_live,'fixture-replacement.png',null);
+   raise exception 'resident replaced QR';
+ exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
  begin perform public.schedule_resident_round(v_day+33,'09:00','12:00');raise exception 'resident created session';exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
  raise notice 'PASS Resident cannot schedule';
  perform public.check_in_resident_round(v_tok);
+ if public.get_my_resident_round_cme_url(v_live) is distinct from 'https://score.ccme.or.th/event/fixture/audience/join' then raise exception 'own check-in did not reveal correct URL'; end if;
+ if public.get_my_resident_round_cme_url(v_id) is not null then raise exception 'returned CME for another round'; end if;
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
+ if public.admin_set_round_cme_speaker_qr(v_live,null,null) is distinct from v_speaker_path then raise exception 'speaker QR delete returned wrong image'; end if;
+ if not exists(select 1 from public.resident_round_cme_qr where session_id=v_live and attendee_url is not null) then raise exception 'deleting the speaker QR erased the attendee link'; end if;
+ perform public.set_resident_round_cme_qr(v_live,'fixture-replacement.png');
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000002',true);
+ if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'stale URL survived legacy image replacement'; end if;
+ raise notice 'PASS CME link restricted to the checked-in user and QR replacement clears it';
  select checked_in_at into v_before from public.resident_round_attendance where session_id=v_live;
  perform public.check_in_resident_round(v_tok);
  if (select checked_in_at from public.resident_round_attendance where session_id=v_live)<>v_before then raise exception 'duplicate scan changed time';end if;
