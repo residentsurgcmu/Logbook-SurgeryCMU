@@ -6,7 +6,7 @@ insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000
 insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident'),('e0000000-0000-4000-8000-000000000003','staff');
 select set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
 do $$
-declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text; v_named uuid;
+declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text; v_named uuid; v_parallel uuid; v_parallel_tok uuid;
 begin
  v_id := public.schedule_resident_round(v_day+30,'09:00','12:00','09:00','12:00',true);
  if not exists(select 1 from public.resident_round_seat_config where session_id=v_id and on_time_at=((v_day+30+time '09:00') at time zone 'Asia/Bangkok')) then raise exception 'default seating/cutoff missing';end if;
@@ -55,6 +55,13 @@ begin
  -- A live window independent of midnight and time-of-day.
  insert into public.resident_round_sessions(meeting_date,starts_at,ends_at,opened_at,opened_by) values(v_day,clock_timestamp()-interval '30 minutes',clock_timestamp()+interval '30 minutes',clock_timestamp(),auth.uid()) returning id into v_live;
  insert into public.resident_round_qr_tokens(session_id,minute_start) values(v_live,date_trunc('minute',clock_timestamp())) returning token into v_tok;
+ insert into public.resident_round_sessions(conference_name,meeting_date,starts_at,ends_at,opened_at,opened_by)
+   select 'Overlapping unit conference',meeting_date,starts_at,ends_at,opened_at,opened_by
+   from public.resident_round_sessions where id=v_live returning id into v_parallel;
+ select token into v_parallel_tok from public.admin_list_current_resident_round_qrs() where session_id=v_parallel;
+ if v_parallel_tok is null or v_parallel_tok=v_tok or not exists(
+   select 1 from public.admin_list_current_resident_round_qrs() where session_id=v_live and token=v_tok
+ ) then raise exception 'parallel sessions did not receive independent QR tokens'; end if;
  insert into storage.objects(bucket_id,name) values
    ('resident-round-cme-qr','fixture-attendee.png'),('resident-round-cme-qr','fixture-replacement.png');
  perform public.set_resident_round_cme_attendee_qr(v_live,'fixture-attendee.png','https://score.ccme.or.th/event/fixture/audience/join');
@@ -91,6 +98,17 @@ begin
  perform public.check_in_resident_round(v_tok);
  if public.get_my_resident_round_cme_url(v_live) is distinct from 'https://score.ccme.or.th/event/fixture/audience/join' then raise exception 'own check-in did not reveal correct URL'; end if;
  if public.get_my_resident_round_cme_url(v_id) is not null then raise exception 'returned CME for another round'; end if;
+ if not exists(select 1 from public.my_current_resident_conference() where session_id=v_live) then
+   raise exception 'current conference status did not reflect check-in';
+ end if;
+ begin
+   perform public.check_in_resident_round(v_parallel_tok);
+   raise exception 'simultaneous check-in accepted';
+ exception when others then if sqlerrm <> 'ROUND_ALREADY_IN_CONFERENCE' then raise; end if; end;
+ if exists(select 1 from public.resident_round_attendance where session_id=v_parallel and user_id=auth.uid()) then
+   raise exception 'parallel scan wrote attendance';
+ end if;
+
  perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000003',true);
  if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'speaker link visible before Staff check-in'; end if;
  perform public.check_in_resident_round(v_tok);
@@ -118,6 +136,13 @@ begin
  update public.resident_round_sessions set ends_at=v_before where id=v_live;
  begin perform public.check_in_resident_round(v_tok);raise exception 'after end accepted';exception when others then if sqlerrm not like '%expired or is invalid%' then raise;end if;end;
  raise notice 'PASS after end rejected without manual close';
+ perform public.check_in_resident_round(v_parallel_tok);
+ if not exists(select 1 from public.my_current_resident_conference()
+   where session_id=v_parallel and conference_name='Overlapping unit conference') then
+   raise exception 'next room not available once the other round ended';
+ end if;
+ raise notice 'PASS separate QR per simultaneous round, one active membership, and matching status';
+
  begin perform public.admin_record_missing_round_attendance(v_live,'e0000000-0000-4000-8000-000000000002',v_before,'confirmed attendance');raise exception 'resident corrected attendance';exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
  raise notice 'PASS Resident cannot record missing attendance';
  perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);

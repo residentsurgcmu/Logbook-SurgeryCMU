@@ -576,16 +576,22 @@ export async function closeRound(sessionId) {
   fail(error);
 }
 
-export async function currentRoundQr() {
-  const { data, error } = await supabase.rpc("current_resident_round_qr");
+export async function currentRoundQrs() {
+  const { data, error } = await supabase.rpc("admin_list_current_resident_round_qrs");
   fail(error);
-  return data?.[0] || null;
+  return data || [];
 }
 
 export async function loadMyRoundCmeUrl(sessionId, role) {
   const { data, error } = await supabase.rpc("get_my_resident_round_cme_url", { p_session_id: sessionId });
   fail(error);
   return role === "staff" ? roundCmeSpeakerUrl(data) : roundCmeAttendeeUrl(data);
+}
+
+export async function loadMyCurrentConference() {
+  const { data, error } = await supabase.rpc("my_current_resident_conference");
+  fail(error);
+  return data?.[0] || null;
 }
 
 export async function checkInRound(token) {

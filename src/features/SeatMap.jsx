@@ -14,7 +14,7 @@ const TABS = [["map", "ผังที่นั่ง"], ["people", "ผู้�
 
 // Shown on the "เช็คชื่อประชุม" page for every session that has a seat map. Renders nothing when there is none and also
 // nothing when the session list cannot be loaded (the page works without it); only refresh() failures show a message.
-export function SeatMapPanel({ user, refreshKey = "" }) {
+export function SeatMapPanel({ user, refreshKey = "", checkedInSessionId = "" }) {
   const [sessions, setSessions] = useState(null);
   const [sessionId, setSessionId] = useState("");
   const [map, setMap] = useState(null);
@@ -42,12 +42,20 @@ export function SeatMapPanel({ user, refreshKey = "" }) {
     try {
       const list = await listSeatSessions();
       if (!mounted.current) return;
-      setSessions(list);
-      setSessionId((previous) => (previous && list.some((item) => item.session_id === previous) ? previous : pickDefaultSession(list, Date.now())));
+      const now = Date.now();
+      const joined = list.find(({ session_id }) => session_id === checkedInSessionId);
+      const visible = joined && Date.parse(joined.effective_end) > now
+        ? list.filter((session) => session.session_id === joined.session_id || Date.parse(session.effective_end) <= now)
+        : list;
+      setSessions(visible);
+      setSessionId((previous) => {
+        const preferred = checkedInSessionId || previous;
+        return preferred && visible.some((item) => item.session_id === preferred) ? preferred : pickDefaultSession(visible, now);
+      });
     } catch (nextError) {
       if (mounted.current) setSessions([]);
     }
-  }, []);
+  }, [checkedInSessionId]);
 
   const refresh = useCallback(async (id) => {
     if (!id) return;

@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import {
   deleteResidentAssessment,
   inviteStaff,
+  loadMyCurrentConference,
   markNotificationRead,
   provisionAccount,
   recordHistoricalAssessment,
@@ -844,6 +845,32 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
   const [roundToken, setRoundToken] = useState(() => parseRoundToken(window.location.pathname));
   const initialTab =
     workspace.user.role !== "admin" && roundToken ? "attendance" : workspace.user.role === "staff" && routeToken ? "scan" : "home";
+  const [currentConference, setCurrentConference] = useState(null);
+  const [conferenceRefresh, setConferenceRefresh] = useState(0);
+  useEffect(() => {
+    if (workspace.user.role === "admin") return;
+    let active = true;
+    let request = 0;
+    const refresh = async () => {
+      const current = ++request;
+      try {
+        const next = await loadMyCurrentConference();
+        if (active && current === request) setCurrentConference(next);
+      } catch { /* Attendance stays available if the status request fails. */ }
+    };
+    refresh();
+    const timer = window.setInterval(() => { if (!document.hidden) refresh(); }, 30000);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [workspace.user.id, workspace.user.role, conferenceRefresh]);
+  useEffect(() => {
+    if (!currentConference?.effective_end) return;
+    const timeout = window.setTimeout(() => setCurrentConference(null),
+      Math.max(0, new Date(currentConference.effective_end).getTime() - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [currentConference]);
+
   const [tab, setTab] = useState(initialTab);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef(null);
@@ -992,6 +1019,9 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           <button type="button" className="icon-button app-menu-button" onClick={openMenu} aria-label="เปิดเมนู" aria-expanded={menuOpen}><MenuIcon /></button>
           <div className="app-crumb">Resident Corner {tab !== "home" && <span>/ {titles[tab]}</span>}</div>
           <div className="app-user">
+            {currentConference && <span className="app-conference-status" role="status" title={`In Conference · ${currentConference.conference_name}`}>
+              <strong>In Conference</strong><span> · {currentConference.conference_name}</span>
+            </span>}
             <span className="header-user-name" title={workspace.user.name}>{workspace.user.name}</span>
             <span className="role-chip">{roleLabel[workspace.user.role]}</span>
             <button className="text-button" type="button" onClick={onLogout}>
@@ -1055,6 +1085,8 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
           <RoundCheckIn
             token={roundToken}
             user={workspace.user}
+            onCheckedIn={() => setConferenceRefresh((value) => value + 1)}
+            activeConferenceId={currentConference?.session_id}
             onTokenUsed={() => {
               setRoundToken("");
               window.history.replaceState({}, document.title, "/");

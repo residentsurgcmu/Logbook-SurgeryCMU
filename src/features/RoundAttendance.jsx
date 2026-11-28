@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, saveNamedRoundConference, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
+import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, saveNamedRoundConference, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQrs, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
 import { RoundQrScanner } from "./RoundQrScanner";
 import { SeatMapPanel } from "./SeatMap";
@@ -68,7 +68,7 @@ async function exportAttendance(format, attendance, session) {
 export function RoundAdmin({ user }) {
   const [data, setData] = useState({ sessions: [], attendance: [], cmeQr: [] });
   const [selectedId, setSelectedId] = useState("");
-  const [qr, setQr] = useState(null);
+  const [qrs, setQrs] = useState([]);
   const [seatConfigs, setSeatConfigs] = useState(null);
   const [offsetMs, setOffsetMs] = useState(0);
   const [tick, setTick] = useState(0);
@@ -139,13 +139,14 @@ export function RoundAdmin({ user }) {
     const seq = ++refreshSeq.current;
     try {
       const requestedAt = Date.now();
-      const [nextData, nextQr, nextSeatConfigs] = await Promise.all([loadRoundAdminData(), currentRoundQr(), adminListSeatConfigs().catch(() => null)]);
+      const [nextData, nextQrs, nextSeatConfigs] = await Promise.all([loadRoundAdminData(), currentRoundQrs(), adminListSeatConfigs().catch(() => null)]);
       // Ignore a slower, older response (e.g. the 10 s poll) that finishes
       // after a newer refresh, so it cannot hide a just-created session.
       if (!mounted.current || seq !== refreshSeq.current) return;
       setData(nextData);
       setSelectedId((previous) => previous || nextData.sessions.find((item) => !item.cancelled_at)?.id || "");
-      setQr(nextQr);
+      setQrs(nextQrs);
+      const nextQr = nextQrs[0];
       setSeatConfigs(nextSeatConfigs ? Object.fromEntries(nextSeatConfigs.map((row) => [row.session_id, row])) : null);
       if (nextQr) setOffsetMs(new Date(nextQr.server_now).getTime() - requestedAt);
       setError("");
@@ -158,12 +159,12 @@ export function RoundAdmin({ user }) {
     const clock = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => { mounted.current = false; window.clearInterval(poll); window.clearInterval(clock); };
   }, []);
-  const remaining = qr ? Math.max(0, new Date(qr.valid_until).getTime() - (Date.now() + offsetMs)) : 0;
   useEffect(() => {
-    if (!qr) return undefined;
-    const timer = window.setTimeout(() => { setQr(null); refresh(); }, Math.max(0, remaining));
+    if (!qrs.length) return;
+    const expiresAt = Math.min(...qrs.map(({ valid_until }) => new Date(valid_until).getTime()));
+    const timer = window.setTimeout(refresh, Math.max(0, expiresAt - (Date.now() + offsetMs)));
     return () => window.clearTimeout(timer);
-  }, [qr?.token, qr?.valid_until]);
+  }, [qrs, offsetMs]);
   async function createSchedule(event) {
     event.preventDefault();
     const dateError = (namedConference && !scheduleForm.name.trim() ? "กรุณาระบุชื่อ Conference" : "")
@@ -211,14 +212,14 @@ export function RoundAdmin({ user }) {
   async function stop(session) {
     if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขรอบนี้หรือเปิดสแกนต่อไม่ได้อีก (ถ้าตั้งผิด ให้เลือก "ยกเลิกรอบนี้" แทน)`)) return;
     setBusy("close"); setError("");
-    try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
+    try { await closeRound(session.id); setQrs((rows) => rows.filter(({ session_id }) => session_id !== session.id)); await refresh(); }
     catch (nextError) { setError(nextError.message || "ปิดการเช็คชื่อไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function cancel(session) {
     if (!window.confirm(`ยกเลิกรอบของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? รอบนี้จะหยุดรับสแกนทันทีและหายจากรายการ แล้วตั้งรอบใหม่ในช่วงเวลาเดิมได้`)) return;
     setBusy("cancel"); setError("");
-    try { await cancelRoundSession(session.id); if (qr?.session_id === session.id) setQr(null); if (selectedId === session.id) setSelectedId(""); await refresh(); }
+    try { await cancelRoundSession(session.id); setQrs((rows) => rows.filter(({ session_id }) => session_id !== session.id)); if (selectedId === session.id) setSelectedId(""); await refresh(); }
     catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "ยกเลิกรอบไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
@@ -296,12 +297,14 @@ export function RoundAdmin({ user }) {
         {timeFields(scheduleForm, setScheduleForm)}
         <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "open" ? "กำลังบันทึก…" : "สร้างรอบประชุม"}</button>
       </form>
-      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569) · สแกนแล้วถือว่าเช็คชื่อสำเร็จ แม้ยังไม่ได้เลือกที่นั่ง · ตั้งได้หลายรอบต่อวัน ถ้าเวลาสแกนไม่ซ้อนกัน</p>
+      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569) · สแกนแล้วถือว่าเช็คชื่อสำเร็จ แม้ยังไม่ได้เลือกที่นั่ง · รอบหลักกับ Conference ย่อยเปิดพร้อมกันได้ แต่รอบในกลุ่มเดียวกันต้องไม่ซ้อนเวลา</p>
       {scheduleDateError && <p className="form-error" role="alert">{scheduleDateError}</p>}
       {!visibleSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนของวันนี้หรือวันถัดไป ตั้งตารางใหม่ด้านบนได้เลย</p>}
       {visibleSessions.map((session) => {
         const isEditing = editingId === session.id;
-        const isLiveNow = qr?.session_id === session.id && remaining > 0;
+        const qr = qrs.find(({ session_id }) => session_id === session.id);
+        const remaining = qr ? new Date(qr.valid_until).getTime() - nowMs : 0;
+        const isLiveNow = remaining > 0;
         const status = roundSessionStatus(session, nowMs);
         const acceptsScans = status === "upcoming" || status === "live";
         const canEdit = status !== "closed" && status !== "cancelled";
@@ -512,7 +515,7 @@ function RoundCmeNext({ href }) {
   </div>;
 }
 
-export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user }) {
+export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user, onCheckedIn, activeConferenceId }) {
   const [scannedToken, setScannedToken] = useState("");
   const token = linkToken || scannedToken;
   const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
@@ -548,6 +551,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
           if (mounted.current) {
             setResult(next); setError("");
             if (next?.session_id) {
+              onCheckedIn?.();
               loadMyRoundCmeUrl(next.session_id, user?.role).then((href) => {
                 if (mounted.current && checkInSequence.current === sequence && href) setCme({ href, sequence });
               }).catch(() => {});
@@ -579,7 +583,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
     {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
-    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} />}
+    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} checkedInSessionId={result?.session_id || activeConferenceId || ""} />}
   </section>;
 }
 
