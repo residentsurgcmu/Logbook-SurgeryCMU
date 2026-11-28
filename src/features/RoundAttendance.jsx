@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
+import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, saveNamedRoundConference, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQrs, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
 import { RoundQrScanner } from "./RoundQrScanner";
 import { cmeRequiresTap } from "../roundCme";
@@ -15,7 +15,9 @@ const bangkokDate = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", mo
 const thaiHM = (value) => new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 const toTimeInputValue = (value) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Bangkok" }).format(new Date(value));
 const hmOf = (value) => String(value || "").slice(0, 5);
-const EMPTY_SCHEDULE = { date: "", start: "", end: "", activityStart: "", activityEnd: "", customScan: false, scanStart: "", scanEnd: "", enableSeats: true };
+const CONFERENCE_ROOM = { key: "opportunity-order", label: "ผัง ห้องโอกาส-ระเบียบ" };
+const roundTitle = (session) => session.conference_name || "MM & Grand Round";
+const EMPTY_SCHEDULE = { name: "", roomKey: CONFERENCE_ROOM.key, date: "", start: "", end: "", activityStart: "", activityEnd: "", customScan: false, scanStart: "", scanEnd: "", enableSeats: true };
 const safeCell = (value) => /^[=+@\-\t\r]/.test(String(value || "")) ? `'${value}` : String(value ?? "");
 
 function download(blob, filename) {
@@ -67,7 +69,7 @@ async function exportAttendance(format, attendance, session) {
 export function RoundAdmin({ user }) {
   const [data, setData] = useState({ sessions: [], attendance: [], cmeQr: [] });
   const [selectedId, setSelectedId] = useState("");
-  const [qr, setQr] = useState(null);
+  const [qrs, setQrs] = useState([]);
   const [seatConfigs, setSeatConfigs] = useState(null);
   const [offsetMs, setOffsetMs] = useState(0);
   const [tick, setTick] = useState(0);
@@ -84,7 +86,11 @@ export function RoundAdmin({ user }) {
   const hasInitialPdfDateRange = useRef(false);
   // Cancelled sessions are kept for history only; they never reach the lists,
   // the attendance dropdown or the PDF range.
-  const reportSessions = useMemo(() => data.sessions.filter((item) => !item.cancelled_at), [data.sessions]);
+  const namedConference = adminPage === "conference-rooms";
+  const allSessions = useMemo(() => data.sessions.filter((item) => !item.cancelled_at), [data.sessions]);
+  const reportSessions = useMemo(() => allSessions.filter((item) =>
+    Boolean(item.conference_name) === namedConference
+  ), [allSessions, namedConference]);
   const attendanceCount = useMemo(() => {
     const counts = new Map();
     for (const row of data.attendance) counts.set(row.session_id, (counts.get(row.session_id) || 0) + 1);
@@ -134,13 +140,14 @@ export function RoundAdmin({ user }) {
     const seq = ++refreshSeq.current;
     try {
       const requestedAt = Date.now();
-      const [nextData, nextQr, nextSeatConfigs] = await Promise.all([loadRoundAdminData(), currentRoundQr(), adminListSeatConfigs().catch(() => null)]);
+      const [nextData, nextQrs, nextSeatConfigs] = await Promise.all([loadRoundAdminData(), currentRoundQrs(), adminListSeatConfigs().catch(() => null)]);
       // Ignore a slower, older response (e.g. the 10 s poll) that finishes
       // after a newer refresh, so it cannot hide a just-created session.
       if (!mounted.current || seq !== refreshSeq.current) return;
       setData(nextData);
       setSelectedId((previous) => previous || nextData.sessions.find((item) => !item.cancelled_at)?.id || "");
-      setQr(nextQr);
+      setQrs(nextQrs);
+      const nextQr = nextQrs[0];
       setSeatConfigs(nextSeatConfigs ? Object.fromEntries(nextSeatConfigs.map((row) => [row.session_id, row])) : null);
       if (nextQr) setOffsetMs(new Date(nextQr.server_now).getTime() - requestedAt);
       setError("");
@@ -153,22 +160,25 @@ export function RoundAdmin({ user }) {
     const clock = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => { mounted.current = false; window.clearInterval(poll); window.clearInterval(clock); };
   }, []);
-  const remaining = qr ? Math.max(0, new Date(qr.valid_until).getTime() - (Date.now() + offsetMs)) : 0;
   useEffect(() => {
-    if (!qr) return undefined;
-    const timer = window.setTimeout(() => { setQr(null); refresh(); }, Math.max(0, remaining));
+    if (!qrs.length) return;
+    const expiresAt = Math.min(...qrs.map(({ valid_until }) => new Date(valid_until).getTime()));
+    const timer = window.setTimeout(refresh, Math.max(0, expiresAt - (Date.now() + offsetMs)));
     return () => window.clearTimeout(timer);
-  }, [qr?.token, qr?.valid_until]);
+  }, [qrs, offsetMs]);
   async function createSchedule(event) {
     event.preventDefault();
-    const dateError = validateRoundMeetingDate(scheduleForm.date, new Date(Date.now() + offsetMs))
+    const dateError = (namedConference && !scheduleForm.name.trim() ? "กรุณาระบุชื่อ Conference" : "")
+      || validateRoundMeetingDate(scheduleForm.date, new Date(Date.now() + offsetMs))
       || validateRoundTimes(roundSchedulePayload(scheduleForm));
     setScheduleDateError(dateError);
     if (dateError) return;
     setBusy("open"); setError("");
     try {
       const timing = roundSchedulePayload(scheduleForm);
-      const id = await openRound(scheduleForm.date, timing.start, timing.end, timing.activityStart, timing.activityEnd, timing.enableSeats);
+      const id = namedConference
+        ? await saveNamedRoundConference(null, scheduleForm.name, scheduleForm.roomKey, scheduleForm.date, timing)
+        : await openRound(scheduleForm.date, timing.start, timing.end, timing.activityStart, timing.activityEnd, timing.enableSeats);
       setScheduleForm(EMPTY_SCHEDULE);
       setSelectedId(id);
       await refresh();
@@ -181,30 +191,36 @@ export function RoundAdmin({ user }) {
     setEditDateError("");
     const scanStart = toTimeInputValue(session.starts_at), scanEnd = toTimeInputValue(session.ends_at);
     const start = hmOf(session.activity_start_time) || scanStart, end = hmOf(session.activity_end_time) || scanEnd;
-    setEditForm({ date: session.meeting_date, start, end, scanStart, scanEnd, customScan: start !== scanStart || end !== scanEnd, enableSeats: true });
+    setEditForm({ name: session.conference_name || "", roomKey: CONFERENCE_ROOM.key, date: session.meeting_date, start, end, scanStart, scanEnd, customScan: start !== scanStart || end !== scanEnd, enableSeats: true });
   }
   async function saveEdit(event) {
     event.preventDefault();
-    const dateError = validateRoundMeetingDate(editForm.date, new Date(Date.now() + offsetMs))
+    const dateError = (namedConference && !editForm.name.trim() ? "กรุณาระบุชื่อ Conference" : "")
+      || validateRoundMeetingDate(editForm.date, new Date(Date.now() + offsetMs))
       || validateRoundTimes(roundSchedulePayload(editForm));
     setEditDateError(dateError);
     if (dateError) return;
     setBusy("edit"); setError("");
-    try { const timing = roundSchedulePayload(editForm); await updateRoundSession(editingId, editForm.date, timing.start, timing.end, timing.activityStart, timing.activityEnd, timing.enableSeats); setEditingId(""); await refresh(); }
+    try {
+      const timing = roundSchedulePayload(editForm);
+      if (namedConference) await saveNamedRoundConference(editingId, editForm.name, editForm.roomKey, editForm.date, timing);
+      else await updateRoundSession(editingId, editForm.date, timing.start, timing.end, timing.activityStart, timing.activityEnd, timing.enableSeats);
+      setEditingId(""); await refresh();
+    }
     catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "แก้ไขตารางสแกนไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function stop(session) {
     if (!window.confirm(`ปิดรอบสแกน QR ของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? ปิดแล้วจะแก้ไขรอบนี้หรือเปิดสแกนต่อไม่ได้อีก (ถ้าตั้งผิด ให้เลือก "ยกเลิกรอบนี้" แทน)`)) return;
     setBusy("close"); setError("");
-    try { await closeRound(session.id); if (qr?.session_id === session.id) setQr(null); await refresh(); }
+    try { await closeRound(session.id); setQrs((rows) => rows.filter(({ session_id }) => session_id !== session.id)); await refresh(); }
     catch (nextError) { setError(nextError.message || "ปิดการเช็คชื่อไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
   async function cancel(session) {
     if (!window.confirm(`ยกเลิกรอบของวันที่ ${thaiDate(session.meeting_date)} (${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.)? รอบนี้จะหยุดรับสแกนทันทีและหายจากรายการ แล้วตั้งรอบใหม่ในช่วงเวลาเดิมได้`)) return;
     setBusy("cancel"); setError("");
-    try { await cancelRoundSession(session.id); if (qr?.session_id === session.id) setQr(null); if (selectedId === session.id) setSelectedId(""); await refresh(); }
+    try { await cancelRoundSession(session.id); setQrs((rows) => rows.filter(({ session_id }) => session_id !== session.id)); if (selectedId === session.id) setSelectedId(""); await refresh(); }
     catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "ยกเลิกรอบไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
@@ -230,13 +246,25 @@ export function RoundAdmin({ user }) {
     <label>เวลาเริ่มประชุม<input type="time" required value={form.start} onChange={(event) => setForm({ ...form, start: event.target.value })} /></label>
     <label>เวลาจบประชุม<input type="time" required value={form.end} onChange={(event) => setForm({ ...form, end: event.target.value })} /></label>
     <details className="round-form-wide"><summary>ตัวเลือกเพิ่มเติม (กรณีพิเศษ)</summary>
-      <label className="round-option-check"><input type="checkbox" checked={form.enableSeats !== false} disabled={form === editForm && Boolean(seatConfigs?.[editingId])} onChange={(event) => setForm({ ...form, enableSeats: event.target.checked })} /> เปิดผังที่นั่งพร้อม QR</label>
+      {!namedConference && <label className="round-option-check"><input type="checkbox" checked={form.enableSeats !== false} disabled={form === editForm && Boolean(seatConfigs?.[editingId])} onChange={(event) => setForm({ ...form, enableSeats: event.target.checked })} /> เปิดผังที่นั่งพร้อม QR</label>}
       <label className="round-option-check"><input type="checkbox" checked={Boolean(form.customScan)} onChange={(event) => setForm({ ...form, customScan: event.target.checked, scanStart: form.scanStart || form.start, scanEnd: form.scanEnd || form.end })} /> กำหนดช่วงรับสแกนต่างจากเวลาประชุม</label>
       {form.customScan && <><label>เริ่มรับสแกน<input type="time" required value={form.scanStart} onChange={(event) => setForm({ ...form, scanStart: event.target.value })} /></label><label>สิ้นสุดรับสแกน<input type="time" required value={form.scanEnd} onChange={(event) => setForm({ ...form, scanEnd: event.target.value })} /></label><p>ตัวเลือกนี้เปลี่ยนเวลาเปิด–ปิดรับสแกน แต่เวลาสายยังเทียบกับเวลาเริ่มประชุม</p></>}
     </details>
   </>;
+  const conferenceFields = (form, setForm) => namedConference && <>
+    <label className="round-form-wide">ชื่อ Conference
+      <input required maxLength={120} placeholder="เช่น Upper GI · Journal Club" value={form.name}
+        onChange={(event) => setForm({ ...form, name: event.target.value })} />
+    </label>
+    <label className="round-form-wide">ห้องประชุม
+      <select value={form.roomKey} onChange={(event) => setForm({ ...form, roomKey: event.target.value })}>
+        <option value={CONFERENCE_ROOM.key}>{CONFERENCE_ROOM.label}</option>
+      </select>
+    </label>
+  </>;
   const renderEditForm = () => <>
           <form className="round-schedule-form" onSubmit={saveEdit}>
+            {conferenceFields(editForm, setEditForm)}
             <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(editDateError)} value={editForm.date} onChange={(event) => { setEditForm({ ...editForm, date: event.target.value }); setEditDateError(""); }} /></label>
             {timeFields(editForm, setEditForm)}
             <div className="round-form-actions round-form-wide"><button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "edit" ? "กำลังบันทึก…" : "บันทึกการแก้ไข"}</button>
@@ -245,41 +273,48 @@ export function RoundAdmin({ user }) {
           {editDateError && <p className="form-error" role="alert">{editDateError}</p>}
   </>;
   const adminNav = <nav className="resident-panel round-admin-nav" aria-label="จัดการรอบประชุม">
-    {[["rounds", "รอบประชุมและเช็คชื่อ"], ["cme", "QR CME"]].map(([id, label]) =>
+    {[["rounds", "รอบประชุมและเช็คชื่อ"], ["conference-rooms", "Conference ย่อย"], ["cme", "QR CME"]].map(([id, label]) =>
       <button key={id} type="button" aria-pressed={adminPage === id}
         className={adminPage === id ? "primary-button" : "secondary-button"} disabled={Boolean(busy)}
-        onClick={() => setAdminPage(id)}>{label}</button>
+        onClick={() => {
+          setAdminPage(id); setEditingId(""); setScheduleForm(EMPTY_SCHEDULE);
+          setScheduleDateError(""); setError("");
+        }}>{label}</button>
     )}
   </nav>;
   if (adminPage === "cme") return <>{adminNav}
-    <RoundCmeAdmin user={user} sessions={visibleSessions.filter((session) => ["upcoming", "live"].includes(roundSessionStatus(session, nowMs)))}
+    <RoundCmeAdmin user={user} sessions={allSessions.filter((session) => ["upcoming", "live"].includes(roundSessionStatus(session, nowMs)))
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))}
       attendeeRows={data.cmeQr} refresh={refresh} />
     {error && <p className="form-error" role="alert">{error}</p>}
   </>;
   return <>{adminNav}<div className="round-layout">
     <section className="resident-panel round-admin-panel">
-      <h2>MM &amp; Grand Round · เช็คชื่อเข้าประชุม</h2>
+      <h2>{namedConference ? "Conference ย่อย · เช็คชื่อเข้าประชุม" : "MM & Grand Round · เช็คชื่อเข้าประชุม"}</h2>
       <p>ตั้งวันที่และเวลาเริ่ม–จบประชุมครั้งเดียว ระบบเตรียม QR และผังที่นั่งให้พร้อม เปิดรับสแกนเมื่อเริ่มและหยุดเมื่อจบอัตโนมัติ ผู้มาสายยังสแกนได้ตลอดรอบ</p>
       <form className="round-schedule-form" onSubmit={createSchedule}>
+        {conferenceFields(scheduleForm, setScheduleForm)}
         <label className="round-form-wide">วันที่ประชุม (ใช้ปี ค.ศ.)<input type="date" required min={minMeetingDate} max={maxMeetingDate} aria-invalid={Boolean(scheduleDateError)} value={scheduleForm.date} onChange={(event) => { setScheduleForm({ ...scheduleForm, date: event.target.value }); setScheduleDateError(""); }} /></label>
         {timeFields(scheduleForm, setScheduleForm)}
         <button className="primary-button" type="submit" disabled={Boolean(busy)}>{busy === "open" ? "กำลังบันทึก…" : "สร้างรอบประชุม"}</button>
       </form>
-      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569) · สแกนแล้วถือว่าเช็คชื่อสำเร็จ แม้ยังไม่ได้เลือกที่นั่ง · ตั้งได้หลายรอบต่อวัน ถ้าเวลาสแกนไม่ซ้อนกัน</p>
+      <p className="round-date-hint">ใส่ปีเป็น ค.ศ. เช่น 28/09/2026 (ไม่ใช่ พ.ศ. 2569) · สแกนแล้วถือว่าเช็คชื่อสำเร็จ แม้ยังไม่ได้เลือกที่นั่ง · รอบหลักกับ Conference ย่อยเปิดพร้อมกันได้ แต่รอบในกลุ่มเดียวกันต้องไม่ซ้อนเวลา</p>
       {scheduleDateError && <p className="form-error" role="alert">{scheduleDateError}</p>}
       {!visibleSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนของวันนี้หรือวันถัดไป ตั้งตารางใหม่ด้านบนได้เลย</p>}
       {visibleSessions.map((session) => {
         const isEditing = editingId === session.id;
-        const isLiveNow = qr?.session_id === session.id && remaining > 0;
+        const qr = qrs.find(({ session_id }) => session_id === session.id);
+        const remaining = qr ? new Date(qr.valid_until).getTime() - nowMs : 0;
+        const isLiveNow = remaining > 0;
         const status = roundSessionStatus(session, nowMs);
         const acceptsScans = status === "upcoming" || status === "live";
         const canEdit = status !== "closed" && status !== "cancelled";
         const timeLabel = formatRoundTimeRange(session);
         return <section className="round-session-card" key={session.id} aria-labelledby={`round-session-${session.id}`}>
-          <h3 id={`round-session-${session.id}`}>ประชุมวันที่ {thaiDate(session.meeting_date)} <span className={`round-status-chip round-status-chip-${status}`}>{ROUND_STATUS_LABELS[status]}</span></h3>
+          <h3 id={`round-session-${session.id}`}>{session.conference_name && <>{session.conference_name} · </>}ประชุมวันที่ {thaiDate(session.meeting_date)} <span className={`round-status-chip round-status-chip-${status}`}>{ROUND_STATUS_LABELS[status]}</span></h3>
           {!isEditing && <p>{timeLabel && !timeLabel.startsWith("ช่วงสแกน") && <><strong>{timeLabel}</strong> · </>}สแกนได้ {thaiHM(session.starts_at)}–{thaiHM(session.ends_at)} น. ตามเวลาไทย{canEdit && <> · <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button></>}</p>}
           {isEditing && renderEditForm()}
-          {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label="QR เช็คชื่อ MM และ Grand Round" /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
+          {isLiveNow && <div className="round-qr"><QRCodeSVG value={`${window.location.origin}/attendance/${qr.token}`} size={270} level="H" marginSize={2} aria-label={`QR เช็คชื่อ ${roundTitle(session)}`} /><strong>QR ปัจจุบัน</strong><span>เปลี่ยนใน {Math.ceil(remaining / 1000)} วินาที</span></div>}
           {!isLiveNow && status === "upcoming" && <p role="status" className="round-status round-status-upcoming">ยังไม่ถึงเวลา · QR จะแสดงอัตโนมัติเมื่อถึง {thaiHM(session.starts_at)} น. ของวันที่ {thaiDate(session.meeting_date)}</p>}
           {!isLiveNow && status === "live" && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน · กำลังโหลด QR…</p>}
           {isLiveNow && <p role="status" className="round-status round-status-live">กำลังเปิดรับสแกน ถึง {thaiHM(session.ends_at)} น.</p>}
@@ -298,7 +333,7 @@ export function RoundAdmin({ user }) {
         <summary>รอบที่หมดเวลาแล้ว ({endedSessions.length})</summary>
         <p>รอบเหล่านี้หยุดรับสแกนตามเวลาแล้ว ไม่ต้องกดปิดซ้ำ ดูรายชื่อหรือแก้เวลาที่ตั้งผิดได้</p>
         <ul>{endedSessions.map((session) => <li key={session.id}>
-          <span>{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
+          <span>{session.conference_name && `${session.conference_name} · `}{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
           <span className="round-ended-actions">
             <button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button>
             <button type="button" className="link-button" disabled={Boolean(busy)} onClick={() => startEdit(session)}>แก้ไขวันที่/เวลา</button>
@@ -310,7 +345,7 @@ export function RoundAdmin({ user }) {
       {pastSeatSessions.length > 0 && <details className="round-ended-sessions">
         <summary>ผังที่นั่งของรอบที่ผ่านมา ({pastSeatSessions.length})</summary>
         <ul>{pastSeatSessions.map((session) => <li key={session.id}>
-          <span>{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
+          <span>{session.conference_name && `${session.conference_name} · `}{thaiDate(session.meeting_date)} · {formatRoundTimeRange(session) || `${thaiHM(session.starts_at)}–${thaiHM(session.ends_at)} น.`}</span>
           <SeatAdminPanel key={`${session.id}:past`} session={session} config={seatConfigs[session.id]} canConfigure={false} onChanged={refresh} />
         </li>)}</ul>
       </details>}
@@ -318,7 +353,7 @@ export function RoundAdmin({ user }) {
     </section>
     <section className="resident-panel">
       <h2>รายชื่อผู้เข้าประชุม</h2>
-      <label>วันที่ประชุม<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{reportSessions.map((item) => <option key={item.id} value={item.id}>{thaiDate(item.meeting_date)}{formatRoundTimeRange(item) ? ` · ${formatRoundTimeRange(item)}` : ""}</option>)}</select></label>
+      <label>วันที่ประชุม<select value={selected?.id || ""} onChange={(event) => setSelectedId(event.target.value)}>{reportSessions.map((item) => <option key={item.id} value={item.id}>{item.conference_name && `${item.conference_name} · `}{thaiDate(item.meeting_date)}{formatRoundTimeRange(item) ? ` · ${formatRoundTimeRange(item)}` : ""}</option>)}</select></label>
       <div className="round-filter-grid"><label>ชั้นปี (PGY)<select value={roundFilters.pgy} onChange={(event) => { const pgy = event.target.value; const chosen = roundResidents.find((resident) => resident.id === roundFilters.residentId); setRoundFilters({ pgy, residentId: chosen && pgy && Number(chosen.pgy) !== Number(pgy) ? "" : roundFilters.residentId }); }}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((year) => <option key={year} value={year}>PGY {year}</option>)}</select></label><label>Resident<select value={roundFilters.residentId} onChange={(event) => setRoundFilters({ ...roundFilters, residentId: event.target.value })}><option value="">Resident ทุกคน</option>{residentsForPgy.map((resident) => <option key={resident.id} value={resident.id}>{resident.name} · PGY {resident.pgy}</option>)}</select></label></div>
       {selected && <div className="round-export"><span>{rows.length} คน</span><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("csv")}>ดาวน์โหลด CSV</button><button className="secondary-button" type="button" disabled={Boolean(busy)} onClick={() => runExport("xlsx")}>ดาวน์โหลด Excel</button></div>}
       <section className="round-pdf-export" aria-labelledby="round-pdf-title">
@@ -394,7 +429,7 @@ function RoundCmeAdmin({ user, sessions, attendeeRows, refresh }) {
       <label>รอบประชุม<select value={selectedId} disabled={Boolean(busy)} onChange={(event) => {
         setSessionId(event.target.value); setNotice(""); setError(""); setSpeakerError("");
       }}>{sessions.map((item) => <option key={item.id} value={item.id}>
-        {thaiDate(item.meeting_date)} · {formatRoundTimeRange(item) || `${thaiHM(item.starts_at)}–${thaiHM(item.ends_at)} น.`}
+        {roundTitle(item)} · {thaiDate(item.meeting_date)} · {formatRoundTimeRange(item) || `${thaiHM(item.starts_at)}–${thaiHM(item.ends_at)} น.`}
       </option>)}</select></label>
       <div className="round-cme-admin-grid">
         {Object.entries(cmeKinds).map(([kind, label]) => {
@@ -420,7 +455,7 @@ function RoundCmeAdmin({ user, sessions, attendeeRows, refresh }) {
           </section>;
         })}
       </div>
-    </> : <p>ยังไม่มีรอบที่กำลังเปิดหรือกำลังจะมาถึง กรุณาสร้างรอบในหน้า “รอบประชุมและเช็คชื่อ” ก่อน</p>}
+    </> : <p>ยังไม่มีรอบที่กำลังเปิดหรือกำลังจะมาถึง กรุณาสร้างรอบในหน้า “รอบประชุมและเช็คชื่อ” หรือ “Conference ย่อย” ก่อน</p>}
     {notice && <p className="form-success" role="status">{notice}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
   </section>;
@@ -483,7 +518,7 @@ function RoundCmeNext({ href }) {
   </div>;
 }
 
-export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user, quickScan, onQuickScanStarted }) {
+export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user, quickScan, onQuickScanStarted, onCheckedIn, activeConferenceId }) {
   const [scannedToken, setScannedToken] = useState("");
   const token = linkToken || scannedToken;
   const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
@@ -519,6 +554,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
           if (mounted.current) {
             setResult(next); setError("");
             if (next?.session_id) {
+              onCheckedIn?.();
               loadMyRoundCmeUrl(next.session_id, user?.role).then((href) => {
                 if (mounted.current && checkInSequence.current === sequence && href) setCme({ href, sequence });
               }).catch(() => {});
@@ -550,7 +586,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
     {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} quickScan={quickScan} onQuickScanStarted={onQuickScanStarted} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>
     {history.length ? <ul>{history.map((item) => <li key={item.session_id}>{thaiTime(item.checked_in_at)}</li>)}</ul> : <p>ยังไม่มีประวัติการเช็คชื่อ</p>}
-    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} checkedInSessionId={result?.session_id || ""} />}
+    {user && !token && <SeatMapPanel user={user} refreshKey={result?.checked_in_at || ""} checkedInSessionId={result?.session_id || activeConferenceId || ""} />}
   </section>;
 }
 

@@ -416,7 +416,7 @@ export async function loadRoundAdminData() {
   const pageSize = 500;
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase.from("resident_round_sessions")
-      .select("id,meeting_date,starts_at,ends_at,activity_start_time,activity_end_time,opened_at,closed_at,cancelled_at")
+      .select("id,meeting_date,starts_at,ends_at,activity_start_time,activity_end_time,opened_at,closed_at,cancelled_at,conference_name")
       .order("meeting_date", { ascending: false }).order("starts_at", { ascending: false }).order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
     fail(error);
@@ -551,6 +551,21 @@ export async function updateRoundSession(sessionId, meetingDate, startTime, endT
   fail(error);
 }
 
+export async function saveNamedRoundConference(sessionId, name, roomKey, date, timing) {
+  const { data, error } = await supabase.rpc("admin_save_named_round_conference", {
+    p_session_id: sessionId || null,
+    p_conference_name: name.trim(),
+    p_room_key: roomKey,
+    p_meeting_date: date,
+    p_start_time: timing.start,
+    p_end_time: timing.end,
+    p_activity_start: timing.activityStart || null,
+    p_activity_end: timing.activityEnd || null,
+  });
+  fail(error);
+  return data;
+}
+
 export async function cancelRoundSession(sessionId) {
   const { error } = await supabase.rpc("cancel_resident_round_session", { p_session_id: sessionId });
   fail(error);
@@ -561,16 +576,22 @@ export async function closeRound(sessionId) {
   fail(error);
 }
 
-export async function currentRoundQr() {
-  const { data, error } = await supabase.rpc("current_resident_round_qr");
+export async function currentRoundQrs() {
+  const { data, error } = await supabase.rpc("admin_list_current_resident_round_qrs");
   fail(error);
-  return data?.[0] || null;
+  return data || [];
 }
 
 export async function loadMyRoundCmeUrl(sessionId, role) {
   const { data, error } = await supabase.rpc("get_my_resident_round_cme_url", { p_session_id: sessionId });
   fail(error);
   return role === "staff" ? roundCmeSpeakerUrl(data) : roundCmeAttendeeUrl(data);
+}
+
+export async function loadMyCurrentConference() {
+  const { data, error } = await supabase.rpc("my_current_resident_conference");
+  fail(error);
+  return data?.[0] || null;
 }
 
 export async function checkInRound(token) {

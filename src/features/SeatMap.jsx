@@ -43,10 +43,15 @@ export function SeatMapPanel({ user, refreshKey = "", checkedInSessionId = "" })
     try {
       const list = await listSeatSessions();
       if (!mounted.current) return;
-      setSessions(list);
+      const now = Date.now();
+      const joined = list.find(({ session_id }) => session_id === checkedInSessionId);
+      const visible = joined && Date.parse(joined.effective_end) > now
+        ? list.filter((session) => session.session_id === joined.session_id || Date.parse(session.effective_end) <= now)
+        : list;
+      setSessions(visible);
       setSessionId((previous) => {
         const preferred = checkedInSessionId || previous;
-        return pickDefaultSession(list, Date.now(), preferred);
+        return pickDefaultSession(visible, now, preferred);
       });
     } catch (nextError) {
       if (mounted.current) setSessions([]);

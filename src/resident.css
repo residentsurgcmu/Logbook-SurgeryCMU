@@ -679,3 +679,6 @@ button.admission-archive-heading { cursor: pointer; }
 .round-cme-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .round-cme-admin-grid .round-cme-qr { border: 1px solid var(--resident-line); border-radius: 12px; padding: 16px; align-content: start; }
 @media (max-width: 680px) { .round-cme-admin-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.app-conference-status { flex: 0 1 auto; min-width: 0; max-width: 240px; padding: 4px 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+@media (max-width: 650px) { .app-conference-status > span { display: none; } }

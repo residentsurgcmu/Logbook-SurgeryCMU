@@ -89,6 +89,7 @@ export function validateRoundTimes({ start, end, activityStart = "", activityEnd
 // Thai text for the errors Postgres raises from the round RPCs.
 export function roundScheduleErrorMessage(error) {
   const message = String(error?.message || "");
+  if (message.includes("ROUND_ALREADY_IN_CONFERENCE")) return "เปลี่ยนเวลาไม่ได้ เพราะผู้ที่เช็กชื่อไว้จะอยู่สองรอบพร้อมกัน";
   if (/overlaps/i.test(message)) return "ช่วงเวลาสแกนซ้อนกับรอบอื่นที่ยังเปิดอยู่ กรุณาเลือกเวลาอื่น หรือยกเลิกรอบเดิมก่อน";
   if (/already has attendance/i.test(message)) return "ยกเลิกไม่ได้ เพราะรอบนี้มีผู้เช็คชื่อแล้ว ใช้ \"ปิดรอบ\" แทน";
   if (/Activity end time must be after start time|Activity start and end/i.test(message)) return "เวลาสิ้นสุดกิจกรรมต้องหลังเวลาเริ่ม และต้องกรอกทั้งสองช่อง";
@@ -122,6 +123,7 @@ export function isInAppBrowser(userAgent = typeof navigator === "undefined" ? ""
 
 export function roundCheckInErrorMessage(error) {
   const message = String(error?.message || "");
+  if (message.includes("ROUND_ALREADY_IN_CONFERENCE")) return "คุณเช็กชื่อเข้าประชุมอีกห้องแล้ว เลือกได้ครั้งละหนึ่งห้องในช่วงเวลาเดียวกัน";
   if (/expired or is invalid/i.test(message)) return "QR หมดอายุหรือไม่ถูกต้อง กรุณาสแกน QR ที่แสดงอยู่ตอนนี้อีกครั้ง";
   if (/Active Resident or Staff account required/i.test(message)) return "บัญชีนี้ไม่ใช่ Resident หรือ Staff ที่เปิดใช้งาน จึงเช็คชื่อไม่ได้";
   return message || "เช็คชื่อไม่สำเร็จ กรุณาสแกน QR ปัจจุบันอีกครั้ง";
