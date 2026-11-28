@@ -6,7 +6,7 @@ insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000
 insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident'),('e0000000-0000-4000-8000-000000000003','staff');
 select set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
 do $$
-declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text;
+declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text; v_named uuid;
 begin
  v_id := public.schedule_resident_round(v_day+30,'09:00','12:00','09:00','12:00',true);
  if not exists(select 1 from public.resident_round_seat_config where session_id=v_id and on_time_at=((v_day+30+time '09:00') at time zone 'Asia/Bangkok')) then raise exception 'default seating/cutoff missing';end if;
@@ -14,10 +14,34 @@ begin
  v_plain := public.schedule_resident_round(v_day+31,'09:00','12:00','09:00','12:00',false);
  if exists(select 1 from public.resident_round_seat_config where session_id=v_plain) then raise exception 'QR only ignored';end if;
  raise notice 'PASS explicit QR only';
+ v_named := public.admin_save_named_round_conference(null, '  Upper GI Journal Club  ', 'opportunity-order',
+   v_day+32, '09:00','12:00', '10:00','12:00');
+ if not exists (
+   select 1 from public.resident_round_sessions s
+   join public.resident_round_seat_config c on c.session_id=s.id
+   join public.resident_room_layouts l on l.id=c.layout_id
+   where s.id=v_named and s.conference_name='Upper GI Journal Club'
+     and l.name='ห้องประชุมจริง · 64 ที่ (2569-10)'
+     and c.on_time_at=((v_day+32+time '10:00') at time zone 'Asia/Bangkok')
+ ) then raise exception 'named conference did not use the existing room and activity cutoff'; end if;
+ begin
+   perform public.admin_save_named_round_conference(null,'Overlap','opportunity-order',v_day+32,'09:30','11:00',null,null);
+   raise exception 'expected overlap rejection';
+ exception when others then if sqlerrm not like '%overlaps%' then raise; end if; end;
+ perform public.admin_save_named_round_conference(v_named,'Upper GI Case Review','opportunity-order',v_day+32,'09:00','12:00','10:00','12:00');
+ if not exists (select 1 from public.resident_round_sessions where id=v_named and conference_name='Upper GI Case Review') then
+   raise exception 'conference rename changed or removed the selected round';
+ end if;
+ begin
+   perform public.admin_save_named_round_conference(v_id,'Cannot rename main','opportunity-order',v_day+30,'10:00','13:00',null,null);
+   raise exception 'renamed an unnamed main round';
+ exception when others then if sqlerrm <> 'Named conference not found' then raise; end if; end;
+ raise notice 'PASS named conference, existing room, distinct schedule, and same round on rename';
+
  select count(*) into v_n from public.resident_round_sessions;
  update public.resident_room_layouts set active=false;
  begin
-   perform public.schedule_resident_round(v_day+32,'09:00','12:00','09:00','12:00',true);
+   perform public.schedule_resident_round(v_day+34,'09:00','12:00','09:00','12:00',true);
    raise exception 'expected layout error';
  exception when others then if sqlerrm not like '%Layout not found%' then raise;end if;end;
  if (select count(*) from public.resident_round_sessions)<>v_n then raise exception 'partial schedule survived';end if;
@@ -59,6 +83,10 @@ begin
    raise exception 'resident replaced QR';
  exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
  begin perform public.schedule_resident_round(v_day+33,'09:00','12:00');raise exception 'resident created session';exception when others then if sqlerrm not like '%Active Admin%' then raise;end if;end;
+ begin
+   perform public.admin_save_named_round_conference(null,'Resident cannot create','opportunity-order',v_day+33,'09:00','10:00',null,null);
+   raise exception 'Resident created named conference';
+ exception when others then if sqlerrm not like '%Active Admin%' then raise; end if; end;
  raise notice 'PASS Resident cannot schedule';
  perform public.check_in_resident_round(v_tok);
  if public.get_my_resident_round_cme_url(v_live) is distinct from 'https://score.ccme.or.th/event/fixture/audience/join' then raise exception 'own check-in did not reveal correct URL'; end if;
