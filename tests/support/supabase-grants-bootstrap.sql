@@ -21,8 +21,13 @@ create table auth.users (
   raw_app_meta_data jsonb default '{}',
   created_at timestamptz default now(),
   invited_at timestamptz,
-  last_sign_in_at timestamptz
+  last_sign_in_at timestamptz,
+  email_confirmed_at timestamptz,
+  banned_until timestamptz,
+  confirmation_token text default '',
+  recovery_token text default ''
 );
+create table auth.one_time_tokens (user_id uuid references auth.users(id), token_type text);
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
 $$;

@@ -512,4 +512,35 @@ begin
   perform t.err('workflow_resident',rename,'changed','stale caption cannot overwrite');
 end $$;
 
+-- Pending invitation cancellation preserves its account and audit while revoking the old links.
+insert into t.users(name) values ('invite_cancel_fixture');
+insert into auth.users(id,email,invited_at,confirmation_token,recovery_token)
+  values (t.uid('invite_cancel_fixture'),'invite-cancel@example.test',now(),'invite-fixture','recovery-fixture');
+select t.as_user('adm');
+select public.admin_provision_account_internal(t.uid('adm'),t.uid('invite_cancel_fixture'),
+  'invite-cancel@example.test','Test Pending Invite','resident',1::smallint,null);
+insert into auth.one_time_tokens(user_id,token_type) values
+  (t.uid('invite_cancel_fixture'),'confirmation_token'),(t.uid('invite_cancel_fixture'),'recovery_token');
+do $$
+declare
+  target uuid := t.uid('invite_cancel_fixture');
+  stamp timestamptz := t.updated_at('invite_cancel_fixture');
+  cmd text := format('select public.admin_cancel_pending_resident_invite(%L,%L)',target,stamp);
+begin
+  perform t.err('r1',cmd,'Active Admin','a Resident cannot cancel a pending invite');
+  perform t.denied('anon',cmd,'anonymous cannot cancel a pending invite');
+  update auth.users set email_confirmed_at=now() where id=target;
+  perform t.err('adm',cmd,'INVITE_NOT_PENDING','a confirmed account cannot be cancelled as an unused invite');
+  update auth.users set email_confirmed_at=null where id=target;
+  perform t.ok(t.count_as('adm',format('select count(*) from public.admin_list_accounts() where user_id=%L',target))=1,'pending invite initially listed');
+  perform t.rows_as('adm',cmd);
+  perform t.ok(t.count_as('adm',format('select count(*) from public.admin_list_accounts() where user_id=%L',target))=0,'cancelled invite is hidden from the list');
+  perform t.ok((select not active from public.resident_profiles where user_id=target),'profile kept but inactive');
+  perform t.ok((select confirmation_token='' and recovery_token='' and banned_until>now() from auth.users where id=target),'Auth row retained with old tokens revoked');
+  perform t.ok(not exists(select 1 from auth.one_time_tokens where user_id=target),'old OTPs removed');
+  perform t.ok((select cancelled_by=t.uid('adm') from private.resident_invite_lifecycle where user_id=target),'cancellation retains actor');
+  perform t.err('adm',format('select public.admin_set_account_active(%L,true,%L,gen_random_uuid(),%L,null)',
+    target,t.updated_at('invite_cancel_fixture'),'test reactivation'),'INVITE_CANCELLED','normal reactivation cannot reopen a cancelled invite');
+end $$;
+
 rollback;

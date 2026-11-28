@@ -1,3 +1,8 @@
+export function canCancelPendingInvite(account, row) {
+  return Boolean(account && account.role !== "admin" && row?.sent_at &&
+    !row.activated_at && !row.prior_auth_sign_in && row.mail_status !== "sending");
+}
+
 export function inviteState(row) {
   if (!row) return { key: "unknown", label: "ไม่ทราบสถานะ", resend: false };
   if (row.activated_at) return { key: "activated", label: "เปิดใช้งานแล้ว", resend: false };

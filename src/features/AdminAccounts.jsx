@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction,
-  updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite,
+  updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite, cancelPendingResidentInvite,
 } from "../residentApi";
 import {
   ACCOUNT_ROLE_LABELS, accountDraft, accountEditPlan, accountErrorCode,
   accountErrorMessage, accountEventSummary, accountStatusReason, prepareAccountAttempt,
 } from "../adminAccounts.js";
-import { inviteState } from "../adminInviteState.js";
+import { canCancelPendingInvite, inviteState } from "../adminInviteState.js";
 import "./AdminAccounts.css";
 
-const liveApi = { listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction, updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite };
+const liveApi = { listAdminAccounts, listAdminAccountEvents, previewAdminAccountAction, updateAdminAccount, setAdminAccountActive, listAdminInviteStates, resendAccountInvite, cancelPendingResidentInvite };
 const detail = (account) => account.role === "resident" ? `PGY ${account.pgy ?? "—"}` : account.role === "staff" ? account.unit_name || "ไม่ระบุหน่วย" : account.admin_tag || "ไม่ระบุป้าย";
 const sortColumns = [
   { key: "name", label: "บัญชี", value: (account) => account.full_name || account.email },
@@ -71,6 +71,10 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
   const [inviteError, setInviteError] = useState("");
   const [resendTarget, setResendTarget] = useState(null);
   const [resending, setResending] = useState(false);
+  const [cancelInviteTarget, setCancelInviteTarget] = useState(null);
+  const [cancellingInvite, setCancellingInvite] = useState(false);
+  const cancellingInviteRef = useRef(false);
+  const cancelInviteConfirm = useRef(null);
   const [resendFeedback, setResendFeedback] = useState(null);
   const sending = useRef(false);
   const resendConfirmation = useRef(null);
@@ -253,13 +257,43 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
     }
   }
   useEffect(() => { if (resendTarget) resendConfirmation.current?.focus(); }, [resendTarget]);
+  useEffect(() => { if (cancelInviteTarget) cancelInviteConfirm.current?.focus(); }, [cancelInviteTarget]);
+  async function cancelInvite() {
+    if (!cancelInviteTarget || cancellingInviteRef.current) return;
+    const target = cancelInviteTarget;
+    cancellingInviteRef.current = true;
+    setCancellingInvite(true);
+    setResendFeedback(null);
+    try {
+      await api.cancelPendingResidentInvite(target);
+      if (!mounted.current) return;
+      ++listSequence.current;
+      setAccounts((rows) => rows.filter(({ user_id }) => user_id !== target.user_id));
+      setCancelInviteTarget(null);
+      setResendFeedback({ message: "ยกเลิกคำเชิญแล้ว และนำบัญชีออกจากรายชื่อ" });
+      await reloadAccounts().catch(() => {});
+    } catch (nextError) {
+      if (mounted.current) {
+        setCancelInviteTarget(null);
+        setResendFeedback({ error: true, message: nextError.message });
+      }
+    } finally {
+      cancellingInviteRef.current = false;
+      if (mounted.current) setCancellingInvite(false);
+    }
+  }
   const showInviteStatus = (account) => {
     const row = invites[account.user_id];
     const state = inviteState(row);
     return <div className="account-invite-state"><span>{state.label}</span>{(row?.activated_at || row?.sent_at) && <small>{row.activated_at ? "เข้าใช้ครั้งแรกที่บันทึก" : "ส่งคำเชิญล่าสุด"} · {dateTime(row.activated_at || row.sent_at)}</small>}</div>;
   };
   const accountActions = (account) => <div className="account-actions"><button type="button" className="text-button" disabled={loading || Boolean(listError)} onClick={() => beginEdit(account)} aria-label={`แก้ไข ${account.full_name}`}>แก้ไข</button>{isSelf(account) ? <button type="button" className="secondary-button" disabled>บัญชีของคุณ</button> : <button type="button" className="secondary-button" disabled={loading || Boolean(listError)} onClick={() => beginStatus(account)} aria-label={`${account.active ? "ปิด" : "เปิด"}ใช้งาน ${account.full_name}`}>{account.active ? "ปิดใช้งาน" : "เปิดกลับ"}</button>}
-    {account.active && !isSelf(account) && inviteState(invites[account.user_id]).resend && <button type="button" className="text-button" disabled={loading || resending || Boolean(listError)} onClick={() => { setResendTarget(account); setResendFeedback(null); focusSection(); }} aria-label={`ส่งอีเมลซ้ำให้ ${account.full_name}`}>ส่งอีเมลซ้ำ</button>}</div>;
+    {account.active && !isSelf(account) && inviteState(invites[account.user_id]).resend && <button type="button" className="text-button" disabled={loading || resending || cancellingInvite || Boolean(listError)} onClick={() => { setResendTarget(account); setCancelInviteTarget(null); setResendFeedback(null); focusSection(); }} aria-label={`ส่งอีเมลซ้ำให้ ${account.full_name}`}>ส่งอีเมลซ้ำ</button>}
+    {api.cancelPendingResidentInvite && canCancelPendingInvite(account, invites[account.user_id]) &&
+      <button type="button" className="text-button" disabled={loading || resending || cancellingInvite || Boolean(listError)}
+        aria-label={`ยกเลิกคำเชิญของ ${account.full_name}`}
+        onClick={() => { setCancelInviteTarget(account); setResendTarget(null); setResendFeedback(null); focusSection(); }}>ยกเลิกคำเชิญ</button>}
+    </div>;
   const validationText = (key) => validation[key] && <span className="form-error" role="alert" id={`account-error-${key}`}>{validation[key]}</span>;
   const fieldProps = (key) => ({ ref: (node) => { fields.current[key] = node; }, "aria-invalid": Boolean(validation[key]), "aria-describedby": validation[key] ? `account-error-${key}` : undefined });
 
@@ -274,6 +308,14 @@ export default function AdminAccounts({ userId, onRefresh, refreshKey, api = liv
       <p className="account-hint">“เปิดใช้งานแล้ว” ขึ้นเมื่อผู้ใช้เข้า Resident Corner ด้วยรหัสผ่าน “ส่งคำเชิญแล้ว” ยังยืนยันการเข้า Inbox ไม่ได้</p>
       {inviteError && <p className="form-error" role="alert">{inviteError}</p>}
       {resendTarget && <div className="account-notice" ref={resendConfirmation} tabIndex={-1}><strong>ส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่ {resendTarget.email}?</strong><div className="account-actions"><button type="button" className="secondary-button" disabled={resending} onClick={() => setResendTarget(null)}>ยกเลิก</button><button type="button" className="primary-button" disabled={resending} onClick={confirmResend}>{resending ? "กำลังส่ง…" : "ยืนยันส่งอีเมลซ้ำ"}</button></div></div>}
+      {cancelInviteTarget && <div className="account-notice warning" ref={cancelInviteConfirm} tabIndex={-1}>
+        <strong>ยกเลิกคำเชิญของ {cancelInviteTarget.full_name}?</strong>
+        <p>ลิงก์ที่เคยส่งไปยัง {cancelInviteTarget.email} จะใช้ไม่ได้ และบัญชีจะหายจากรายชื่อ</p>
+        <div className="account-actions">
+          <button type="button" className="secondary-button" disabled={cancellingInvite} onClick={() => setCancelInviteTarget(null)}>กลับ</button>
+          <button type="button" className="account-danger-button" disabled={cancellingInvite} onClick={cancelInvite}>{cancellingInvite ? "กำลังยกเลิก…" : "ยืนยันยกเลิกคำเชิญ"}</button>
+        </div>
+      </div>}
       {resendFeedback && <p className={resendFeedback.error ? "form-error" : "form-success"} role={resendFeedback.error ? "alert" : "status"}>{resendFeedback.message}</p>}
       {listError && <p className="form-error" role="alert">{listError} กรุณาโหลดรายชื่อใหม่ก่อนทำรายการ</p>}
       {loading && <p role="status">กำลังโหลดบัญชี…</p>}

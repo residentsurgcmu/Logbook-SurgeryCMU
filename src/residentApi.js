@@ -758,6 +758,19 @@ export async function listAdminInviteStates(accountIds) {
   return rows;
 }
 
+export async function cancelPendingResidentInvite(account) {
+  const { error } = await supabase.rpc("admin_cancel_pending_resident_invite", {
+    p_user_id: account.user_id,
+    p_expected_updated_at: account.updated_at,
+  });
+  if (!error) return;
+  if (error.message?.includes("INVITE_NOT_PENDING")) throw new Error("ยกเลิกไม่ได้: ระบบไม่พบคำเชิญที่ยังไม่ถูกใช้ กรุณาโหลดรายชื่อใหม่");
+  if (error.message?.includes("INVITE_SENDING")) throw new Error("กำลังส่งคำเชิญซ้ำ กรุณารอแล้วลองใหม่");
+  if (error.message?.includes("ACCOUNTS_PAUSED")) throw new Error(ACCOUNTS_PAUSED_MESSAGE);
+  if (/ACCOUNT_CONFLICT|PREVIEW_CHANGED/.test(error.message || "")) throw new Error("ข้อมูลบัญชีเปลี่ยนหรือมีรายการผูกอยู่ กรุณาโหลดรายชื่อใหม่ก่อนทำรายการ");
+  throw new Error("ยังยืนยันผลการยกเลิกไม่ได้ กรุณาโหลดรายชื่อใหม่เพื่อตรวจสอบ");
+}
+
 export async function resendAccountInvite(userId) {
   const { data, error } = await supabase.functions.invoke("resident-admin", {
     body: { action: "resend_invite", userId },
