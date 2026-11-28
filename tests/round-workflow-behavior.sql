@@ -1,9 +1,9 @@
 begin;
 do $$ begin if exists(select 1 from public.resident_profiles) then raise exception 'Refusing fixtures on a nonempty database'; end if; end $$;
 update public.resident_maintenance_pause set paused=false where scope='accounts';
-insert into auth.users(id,email) values ('e0000000-0000-4000-8000-000000000001','round-admin@fixture.test'),('e0000000-0000-4000-8000-000000000002','round-resident@fixture.test');
-insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000000-0000-4000-8000-000000000001','Round Admin','round-admin@fixture.test',null),('e0000000-0000-4000-8000-000000000002','Round Resident','round-resident@fixture.test',1);
-insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident');
+insert into auth.users(id,email) values ('e0000000-0000-4000-8000-000000000001','round-admin@fixture.test'),('e0000000-0000-4000-8000-000000000002','round-resident@fixture.test'),('e0000000-0000-4000-8000-000000000003','round-staff@fixture.test');
+insert into public.resident_profiles(user_id,full_name,email,pgy) values ('e0000000-0000-4000-8000-000000000001','Round Admin','round-admin@fixture.test',null),('e0000000-0000-4000-8000-000000000002','Round Resident','round-resident@fixture.test',1),('e0000000-0000-4000-8000-000000000003','Round Staff','round-staff@fixture.test',null);
+insert into public.resident_user_roles(user_id,role) values ('e0000000-0000-4000-8000-000000000001','admin'),('e0000000-0000-4000-8000-000000000002','resident'),('e0000000-0000-4000-8000-000000000003','staff');
 select set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
 do $$
 declare v_id uuid; v_plain uuid; v_live uuid; v_tok uuid; v_day date := (clock_timestamp() at time zone 'Asia/Bangkok')::date; v_n int; v_before timestamptz; v_on timestamptz; v_speaker_path text;
@@ -63,16 +63,29 @@ begin
  perform public.check_in_resident_round(v_tok);
  if public.get_my_resident_round_cme_url(v_live) is distinct from 'https://score.ccme.or.th/event/fixture/audience/join' then raise exception 'own check-in did not reveal correct URL'; end if;
  if public.get_my_resident_round_cme_url(v_id) is not null then raise exception 'returned CME for another round'; end if;
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000003',true);
+ if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'speaker link visible before Staff check-in'; end if;
+ perform public.check_in_resident_round(v_tok);
+ if public.get_my_resident_round_cme_url(v_live) is distinct from 'https://score.ccme.or.th/event/fixture/speaker/join' then raise exception 'Staff did not receive speaker link'; end if;
+ update public.resident_user_roles set active=false where user_id=auth.uid();
+ if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'inactive Staff received a speaker link'; end if;
+ update public.resident_user_roles set active=true where user_id=auth.uid();
+ raise notice 'PASS Resident and Staff check-ins resolve to their own CCME link';
+
  perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
  if public.admin_set_round_cme_speaker_qr(v_live,null,null) is distinct from v_speaker_path then raise exception 'speaker QR delete returned wrong image'; end if;
  if not exists(select 1 from public.resident_round_cme_qr where session_id=v_live and attendee_url is not null) then raise exception 'deleting the speaker QR erased the attendee link'; end if;
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000003',true);
+ if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'missing speaker QR fell back to the attendee URL'; end if;
+ perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000001',true);
+
  perform public.set_resident_round_cme_qr(v_live,'fixture-replacement.png');
  perform set_config('request.jwt.claim.sub','e0000000-0000-4000-8000-000000000002',true);
  if public.get_my_resident_round_cme_url(v_live) is not null then raise exception 'stale URL survived legacy image replacement'; end if;
  raise notice 'PASS CME link restricted to the checked-in user and QR replacement clears it';
- select checked_in_at into v_before from public.resident_round_attendance where session_id=v_live;
+ select checked_in_at into v_before from public.resident_round_attendance where session_id=v_live and user_id=auth.uid();
  perform public.check_in_resident_round(v_tok);
- if (select checked_in_at from public.resident_round_attendance where session_id=v_live)<>v_before then raise exception 'duplicate scan changed time';end if;
+ if (select checked_in_at from public.resident_round_attendance where session_id=v_live and user_id=auth.uid())<>v_before then raise exception 'duplicate scan changed time';end if;
  raise notice 'PASS late scan accepted and original timestamp preserved';
  update public.resident_round_sessions set ends_at=v_before where id=v_live;
  begin perform public.check_in_resident_round(v_tok);raise exception 'after end accepted';exception when others then if sqlerrm not like '%expired or is invalid%' then raise;end if;end;

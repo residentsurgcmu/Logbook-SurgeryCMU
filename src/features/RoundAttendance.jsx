@@ -401,7 +401,7 @@ function RoundCmeAdmin({ user, sessions, attendeeRows, refresh }) {
           const href = kind === "speaker" ? row?.speaker_url : row?.attendee_url;
           return <section className="round-cme-qr" aria-label={`QR สำหรับ${label}`} key={kind}>
             <h3>สำหรับ{label}</h3>
-            <p>{kind === "attendee" ? "เปิดหลังผู้เข้าร่วมเช็คชื่อใน Resident Corner สำเร็จ" : "Admin เปิดหรือฉายให้ผู้บรรยายแยกต่างหาก"}</p>
+            <p>{kind === "attendee" ? "เปิดหลังบัญชี Resident เช็คชื่อสำเร็จ" : "เปิดหลังบัญชี Staff เช็คชื่อสำเร็จ"}</p>
             {row?.storage_path && <RoundCmePreview key={row.storage_path} path={row.storage_path} label={label} />}
             {href && <a className="secondary-button" href={href} target="_blank" rel="noopener noreferrer">เปิดลิงก์ CCME สำหรับ{label}</a>}
             {row && !href && <p>ภาพเดิมยังไม่ผูกลิงก์ กรุณาอัปโหลด QR ต้นฉบับใหม่</p>}
@@ -516,7 +516,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
           if (mounted.current) {
             setResult(next); setError("");
             if (next?.session_id) {
-              loadMyRoundCmeUrl(next.session_id).then((href) => {
+              loadMyRoundCmeUrl(next.session_id, user?.role).then((href) => {
                 if (mounted.current && checkInSequence.current === sequence && href) setCme({ href, sequence });
               }).catch(() => {});
             }

@@ -567,10 +567,10 @@ export async function currentRoundQr() {
   return data?.[0] || null;
 }
 
-export async function loadMyRoundCmeUrl(sessionId) {
+export async function loadMyRoundCmeUrl(sessionId, role) {
   const { data, error } = await supabase.rpc("get_my_resident_round_cme_url", { p_session_id: sessionId });
   fail(error);
-  return roundCmeAttendeeUrl(data);
+  return role === "staff" ? roundCmeSpeakerUrl(data) : roundCmeAttendeeUrl(data);
 }
 
 export async function checkInRound(token) {
