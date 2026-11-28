@@ -53,3 +53,8 @@ export const MenuIcon = (props) => <Icon {...props}><path d="M3 6h18M3 12h18M3 1
 
 export const PhotoIcon = (props) => <Icon {...props}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="1.5" /><path d="m21 15-5-5L5 20" /></Icon>;
 export const PencilIcon = (props) => <Icon {...props}><path d="m14 6 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z" /></Icon>;
+
+export const ScheduleIcon = (props) => <Icon {...props}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M3 10h18M3 15h18M12 7h5" /></Icon>;
+export const VideoLibraryIcon = (props) => <Icon {...props}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="m10 8 5 3-5 3ZM8 21h8" /></Icon>;
+export const MeetingIcon = (props) => <Icon {...props}><circle cx="12" cy="5" r="2" /><circle cx="5" cy="11" r="2" /><circle cx="19" cy="11" r="2" /><path d="M9 9c.5-1 1.5-2 3-2s2.5 1 3 2M2 19v-2a3 3 0 0 1 6 0v2M16 19v-2a3 3 0 0 1 6 0v2M9 20h6" /></Icon>;
+export const SettingsIcon = (props) => <Icon {...props}><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="8" cy="6" r="2" fill="var(--sidebar-icon-knob, #1a383e)" /><circle cx="15" cy="12" r="2" fill="var(--sidebar-icon-knob, #1a383e)" /><circle cx="10" cy="18" r="2" fill="var(--sidebar-icon-knob, #1a383e)" /></Icon>;

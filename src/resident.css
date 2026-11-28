@@ -335,6 +335,9 @@ html, body, .app-shell, .resident-app { background: var(--canvas); }
 .resident-app .app-sidebar .app-nav { display:block; position:static; width:auto; min-height:0; margin:0; padding:0; border:0; background:transparent; box-shadow:none; overflow:visible; }
 .app-nav-title { margin:14px 10px 4px; color:var(--text-muted); font-size:12px; font-weight:800; letter-spacing:.06em; }
 .resident-app .app-nav button { position:relative; display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:8px 12px; border:0; border-radius:var(--radius-md); background:transparent; color:#2b3a30; font-size:14.5px; font-weight:700; text-align:left; cursor:pointer; transition:background-color .15s ease; }
+.resident-app .app-nav button > svg { flex: 0 0 auto; }
+.app-nav-label { min-width: 0; white-space: normal; word-break: normal; overflow-wrap: normal; }
+.app-nav-phrase { display: inline-block; white-space: nowrap; }
 .resident-app .app-nav button:hover { background:#f1f6f2; }
 .resident-app .app-nav button.active { background:var(--brand-soft); color:var(--brand); }
 .resident-app .app-nav button.active::before { content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:0 3px 3px 0; background:var(--brand); }

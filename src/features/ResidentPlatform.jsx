@@ -42,17 +42,23 @@ import {
   BookIcon,
   CalendarIcon,
   CameraIcon,
+  ChartIcon,
   CheckIcon,
   ClipboardIcon,
   DownloadIcon,
   FileIcon,
   HomeIcon,
   KeyIcon,
+  MeetingIcon,
   MenuIcon,
   MicIcon,
   PlusIcon,
   QrIcon,
   ScanIcon,
+  ScheduleIcon,
+  SettingsIcon,
+  UserIcon,
+  VideoLibraryIcon,
   XIcon,
 } from "../components/Icons";
 import {
@@ -818,24 +824,25 @@ function NavBadge({ count }) {
 
 const navIcons = {
   home: HomeIcon,
-  videos: BookIcon,
-  schedule: CalendarIcon,
+  videos: VideoLibraryIcon,
+  schedule: ScheduleIcon,
   calendar: CalendarIcon,
   accounts: KeyIcon,
   request: PlusIcon,
   pending: ClipboardIcon,
   scan: ScanIcon,
-  dashboard: HomeIcon,
+  dashboard: ChartIcon,
   qr: QrIcon,
   history: BookIcon,
   cases: BedIcon,
   conference: MicIcon,
   attendance: CheckIcon,
-  "round-admin": CalendarIcon,
+  "round-admin": MeetingIcon,
   notifications: BellIcon,
   exams: FileIcon,
   export: DownloadIcon,
-  admin: KeyIcon,
+  admin: SettingsIcon,
+  myspace: UserIcon,
 };
 
 export default function ResidentPlatform({ workspace, onRefresh, onLogout, renderModulePreview }) {
@@ -980,7 +987,14 @@ export default function ResidentPlatform({ workspace, onRefresh, onLogout, rende
                     onClick={() => navigate(id)}
                   >
                     <Icon size={19} />
-                    <span>{label}</span>
+                    <span className="app-nav-label">
+                      {id === "schedule" ? label.split(" / ").map((part, index, parts) => (
+                        <React.Fragment key={part}>
+                          <span className="app-nav-phrase">{part}{index < parts.length - 1 ? " /" : ""}</span>
+                          {index < parts.length - 1 ? " " : null}
+                        </React.Fragment>
+                      )) : label}
+                    </span>
                     <NavBadge count={badges[id]} />
                   </button>
                 );
