@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
+import { listAdminAccounts, loadRoundAttendanceAdjustments, recordMissingRoundAttendance, cancelRoundSession, checkInRound, clearRoundCmeQr, closeRound, currentRoundQr, loadMyRoundCmeUrl, loadOwnRoundAttendance, loadRoundAdminData, loadRoundCmeQrUrl, loadRoundCmeSpeakerQr, openRound, updateRoundSession, uploadRoundCmeQr } from "../residentApi";
 import { exportRoundAttendancePdf, filterRoundAttendance, roundSessionsInDateRange } from "../roundAttendanceExport";
 import { RoundQrScanner } from "./RoundQrScanner";
 import { SeatMapPanel } from "./SeatMap";
@@ -72,7 +72,7 @@ export function RoundAdmin({ user }) {
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [cmeUrls, setCmeUrls] = useState({});
+  const [adminPage, setAdminPage] = useState("rounds");
   const [scheduleForm, setScheduleForm] = useState(EMPTY_SCHEDULE);
   const [editingId, setEditingId] = useState("");
   const [editForm, setEditForm] = useState(EMPTY_SCHEDULE);
@@ -104,7 +104,6 @@ export function RoundAdmin({ user }) {
   );
   const minMeetingDate = shiftIsoDate(todayIso, -366);
   const maxMeetingDate = shiftIsoDate(todayIso, 366);
-  const cmeQrFor = (sessionId) => data.cmeQr.find((item) => item.session_id === sessionId) || null;
   const selected = reportSessions.find((item) => item.id === selectedId) || reportSessions[0];
   const [pdfDateFrom, setPdfDateFrom] = useState("");
   const [pdfDateTo, setPdfDateTo] = useState("");
@@ -153,22 +152,6 @@ export function RoundAdmin({ user }) {
     const clock = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => { mounted.current = false; window.clearInterval(poll); window.clearInterval(clock); };
   }, []);
-  const cmeQrKey = data.cmeQr.map((item) => `${item.session_id}:${item.storage_path}`).join(",");
-  useEffect(() => {
-    let active = true;
-    async function loadCmeUrls() {
-      const entries = await Promise.all(data.cmeQr.map(async (item) => {
-        try { return [item.session_id, await loadRoundCmeQrUrl(item.storage_path)]; }
-        catch (nextError) {
-          if (active) setError(nextError.message || "ไม่สามารถโหลด QR CME ได้");
-          return [item.session_id, ""];
-        }
-      }));
-      if (active) setCmeUrls(Object.fromEntries(entries));
-    }
-    loadCmeUrls();
-    return () => { active = false; };
-  }, [cmeQrKey]);
   const remaining = qr ? Math.max(0, new Date(qr.valid_until).getTime() - (Date.now() + offsetMs)) : 0;
   useEffect(() => {
     if (!qr) return undefined;
@@ -224,22 +207,6 @@ export function RoundAdmin({ user }) {
     catch (nextError) { setError(roundScheduleErrorMessage(nextError) || "ยกเลิกรอบไม่สำเร็จ"); }
     finally { setBusy(""); }
   }
-  async function uploadCme(session, event) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setBusy(`cme-upload-${session.id}`); setError("");
-    try { await uploadRoundCmeQr(session.id, user.id, file); await refresh(); }
-    catch (nextError) { setError(nextError.message || "อัปโหลด QR CME ไม่สำเร็จ"); }
-    finally { setBusy(""); }
-  }
-  async function removeCme(session) {
-    if (!window.confirm(`ลบ QR CME ของวันที่ ${thaiDate(session.meeting_date)}?`)) return;
-    setBusy(`cme-remove-${session.id}`); setError("");
-    try { await clearRoundCmeQr(session.id); await refresh(); }
-    catch (nextError) { setError(nextError.message || "ลบ QR CME ไม่สำเร็จ"); }
-    finally { setBusy(""); }
-  }
   async function runExport(format) {
     if (!selected) return;
     setBusy(format); setError("");
@@ -276,7 +243,19 @@ export function RoundAdmin({ user }) {
           </form>
           {editDateError && <p className="form-error" role="alert">{editDateError}</p>}
   </>;
-  return <div className="round-layout">
+  const adminNav = <nav className="resident-panel round-admin-nav" aria-label="จัดการรอบประชุม">
+    {[["rounds", "รอบประชุมและเช็คชื่อ"], ["cme", "QR CME"]].map(([id, label]) =>
+      <button key={id} type="button" aria-pressed={adminPage === id}
+        className={adminPage === id ? "primary-button" : "secondary-button"} disabled={Boolean(busy)}
+        onClick={() => setAdminPage(id)}>{label}</button>
+    )}
+  </nav>;
+  if (adminPage === "cme") return <>{adminNav}
+    <RoundCmeAdmin user={user} sessions={visibleSessions.filter((session) => ["upcoming", "live"].includes(roundSessionStatus(session, nowMs)))}
+      attendeeRows={data.cmeQr} refresh={refresh} />
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </>;
+  return <>{adminNav}<div className="round-layout">
     <section className="resident-panel round-admin-panel">
       <h2>MM &amp; Grand Round · เช็คชื่อเข้าประชุม</h2>
       <p>ตั้งวันที่และเวลาเริ่ม–จบประชุมครั้งเดียว ระบบเตรียม QR และผังที่นั่งให้พร้อม เปิดรับสแกนเมื่อเริ่มและหยุดเมื่อจบอัตโนมัติ ผู้มาสายยังสแกนได้ตลอดรอบ</p>
@@ -290,7 +269,6 @@ export function RoundAdmin({ user }) {
       {!visibleSessions.length && <p className="muted-empty">ยังไม่มีตารางสแกนของวันนี้หรือวันถัดไป ตั้งตารางใหม่ด้านบนได้เลย</p>}
       {visibleSessions.map((session) => {
         const isEditing = editingId === session.id;
-        const cmeQr = cmeQrFor(session.id);
         const isLiveNow = qr?.session_id === session.id && remaining > 0;
         const status = roundSessionStatus(session, nowMs);
         const acceptsScans = status === "upcoming" || status === "live";
@@ -312,13 +290,6 @@ export function RoundAdmin({ user }) {
             {(status === "ended" || status === "closed") && <button type="button" className="link-button" onClick={() => setSelectedId(session.id)}>ดูรายชื่อ</button>}
             {!attendanceCount.get(session.id) && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => cancel(session)}>{busy === "cancel" ? "กำลังยกเลิก…" : "ยกเลิกรอบนี้"}</button>}
           </div>
-          {acceptsScans && <section className="round-cme-qr" aria-labelledby={`round-cme-title-${session.id}`}>
-            <h4 id={`round-cme-title-${session.id}`}>QR CME สำหรับฉายในห้องประชุม</h4>
-            <p>เป็นภาพ QR แยกจาก QR เช็คชื่อ ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
-            {cmeUrls[session.id] && <img src={cmeUrls[session.id]} alt={`QR CME สำหรับวันที่ ${session.meeting_date}`} />}
-            <label className="secondary-button cme-upload-control">{busy === `cme-upload-${session.id}` ? "กำลังอัปโหลด…" : cmeQr ? "เปลี่ยนภาพ QR CME" : "อัปโหลดภาพ QR CME"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(busy)} onChange={(event) => uploadCme(session, event)} /></label>
-            {cmeQr && <button className="danger-button" type="button" disabled={Boolean(busy)} onClick={() => removeCme(session)}>{busy === `cme-remove-${session.id}` ? "กำลังลบ…" : "ลบ QR CME"}</button>}
-          </section>}
           {seatConfigs && status !== "cancelled" && <SeatAdminPanel key={`${session.id}:${seatConfigs[session.id]?.on_time_at || ""}`} session={session} config={seatConfigs[session.id] || null} canConfigure={status !== "closed"} onChanged={refresh} />}
         </section>;
       })}
@@ -361,7 +332,109 @@ export function RoundAdmin({ user }) {
       <div className="resident-table-wrap"><table><thead><tr><th>ชื่อ</th><th>PGY</th><th>อีเมล</th><th>บทบาท</th><th>เวลาเช็คชื่อ (Asia/Bangkok)</th><th>เทียบเวลาเริ่มประชุม</th></tr></thead><tbody>{rows.map((row) => <tr key={row.user_id}><td>{row.resident_profiles?.full_name || "—"}</td><td>{row.resident_profiles?.pgy ? `PGY ${row.resident_profiles.pgy}` : "—"}</td><td>{row.resident_profiles?.email || "—"}</td><td>{row.role_at_check_in === "staff" ? "Staff" : "Resident"}</td><td>{thaiTime(row.checked_in_at)}{row.resident_round_attendance_adjustments?.length > 0 && <small>Admin บันทึกย้อนหลัง · {row.resident_round_attendance_adjustments[0].reason}</small>}</td><td>{roundArrivalLabel(selected, row.checked_in_at)}</td></tr>)}{!rows.length && <tr><td colSpan="6">ยังไม่มีผู้เช็คชื่อตามตัวกรอง</td></tr>}</tbody></table></div>
       {selected && <MissingAttendance key={selected.id} session={selected} attendance={data.attendance} onDone={refresh} />}
     </section>
-  </div>;
+  </div></>;
+}
+
+const cmeKinds = { attendee: "ผู้เข้าร่วม", speaker: "ผู้บรรยาย" };
+
+function RoundCmeAdmin({ user, sessions, attendeeRows, refresh }) {
+  const [sessionId, setSessionId] = useState("");
+  const [speakerRow, setSpeakerRow] = useState(null);
+  const [loadSpeakerKey, setLoadSpeakerKey] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [speakerError, setSpeakerError] = useState("");
+  const [loadingSpeaker, setLoadingSpeaker] = useState(false);
+  const session = sessions.find(({ id }) => id === sessionId) || sessions[0];
+  const selectedId = session?.id;
+  const attendee = attendeeRows.find(({ session_id }) => session_id === selectedId);
+  const speaker = speakerRow?.sessionId === selectedId ? speakerRow?.row : null;
+  const saving = useRef(false);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let active = true;
+    setLoadingSpeaker(true);
+    setSpeakerError("");
+    loadRoundCmeSpeakerQr(selectedId).then((row) => {
+      if (active) setSpeakerRow({ sessionId: selectedId, row });
+    }).catch(() => {
+      if (active) setSpeakerError("โหลดข้อมูล QR ผู้บรรยายไม่สำเร็จ");
+    }).finally(() => {
+      if (active) setLoadingSpeaker(false);
+    });
+    return () => { active = false; };
+  }, [selectedId, loadSpeakerKey]);
+
+  async function change(kind, file) {
+    if (!session || saving.current) return;
+    const id = session.id;
+    if (!file && !window.confirm(`ลบ QR CME สำหรับ${cmeKinds[kind]} ของรอบนี้?`)) return;
+    saving.current = true;
+    setBusy(kind); setNotice(""); setError("");
+    try {
+      if (file) await uploadRoundCmeQr(id, user.id, file, kind);
+      else await clearRoundCmeQr(id, kind);
+      if (kind === "speaker") setLoadSpeakerKey((value) => value + 1);
+      else await refresh();
+      setNotice(`${file ? "บันทึก" : "ลบ"} QR สำหรับ${cmeKinds[kind]}แล้ว`);
+    } catch (nextError) {
+      setError(nextError.message || "บันทึก QR CME ไม่สำเร็จ");
+    } finally {
+      setBusy(""); saving.current = false;
+    }
+  }
+
+  return <section className="resident-panel round-cme-admin" aria-labelledby="round-cme-heading">
+    <h2 id="round-cme-heading">QR CME สำหรับฉายในห้องประชุม</h2>
+    <p>อัปโหลดเฉพาะรอบที่มี CME เลือกรอบแล้วอัปโหลดรูป QR จาก CCME แยกตามประเภท ระบบนี้ไม่เก็บข้อมูลการสแกน CME</p>
+    {session ? <>
+      <label>รอบประชุม<select value={selectedId} disabled={Boolean(busy)} onChange={(event) => {
+        setSessionId(event.target.value); setNotice(""); setError(""); setSpeakerError("");
+      }}>{sessions.map((item) => <option key={item.id} value={item.id}>
+        {thaiDate(item.meeting_date)} · {formatRoundTimeRange(item) || `${thaiHM(item.starts_at)}–${thaiHM(item.ends_at)} น.`}
+      </option>)}</select></label>
+      <div className="round-cme-admin-grid">
+        {Object.entries(cmeKinds).map(([kind, label]) => {
+          const row = kind === "speaker" ? speaker : attendee;
+          const href = kind === "speaker" ? row?.speaker_url : row?.attendee_url;
+          return <section className="round-cme-qr" aria-label={`QR สำหรับ${label}`} key={kind}>
+            <h3>สำหรับ{label}</h3>
+            <p>{kind === "attendee" ? "เปิดหลังบัญชี Resident เช็คชื่อสำเร็จ" : "เปิดหลังบัญชี Staff เช็คชื่อสำเร็จ"}</p>
+            {row?.storage_path && <RoundCmePreview key={row.storage_path} path={row.storage_path} label={label} />}
+            {href && <a className="secondary-button" href={href} target="_blank" rel="noopener noreferrer">เปิดลิงก์ CCME สำหรับ{label}</a>}
+            {row && !href && <p>ภาพเดิมยังไม่ผูกลิงก์ กรุณาอัปโหลด QR ต้นฉบับใหม่</p>}
+            {kind === "speaker" && loadingSpeaker && <p role="status">กำลังโหลด QR ผู้บรรยาย…</p>}
+            {kind === "speaker" && speakerError && <p className="form-error" role="alert">{speakerError}</p>}
+            <label className="secondary-button cme-upload-control">{busy === kind ? "กำลังบันทึก…" : row ? "เปลี่ยนภาพ QR" : "อัปโหลดภาพ QR"} สำหรับ{label}
+              <input type="file" accept="image/jpeg,image/png,image/webp"
+                disabled={Boolean(busy) || (kind === "speaker" && loadingSpeaker)} onChange={(event) => {
+                  const file = event.target.files?.[0]; event.target.value = "";
+                  if (file) change(kind, file);
+                }} />
+            </label>
+            {row && <button type="button" className="danger-button" disabled={Boolean(busy) || (kind === "speaker" && loadingSpeaker)}
+              onClick={() => change(kind, null)}>ลบ QR สำหรับ{label}</button>}
+          </section>;
+        })}
+      </div>
+    </> : <p>ยังไม่มีรอบที่กำลังเปิดหรือกำลังจะมาถึง กรุณาสร้างรอบในหน้า “รอบประชุมและเช็คชื่อ” ก่อน</p>}
+    {notice && <p className="form-success" role="status">{notice}</p>}
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </section>;
+}
+
+function RoundCmePreview({ path, label }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    loadRoundCmeQrUrl(path).then((next) => { if (active) setUrl(next); }).catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [path]);
+  if (error) return <p role="alert">โหลดภาพ QR ไม่สำเร็จ</p>;
+  return url ? <img src={url} alt={`QR CME สำหรับ${label}`} /> : <p role="status">กำลังโหลดภาพ QR…</p>;
 }
 
 // Check-ins already sent, shared by every mounted copy. The per-instance ref
@@ -369,11 +442,51 @@ export function RoundAdmin({ user }) {
 // token again; a remounted copy now waits for the first request instead.
 const roundCheckIns = new Map();
 
+const CME_REDIRECT_SECONDS = 5;
+
+function RoundCmeNext({ href }) {
+  const [seconds, setSeconds] = useState(CME_REDIRECT_SECONDS);
+  const pending = useRef(true);
+  const [attempted, setAttempted] = useState(false);
+  function stop() {
+    pending.current = false;
+    setSeconds(null);
+  }
+  useEffect(() => {
+    if (seconds == null) return;
+    const timer = window.setTimeout(() => {
+      if (!pending.current) return;
+      if (seconds > 1) {
+        setSeconds(seconds - 1);
+        return;
+      }
+      stop();
+      setAttempted(true);
+      // Some browsers require a fresh tap to open a tab. The link stays
+      // available if the timed open is blocked; the RC page is never replaced.
+      window.open(href, "_blank", "noopener,noreferrer");
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [seconds, href]);
+
+  return <div className="round-cme-next">
+    {seconds != null && <p>กำลังจะเปิด CCME ในแท็บใหม่</p>}
+    <a className="primary-button" href={href} target="_blank" rel="noopener noreferrer" onClick={stop}>เปิด CCME ตอนนี้ (แท็บใหม่)</a>
+    {seconds != null && <button className="secondary-button" type="button" onClick={stop}
+      aria-label="ยกเลิกการเปิด CCME อัตโนมัติ">
+      ยกเลิกเปิดอัตโนมัติ <span aria-hidden="true">({seconds} วินาที)</span>
+    </button>}
+    {attempted && <small>หากแท็บ CCME ไม่เปิด ให้กดปุ่มด้านบน</small>}
+  </div>;
+}
+
 export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, user }) {
   const [scannedToken, setScannedToken] = useState("");
   const token = linkToken || scannedToken;
   const onTokenUsed = () => { setScannedToken(""); onLinkTokenUsed?.(); };
   const [result, setResult] = useState(null);
+  const [cme, setCme] = useState(null);
+  const checkInSequence = useRef(0);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(Boolean(token));
@@ -391,13 +504,23 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
       if (token) {
         if (submittedToken.current === token) return;
         submittedToken.current = token;
+        const sequence = ++checkInSequence.current;
+        setCme(null);
+        setResult(null);
         setBusy(true);
         try {
           // Forget the token once settled so a rescan after a network error
           // retries; onTokenUsed has cleared the token by then.
           if (!roundCheckIns.has(token)) roundCheckIns.set(token, checkInRound(token).finally(() => roundCheckIns.delete(token)));
           const next = await roundCheckIns.get(token);
-          if (mounted.current) { setResult(next); setError(""); }
+          if (mounted.current) {
+            setResult(next); setError("");
+            if (next?.session_id) {
+              loadMyRoundCmeUrl(next.session_id, user?.role).then((href) => {
+                if (mounted.current && checkInSequence.current === sequence && href) setCme({ href, sequence });
+              }).catch(() => {});
+            }
+          }
         } catch (nextError) {
           if (mounted.current) setError(roundCheckInErrorMessage(nextError));
         } finally {
@@ -419,7 +542,7 @@ export function RoundCheckIn({ token: linkToken, onTokenUsed: onLinkTokenUsed, u
   return <section className="resident-panel round-checkin">
     <h2>เช็คชื่อ MM &amp; Grand Round</h2>
     {busy && <p role="status">กำลังตรวจสอบ QR และบันทึกเวลา…</p>}
-    {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p></div>}
+    {result && <div className="form-success" role="status"><strong>{result.already_checked_in ? "คุณเช็คชื่อไว้แล้ว" : "เช็คชื่อสำเร็จ"}</strong><p>Timestamp scan QR: {thaiTime(result.checked_in_at)}</p>{cme && <RoundCmeNext key={cme.sequence} href={cme.href} />}</div>}
     {error && <p className="form-error" role="alert">{error}</p>}
     {!token && <><p>สแกน QR ที่แสดงในห้องประชุมเพื่อเช็คชื่อ</p><RoundQrScanner onToken={setScannedToken} disabled={busy} role={user?.role} /></>}
     <h3>ประวัติการเช็คชื่อของฉัน</h3>

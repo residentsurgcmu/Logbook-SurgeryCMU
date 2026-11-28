@@ -1,3 +1,4 @@
+import { decodeRoundCmeQr, roundCmeAttendeeUrl, roundCmeSpeakerUrl } from "./roundCme.js";
 import { supabase } from "./supabase";
 import { residentTemplates } from "./generated/residentTemplates";
 import { fetchAllRows } from "./supabasePaging";
@@ -434,7 +435,7 @@ export async function loadRoundAdminData() {
   }
   const { data: cmeQr, error: cmeQrError } = await supabase
     .from("resident_round_cme_qr")
-    .select("session_id,storage_path,uploaded_by,uploaded_at,updated_at");
+    .select("session_id,storage_path,uploaded_by,uploaded_at,updated_at,attendee_url");
   fail(cmeQrError);
   return { sessions, attendance, cmeQr: cmeQr || [] };
 }
@@ -446,12 +447,22 @@ const cmeQrExtensions = {
   "image/webp": "webp",
 };
 
-export async function uploadRoundCmeQr(sessionId, adminId, file) {
+export async function uploadRoundCmeQr(sessionId, adminId, file, kind = "attendee") {
   if (!sessionId || !adminId || !file) throw new Error("กรุณาเลือกภาพ QR CME");
   const extension = cmeQrExtensions[file.type];
   if (!extension) throw new Error("QR CME ต้องเป็นภาพ JPEG, PNG หรือ WebP");
   if (file.size > 5 * 1024 * 1024) throw new Error("QR CME ต้องมีขนาดไม่เกิน 5 MB");
-  const path = `${adminId}/${sessionId}/${crypto.randomUUID()}.${extension}`;
+  if (!["attendee", "speaker"].includes(kind)) throw new Error("ประเภท QR CME ไม่ถูกต้อง");
+  const speaker = kind === "speaker";
+  let ccmeUrl;
+  try {
+    ccmeUrl = await decodeRoundCmeQr(file, kind);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ภาพนี้เป็น QR สำหรับผู้บรรยาย") throw error;
+    throw new Error("อ่านภาพ QR CME ไม่สำเร็จ กรุณาลองใช้ภาพต้นฉบับที่เห็น QR ครบ");
+  }
+  if (!ccmeUrl) throw new Error(`กรุณาเลือกภาพ QR จาก CCME สำหรับ${speaker ? "ผู้บรรยาย" : "ผู้เข้าร่วม"}`);
+  const path = `${adminId}/${sessionId}/${speaker ? "speaker/" : ""}${crypto.randomUUID()}.${extension}`;
   const { error: uploadError } = await supabase.storage
     .from(CME_QR_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
@@ -459,8 +470,8 @@ export async function uploadRoundCmeQr(sessionId, adminId, file) {
   let previousPath;
   try {
     const { data, error } = await supabase.rpc(
-      "set_resident_round_cme_qr",
-      { p_session_id: sessionId, p_storage_path: path },
+      speaker ? "admin_set_round_cme_speaker_qr" : "set_resident_round_cme_attendee_qr",
+      { p_session_id: sessionId, p_storage_path: path, [speaker ? "p_speaker_url" : "p_attendee_url"]: ccmeUrl },
     );
     fail(error);
     previousPath = data;
@@ -495,10 +506,18 @@ export async function loadRoundCmeQrUrl(storagePath) {
   return data?.signedUrl || "";
 }
 
-export async function clearRoundCmeQr(sessionId) {
+export async function loadRoundCmeSpeakerQr(sessionId) {
+  const { data, error } = await supabase.rpc("admin_get_round_cme_speaker_qr", { p_session_id: sessionId });
+  fail(error);
+  const row = data?.[0];
+  return row ? { ...row, speaker_url: roundCmeSpeakerUrl(row.speaker_url) } : null;
+}
+
+export async function clearRoundCmeQr(sessionId, kind = "attendee") {
+  const speaker = kind === "speaker";
   const { data: storagePath, error } = await supabase.rpc(
-    "clear_resident_round_cme_qr",
-    { p_session_id: sessionId },
+    speaker ? "admin_set_round_cme_speaker_qr" : "clear_resident_round_cme_qr",
+    speaker ? { p_session_id: sessionId, p_storage_path: null, p_speaker_url: null } : { p_session_id: sessionId },
   );
   fail(error);
   // The row is already cleared; a failed image delete must not report the
@@ -546,6 +565,12 @@ export async function currentRoundQr() {
   const { data, error } = await supabase.rpc("current_resident_round_qr");
   fail(error);
   return data?.[0] || null;
+}
+
+export async function loadMyRoundCmeUrl(sessionId, role) {
+  const { data, error } = await supabase.rpc("get_my_resident_round_cme_url", { p_session_id: sessionId });
+  fail(error);
+  return role === "staff" ? roundCmeSpeakerUrl(data) : roundCmeAttendeeUrl(data);
 }
 
 export async function checkInRound(token) {
