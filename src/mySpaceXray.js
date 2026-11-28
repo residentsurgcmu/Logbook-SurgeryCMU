@@ -1,12 +1,5 @@
 export const XRAY_AXES = ["Gen", "MIS", "UGI", "Colo", "HBP", "B&E", "Vas", "Trauma"];
 
-export async function matchesXrayPilotEmail(email, expected, crypto = globalThis.crypto) {
-  const normalized = typeof email === "string" ? email.trim().toLowerCase() : "";
-  if (!normalized || !/^[a-f0-9]{64}$/.test(expected ?? "") || !crypto?.subtle) return false;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("") === expected;
-}
-
 const unitNames = {
   UGI: ["ugi", "uppergi", "uppergastrointestinal"],
   Colo: ["colo", "colorectal"],

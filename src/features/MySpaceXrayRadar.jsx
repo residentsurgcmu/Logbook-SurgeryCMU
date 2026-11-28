@@ -75,7 +75,7 @@ export default function MySpaceXrayRadar({ userId }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return <section className="ms-card" aria-labelledby={`${id}-title`}>
-    <div className="ms-card-heading"><h2 id={`${id}-title`}>แผนผังการฝึก · นำร่อง</h2>
+    <div className="ms-card-heading"><h2 id={`${id}-title`}>กราฟ X-ray Anatomy</h2>
       <button className="ms-link" type="button" aria-expanded={open} aria-controls={`${id}-scores`} onClick={() => setOpen((value) => !value)}>{open ? "ซ่อนกราฟ" : "เปิดกราฟคะแนน"}</button>
     </div>
     <div id={`${id}-scores`}>{open ? <OwnXrayResults key={userId} userId={userId} /> : <p className="ms-muted">X-ray Anatomy · ซ่อนคะแนนจนกว่าจะเปิดดู</p>}</div>

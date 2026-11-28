@@ -4,7 +4,6 @@ import { groupManagedRows, managedAttempt, managedCellLabel, OVERALL_LABELS } fr
 import { buildManagedTemplate, buildManagedResultsWorkbook, downloadManagedBook, loadManagedExcel, parseManagedTemplate, XLSX_LIMITS } from "../managedExamExcel.js";
 import "./ManagedExams.css";
 import { XrayRadarResult } from "./MySpaceXrayRadar";
-import { useXrayRadarPilot } from "./useXrayRadarPilot";
 import { buildMySpaceXray } from "../mySpaceXray";
 
 function useAction(onDone) {
@@ -90,7 +89,7 @@ function PersonalResultCards({ rows }) {
   </section>);
 }
 
-export function ManagedPublishedResults({ role, userId, initialYear = "", onYearChange, personalLayout = false, xrayPilot = false }) {
+export function ManagedPublishedResults({ role, userId, initialYear = "", onYearChange, personalLayout = false }) {
   const [loaded, setBundle] = useState(null), [error, setError] = useState(""), [reload, setReload] = useState(0), [year, setYear] = useState(initialYear), [pgy, setPgy] = useState(""), [resident, setResident] = useState(""), [exporting, setExporting] = useState(false);
   const owner = `${userId}/${role}/${reload}`, exportTask = useRef(null), identity = useRef("");
   identity.current = `${owner}/${year}/${pgy}/${resident}`;
@@ -137,7 +136,7 @@ export function ManagedPublishedResults({ role, userId, initialYear = "", onYear
     {error && <p role="alert" className="form-error">{error} กรุณาโหลดใหม่ทั้งชุด</p>}{!bundle && !error && <p role="status">กำลังโหลดผลประกาศทุกปี…</p>}
     {bundle && <><div className="rc04-grid"><label>ปีการศึกษา<select aria-label="ปีการศึกษา" value={year} onChange={(e) => { setYear(e.target.value); onYearChange?.(e.target.value); }}><option value="">ทุกปี (รวมประวัติ)</option>{years.map((y) => <option key={y}>{y}</option>)}</select></label>
       {role !== "resident" && <><label>PGY ณ วันสอบ<select value={pgy} onChange={(e) => setPgy(e.target.value)}><option value="">ทุกชั้นปี</option>{[1, 2, 3, 4].map((y) => <option key={y}>{y}</option>)}</select></label><label>ผู้สอบ<select value={resident} onChange={(e) => setResident(e.target.value)}><option value="">ทุกคน</option>{residents.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select></label></>}
-    </div>{xrayPilot && ["staff", "admin"].includes(role) && <section className="ms-card rc04-xray-pilot"><h2>กราฟ X-ray Anatomy · นำร่อง</h2>
+    </div>{["staff", "admin"].includes(role) && <section className="ms-card"><h2>กราฟ X-ray Anatomy</h2>
       {!resident ? <p>เลือกผู้สอบหนึ่งคนเพื่อเปิดกราฟ</p> : <details key={identity.current}><summary>เปิดกราฟของผู้สอบที่เลือก</summary><XrayRadarResult radar={buildMySpaceXray(visible, resident)} /></details>}
     </section>}{!visible.length ? <p>ยังไม่มีผลประกาศในกลุ่มที่เลือก ผลปีก่อนยังดูได้โดยเลือกทุกปี</p> : personalLayout && role === "resident" ? <PersonalResultCards rows={visible} /> : <ResultTable rows={visible} />}</>}
   </div>;
@@ -237,7 +236,6 @@ function RevisionEditor({ snapshot, publishedId, onDone }) {
   </section>;
 }
 export default function ManagedExams({ user }) {
-  const xrayPilot = useXrayRadarPilot(user);
   const [exams, setExams] = useState([]), [selected, setSelected] = useState(""), [snapshot, setSnapshot] = useState(null), [error, setError] = useState(""), [tick, setTick] = useState(0), [creating, setCreating] = useState(false), [tab, setTab] = useState("manage");
   const selection = useRef(0);
   useEffect(() => { api.setActor(user.id); }, [user.id]);
@@ -248,9 +246,9 @@ export default function ManagedExams({ user }) {
     api.get(selected, revision).then((data) => { if (selection.current === generation) setSnapshot(data); }).catch((e) => { if (selection.current === generation) setError(e.message); });
     return () => { selection.current++; };
   }, [selected, revision, tick]);
-  if (user.role !== "admin") return <ManagedPublishedResults key={user.id} role={user.role} userId={user.id} xrayPilot={xrayPilot} />;
+  if (user.role !== "admin") return <ManagedPublishedResults key={user.id} role={user.role} userId={user.id} />;
   return <div className="rc04-area"><p>หากปิดหรือรีเฟรชหน้าระหว่างบันทึกแล้วไม่แน่ใจผล ให้โหลดรายการใหม่และตรวจชื่อ วันสอบ และข้อมูลที่บันทึกก่อนสร้างหรือส่งรายการใหม่ ระบบไม่ได้เก็บคำขอไว้หลังปิดหน้า</p><div className="button-row"><button className="secondary-button" onClick={() => setTab("manage")}>จัดการฉบับร่าง</button><button className="secondary-button" onClick={() => setTab("published")}>ผลประกาศทุกปี</button></div>
-    {tab === "published" ? <ManagedPublishedResults key={user.id} role="admin" userId={user.id} xrayPilot={xrayPilot} /> : <><div className="button-row"><button className="primary-button" onClick={() => setCreating((x) => !x)}>{creating ? "ซ่อนแบบสร้าง" : "สร้างการสอบใหม่"}</button><button className="secondary-button" onClick={() => { setSnapshot(null); setTick((x) => x + 1); }}>โหลดใหม่</button></div>
+    {tab === "published" ? <ManagedPublishedResults key={user.id} role="admin" userId={user.id} /> : <><div className="button-row"><button className="primary-button" onClick={() => setCreating((x) => !x)}>{creating ? "ซ่อนแบบสร้าง" : "สร้างการสอบใหม่"}</button><button className="secondary-button" onClick={() => { setSnapshot(null); setTick((x) => x + 1); }}>โหลดใหม่</button></div>
       {creating && <CreateManagedExam onCreated={async (r) => { setSelected(r.exam_id); setCreating(false); setTick((x) => x + 1); }} />}
       {error && <p className="form-error" role="alert">{error}</p>}<label>การสอบ (รวมทุกปี)<select value={selected} onChange={(e) => { setError(""); setSelected(e.target.value); }}><option value="">เลือกการสอบ</option>{exams.map((e) => <option key={e.exam_id} value={e.exam_id}>{(e.working || e.published)?.academic_year} · {(e.working || e.published)?.title} · {e.working ? "มีฉบับร่าง" : "ประกาศแล้ว"}</option>)}</select></label>
       {snapshot && <RevisionEditor key={`${snapshot.exam.revision_id}/${snapshot.exam.version}/${snapshot.reviewed}`} snapshot={snapshot} publishedId={exam.published_revision_id} onDone={async () => { setSnapshot(null); setTick((x) => x + 1); }} />}

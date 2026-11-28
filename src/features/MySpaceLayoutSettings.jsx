@@ -3,7 +3,7 @@ import { MY_SPACE_LAYOUTS, MY_SPACE_CARD_LABELS, MY_SPACE_CARD_ORDER, MY_SPACE_C
 
 import ResidentStudioCard from "./ResidentStudioCard";
 
-export default function MySpaceLayoutSettings({ draft, setDraft, radarAvailable, name, pgy, onClose, onSave }) {
+export default function MySpaceLayoutSettings({ draft, setDraft, name, pgy, onClose, onSave }) {
   const dialog = useRef(null);
   useLayoutEffect(() => {
     const element = dialog.current;
@@ -15,7 +15,7 @@ export default function MySpaceLayoutSettings({ draft, setDraft, radarAvailable,
     };
   }, []);
   const configurable = MY_SPACE_CARD_ORDER[draft.layout].filter((key) =>
-    (key !== "radar" || radarAvailable) && (key !== "awards" || !draft.hideAwards));
+    key !== "awards" || !draft.hideAwards);
   return <dialog ref={dialog} className="ms-layout-dialog" aria-label="จัดหน้า My Space"
     onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <div className="ms-layout-dialog-head"><h2>จัดหน้า My Space</h2></div>
